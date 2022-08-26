@@ -5,5 +5,5 @@
         "*.ino": "cpp"
     },
     "particle.targetPlatform": "boron",
-    "particle.targetDevice": "Boron-Verizon01-Server"
+    "particle.targetDevice": "LoRA-Particle-Gateway"
 }
