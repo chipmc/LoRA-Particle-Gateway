@@ -10,8 +10,21 @@ To get Started, you will need to setup a couple devices:
 * Server(s) using a Particle Boron which has an RF-95 Module attached.
 * Client(s) which can be an inexpensive microcontroller with the RF-95 module and a sensor
 
-This is v1 of this code which functions as follows:
-* It listens for clients pushing data in a pre-determined formay
-* Is stores webhook payloads 
-* Periodically, it connects to the Particle network and sends the accumulated data
+To make this code easier to maintain, I am breaking out the main c++ file into the following:
+* device_pinout - this is the file where I will capture the pinout between the uC and the sensors and initialize the pins and main system functions
+* particle_fn - Particle-specific implementation definitions and initializations like Particle variables, functions and system settings
+* storage_objects - By defining system and current objects, I can easily share data and implement persistent storage - in my case FRAM
+* take_measurements - Most applications involve loading drivers and accessing data from sensors - all this is done here
+* LoRA_Functions - In this application, we will use a LoRA modem and the Radiohead libraries (with Jeff's extensions) all LoRA stuff is in this one place
+* LoRA_Particle_Gateway - This is the top-level of the structure and where all the modules come together to realize the progam's intent:
+
+
+With this program, we will collect data from remote nodes connected via LoRA and relay that data to Particle via the Publish function.  
+From there, the Particle Integrations will send this data to its final destination via a Webhook.  The idea of breaking out this code this way
+is to allow you to easily swap out - sensors, the platform, the persistent storage media, the connectivity and still reuse code from this effort.
+Over time, these elements will mature and become building blocks for whatever comes next (your imagination here).
+
+I hope this is helpful and please let me know if you have comments / suggestions as I am always looking for better ideas.
+
+Chip
 
