@@ -92,7 +92,6 @@ bool listenForLoRAMessage() {
 		Log.info("Received from node %d with rssi=%d - a %s message of length %d", from, driver.lastRssi(), loraStateNames[messageFlag] ,len);
 
 		if (loRAStateMachine()) {
-			// flashTheLEDs();
 			return true;
 		}
 	}
@@ -179,19 +178,4 @@ bool deciperDataReport() {
 		buf[8] = lowByte(sysStatus.frequencyMinutes);		
 
 		return true;
-}
-
-
-void flashTheLEDs() {
-	time_t lastChange = 0;
-	int flashes = 0;
-
-	while (flashes <= 6) {
-		if (millis() - lastChange > 1000) {
-			lastChange = millis();
-			digitalWrite(BLUE_LED, !digitalRead(BLUE_LED));
-			flashes++;
-		}
-	}
-	digitalWrite(BLUE_LED, LOW);
 }

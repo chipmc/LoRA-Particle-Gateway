@@ -17,12 +17,13 @@
 
 
 // Functions
-bool initializeLoRA();
-bool listenForLoRAMessage();
-bool sendLoRAMessage();
-void flashTheLEDs();
-bool deciperDataReport();
+bool initializeLoRA();                      // Initialize the LoRA Radio
+bool listenForLoRAMessage();                // When we are in listening mode
+bool sendLoRAMessage();                     // When we are acknowledging a message
+bool loRAStateMachine();                    // This is the logic of which message and which acknowledgement we need to send
+// All these are specific to our three message types - join, data and alert
+bool deciperDataReport();   
 bool acknowledgeDataReport();
-bool loRAStateMachine();
+
 
 #endif
