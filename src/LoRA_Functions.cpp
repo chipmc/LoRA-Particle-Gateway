@@ -92,7 +92,7 @@ bool listenForLoRAMessage() {
 		Log.info("Received from node %d with rssi=%d - a %s message of length %d", from, driver.lastRssi(), loraStateNames[messageFlag] ,len);
 
 		if (loRAStateMachine()) {
-			flashTheLEDs();
+			// flashTheLEDs();
 			return true;
 		}
 	}

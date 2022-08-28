@@ -13,18 +13,16 @@
 
 #include "Particle.h"
 
-// Variables
-// extern char currentPointRelease[6];
+// External Variables
 
 
+// Functions
 bool initializeLoRA();
 bool listenForLoRAMessage();
 bool sendLoRAMessage();
 void flashTheLEDs();
 bool deciperDataReport();
 bool acknowledgeDataReport();
-//void particleInitialize();
-//int setWakeTime(String command); 
-
+bool loRAStateMachine();
 
 #endif
