@@ -44,7 +44,9 @@ const uint8_t dataReport = 3;
 const uint8_t dataAcknowledge = 4;
 const uint8_t alertReport = 5;
 const uint8_t alertAcknowledge = 6;
-
+typedef enum { NULL_STATE, JOIN_REQ, JOIN_ACQ, DATA_RPT, DATA_ACQ, ALERT_RPT, ALERT} LoRA_State;
+char loraStateNames[7][16] = {"Null", "Join Req", "Join Ack", "Data Report", "Data Acq", "Alert Rpt", "Alert Ack"};
+LoRA_State lora_state = NULL_STATE;
 
 // Singleton instance of the radio driver
 RH_RF95 driver(RFM95_CS, RFM95_INT);
@@ -58,8 +60,11 @@ RHMesh manager(driver, GATEWAY_ADDRESS);
 #define RH_MAX_MESSAGE_LEN 255
 #endif
 
-// Dont put this on the stack:
-uint8_t buf[RH_MESH_MAX_MESSAGE_LEN];               // Related to max message size 
+// 
+uint8_t buf[RH_MESH_MAX_MESSAGE_LEN];               // Related to max message size - RadioHead example note: dont put this on the stack:
+uint8_t len = sizeof(buf);
+uint8_t from;
+uint8_t messageFlag = 0;
 //********************************************************
 
 
@@ -77,32 +82,74 @@ bool initializeLoRA() {
 	return true;
 }
 
-void flashTheLEDs() {
-	time_t lastChange = 0;
-	int flashes = 0;
 
-	while (flashes <= 6) {
-		if (millis() - lastChange > 1000) {
-			lastChange = millis();
-			digitalWrite(BLUE_LED, !digitalRead(BLUE_LED));
-			flashes++;
-		}
-	}
-	digitalWrite(BLUE_LED, LOW);
-}
 
 bool listenForLoRAMessage() {
 
-	uint8_t len = sizeof(buf);
-	uint8_t from;
-	uint8_t messageFlag = 0;
-
-
 	if (manager.recvfromAckTimeout(buf, &len, 3000, &from,__null,__null,&messageFlag))	{	// We have received a message
-		digitalWrite(BLUE_LED,HIGH);			        // Signal we are using the radio
 		buf[len] = 0;
-		Log.info("Received from 0x%02x with rssi=%d msg = %d with flag %d", from, driver.lastRssi(), buf[16], (0x0F & messageFlag));
+		lora_state = (LoRA_State)(0x0F & messageFlag);				// Strip out the overhead byte
+		Log.info("Received from node %d with rssi=%d - a %s message of length %d", from, driver.lastRssi(), loraStateNames[messageFlag] ,len);
 
+		if (loRAStateMachine()) {
+			flashTheLEDs();
+			return true;
+		}
+	}
+	return false; 
+}
+
+bool sendLoRAMessage() {
+	if (loRAStateMachine()) {
+		return true;
+	}
+	return false;
+}
+
+bool loRAStateMachine() {
+	switch (lora_state) {
+	case NULL_STATE:
+		Log.info("Error - no message flag received");
+	break;
+
+	case DATA_RPT:
+		Log.info("Decipering data report"); 	// Gateway or a mesh node
+		if (deciperDataReport()) {
+			lora_state = DATA_ACQ;
+			return true;
+		}
+	break;
+
+	case DATA_ACQ:
+		Log.info("Acknowledging Data Report"); // Typically a node or mesh node
+		if (acknowledgeDataReport()) {
+			lora_state = NULL_STATE;
+			return true;
+		}
+	break;
+	}
+	return false;
+}
+
+bool acknowledgeDataReport() {
+	Log.info("Sent response to client message = %d, time = %s, next report = %u minutes", buf[2], Time.timeStr(buf[3] << 24 | buf[4] << 16 | buf[5] <<8 | buf[6]).c_str(), (buf[7] << 8 | buf[8]));
+
+	digitalWrite(BLUE_LED,HIGH);			        // Sending data
+
+	if (manager.sendtoWait(buf, 9, from, dataAcknowledge) == RH_ROUTER_ERROR_NONE) {
+		Log.info("Response received successfully");
+		digitalWrite(BLUE_LED,LOW);
+		driver.sleep();                             // Here is where we will power down the LoRA radio module
+		return true;
+	}
+
+	Log.info("Response not acknowledged");
+	digitalWrite(BLUE_LED,LOW);
+	driver.sleep();                             // Here is where we will power down the LoRA radio module
+	return false;
+}
+
+bool deciperDataReport() {
 		sysStatus.nodeNumber = buf[2] << 8 | buf[3]; // One time kluge until I implement the join process.
 
 		if(sysStatus.nodeNumber == (buf[2] << 8 | buf[3])) {
@@ -119,34 +166,32 @@ bool listenForLoRAMessage() {
 		}
 		else Log.info("Message intended for another node");
 
+		// This is a response to a data message it has a length of 9 and a specific payload and message flag
 		// Send a reply back to the originator client
-		uint8_t data[9];
-		data[0] = 0;                                // to be replaced/updated
-		data[1] = 0;                                // to be replaced/updated       
-		data[2] = buf[16];							// Message number
-		data[3] = ((uint8_t) ((Time.now()) >> 24)); // Fourth byte - current time
-		data[4] = ((uint8_t) ((Time.now()) >> 16));	// Third byte
-		data[5] = ((uint8_t) ((Time.now()) >> 8));	// Second byte
-		data[6] = ((uint8_t) (Time.now()));		    // First byte			
-		data[7] = highByte(sysStatus.frequencyMinutes);	// Time till next report
-		data[8] = lowByte(sysStatus.frequencyMinutes);		
+		buf[0] = 0;                                // to be replaced/updated
+		buf[1] = 0;                                // to be replaced/updated       
+		buf[2] = buf[16];							// Message number
+		buf[3] = ((uint8_t) ((Time.now()) >> 24)); // Fourth byte - current time
+		buf[4] = ((uint8_t) ((Time.now()) >> 16));	// Third byte
+		buf[5] = ((uint8_t) ((Time.now()) >> 8));	// Second byte
+		buf[6] = ((uint8_t) (Time.now()));		    // First byte			
+		buf[7] = highByte(sysStatus.frequencyMinutes);	// Time till next report
+		buf[8] = lowByte(sysStatus.frequencyMinutes);		
 
-		Log.info("Sent response to client message = %d, time = %s, next report = %u minutes", data[2], Time.timeStr(data[3] << 24 | data[4] << 16 | data[5] <<8 | data[6]).c_str(), (data[7] << 8 | data[8]));
-
-		digitalWrite(BLUE_LED,LOW);			        // Done with the radio
-
-		if (manager.sendtoWait(data, sizeof(data), from, dataAcknowledge) == RH_ROUTER_ERROR_NONE) {
-			Log.info("Response received successfully");
-			flashTheLEDs();
-			driver.sleep();                             // Here is where we will power down the LoRA radio module
-			return true;
-		}
-
-		Log.info("Response not acknowledged");
-		driver.sleep();                             // Here is where we will power down the LoRA radio module
-		return false;
-
-	}
-	return false; 
+		return true;
 }
 
+
+void flashTheLEDs() {
+	time_t lastChange = 0;
+	int flashes = 0;
+
+	while (flashes <= 6) {
+		if (millis() - lastChange > 1000) {
+			lastChange = millis();
+			digitalWrite(BLUE_LED, !digitalRead(BLUE_LED));
+			flashes++;
+		}
+	}
+	digitalWrite(BLUE_LED, LOW);
+}

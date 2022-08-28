@@ -19,7 +19,10 @@
 
 bool initializeLoRA();
 bool listenForLoRAMessage();
+bool sendLoRAMessage();
 void flashTheLEDs();
+bool deciperDataReport();
+bool acknowledgeDataReport();
 //void particleInitialize();
 //int setWakeTime(String command); 
 

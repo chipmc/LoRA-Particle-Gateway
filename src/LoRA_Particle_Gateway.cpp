@@ -8,6 +8,7 @@
 // v0.01 - Started with the code from utilities - moving to a standard carrier board
 // v0.02 - Adding sleep and scheduling using localTimeRK
 // v0.03 - Refactored the code to make it more modular
+// v0.04 - Works - refactored the LoRA functions
 
 // Particle Libraries
 #include <RHMesh.h>
@@ -124,6 +125,7 @@ void loop() {
 					frequencyUpdated = false;
 					publishSchedule.withMinuteOfHour(sysStatus.frequencyMinutes, LocalTimeRange(LocalTimeHMS("06:00:00"), LocalTimeHMS("21:59:59")));	 // Publish every 15 minutes from 6am to 10pm
 				}
+				sendLoRAMessage();					// Here we send our response based on the type of message received.
 				state = REPORTING_STATE;
 			}
 
@@ -153,10 +155,10 @@ void loop() {
 				connectingTimeout = millis();
 			}
 
-			if (Particle.connected() || millis() - connectingTimeout > 300000L) {		// Either we will connect or we will timeout - either way we need to disconnect
+			if (Particle.connected() || millis() - connectingTimeout > 300000L) {		// Either we will connect or we will timeout 
 				sysStatus.lastConnection = Time.now();
-				if(Particle.connected() && !sysStatus.lowPowerMode) state = IDLE_STATE;
-				else state = DISCONNECTING_STATE;
+				if(Particle.connected() && !sysStatus.lowPowerMode) state = IDLE_STATE;	// We are connected and not low power - stay connected
+				else state = DISCONNECTING_STATE;										// Typically, we will disconnect and sleep to save power
 			}
 
 			} break;

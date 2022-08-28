@@ -44,7 +44,7 @@ void particleInitialize() {
   const char* batteryContext[8] = {"Unknown","Not Charging","Charging","Charged","Discharging","Fault","Diconnected"};
 
   Log.info("Initializing Particle functions and variables");     // Note: Don't have to be connected but these functions need to in first 30 seconds
-  Particle.variable("Low Power Mode?",(sysStatus.lowPowerMode) ? "Yes" : "No");
+  Particle.variable("Low Power Mode",(sysStatus.lowPowerMode) ? "Yes" : "No");
   Particle.variable("Release",currentPointRelease);   
   Particle.variable("Signal", signalStr);
   Particle.variable("stateOfChg", current.stateOfCharge);
@@ -99,6 +99,10 @@ int setFrequency(String command)
   int tempTime = strtol(command,&pEND,10);                       // Looks for the first integer and interprets it
   if ((tempTime < 0) || (tempTime > 120)) return 0;   // Make sure it falls in a valid range or send a "fail" result
   sysStatus.frequencyMinutes = tempTime;
+  if (sysStatus.frequencyMinutes < 12 && sysStatus.lowPowerMode) {
+    Log.info("Short reporting frequency over-rides low power");
+    sysStatus.lowPowerMode = false;
+  }
   frequencyUpdated = true;                            // Flag to change frequency after next connection to the nodes
   snprintf(data, sizeof(data), "Report frequency will be set to %i minutes at next LoRA connect",sysStatus.frequencyMinutes);
   Log.info(data);
@@ -181,11 +185,16 @@ int setLowPowerMode(String command)                                   // This is
   if (command != "1" && command != "0") return 0;                     // Before we begin, let's make sure we have a valid input
   if (command == "1") {                                               // Command calls for enabling sleep
     sysStatus.lowPowerMode = true;
+    if (sysStatus.frequencyMinutes < 12) {                            // Need to increase reporting frequency to at least 12 mins for low power
+      Log.info("Increasing reporting frequency to 12 minutes");
+      sysStatus.frequencyMinutes = 12;
+      frequencyUpdated = true;
+    }
   }
   else {                                                             // Command calls for disabling sleep
     sysStatus.lowPowerMode = false;
   }
-  snprintf(data, sizeof(data), "Enable sleep is %s", (sysStatus.lowPowerMode) ? "true" : "false");
+  snprintf(data, sizeof(data), "Is Low Power Mode set? %s", (sysStatus.lowPowerMode) ? "yes" : "no");
   Log.info(data);
   if (Particle.connected()) {
     Particle.publish("Mode",data, PRIVATE);
