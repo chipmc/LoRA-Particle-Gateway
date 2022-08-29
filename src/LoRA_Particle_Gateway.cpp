@@ -116,16 +116,17 @@ void loop() {
 			if (state != oldState) {
 				publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 				startLoRAWindow = millis();               // Mark when we enter this state - for timeouts
-				Log.info("In the LoRA state with a frequency of %u minutes", sysStatus.frequencyMinutes);
+				Log.info("Gateway is listening for LoRA messages");
 			} 
 
-			if (listenForLoRAMessage()) {
+			if (listenForLoRAMessageGateway()) {
 				
 				if (frequencyUpdated) {              // If we are to change the update frequency, we need to tell the nodes (or at least one node) about it.
 					frequencyUpdated = false;
 					publishSchedule.withMinuteOfHour(sysStatus.frequencyMinutes, LocalTimeRange(LocalTimeHMS("06:00:00"), LocalTimeHMS("21:59:59")));	 // Publish every 15 minutes from 6am to 10pm
+					publishSchedule.isScheduledTime(); // Clears this flag
 				}
-				sendLoRAMessage();					// Here we send our response based on the type of message received.
+				acknowledgeDataReportGateway(secondsUntilNextEvent());					// Here we send our response based on the type of message received.
 				state = REPORTING_STATE;
 			}
 
@@ -225,6 +226,8 @@ int secondsUntilNextEvent() {											// Time till next scheduled event
 
         LocalTimeConvert localTimeConvert_NEXT;
         localTimeConvert_NEXT.withCurrentTime().convert();
+
+		publishSchedule.isScheduledTime();								// Clears this flag if set and enabled the next time
 
 		if (publishSchedule.getNextScheduledTime(localTimeConvert_NEXT)) {
 			long unsigned secondsToReturn = constrain(localTimeConvert_NEXT.time - localTimeConvert_NOW.time, 0L, 86400L);	// Constrain to positive seconds less than or equal to a day.

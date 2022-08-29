@@ -74,6 +74,7 @@ bool storageObjectLoop() {                          // Monitors the values of th
                       std::hash<uint32_t>{}(sysStatus.lastConnection) + \
                       std::hash<uint16_t>{}(sysStatus.lastConnectionDuration) + \
                       std::hash<uint16_t>{}(sysStatus.frequencyMinutes) + \
+                      std::hash<uint16_t>{}(sysStatus.nextReportSeconds) + \
                       std::hash<byte>{}(sysStatus.lastAlertCode)+ \
                       std::hash<uint32_t>{}(sysStatus.lastAlertTime) + \
                       std::hash<bool>{}(sysStatus.verizonSIM);

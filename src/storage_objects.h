@@ -32,7 +32,8 @@ struct systemStatus_structure {                     // Where we store the config
   unsigned long lastHookResponse;                   // Last time we got a valid Webhook response
   unsigned long lastConnection;                     // Last time we successfully connected to Particle
   uint16_t lastConnectionDuration;                  // How long - in seconds - did it take to last connect to the Particle cloud
-  uint16_t frequencyMinutes;                        // How often do we report
+  uint16_t nextReportSeconds;                       // How often do we report ( on a node this is seconds - for a gateway it is minutes on the hour)
+  uint16_t frequencyMinutes;                        // When we are reporing at minute increments - what are they - for Gateways
   uint8_t lastAlertCode;                            // Last alert to be reported (0 indicates no alert)
   unsigned long lastAlertTime;                      // When was the last alert
   bool verizonSIM;                                  // Are we using a Verizon SIM?

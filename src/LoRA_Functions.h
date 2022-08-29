@@ -18,12 +18,15 @@
 
 // Functions
 bool initializeLoRA();                      // Initialize the LoRA Radio
-bool listenForLoRAMessage();                // When we are in listening mode
-bool sendLoRAMessage();                     // When we are acknowledging a message
-bool loRAStateMachine();                    // This is the logic of which message and which acknowledgement we need to send
-// All these are specific to our three message types - join, data and alert
-bool deciperDataReport();   
-bool acknowledgeDataReport();
+
+// Gateway Functions
+bool listenForLoRAMessageGateway();                // When we are in listening mode
+bool deciperDataReportGateway();                   // Gateway - decodes data from report
+bool acknowledgeDataReportGateway(int nextSeconds);// Gateway- acknowledged recipt of a data report
+
+// Node Functions
+bool composeDataReportNode();                  // Node - Composes data report
+bool receiveAcknowledmentDataReportNode();     // Node - receives acknolwedgement
 
 
 #endif
