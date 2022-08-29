@@ -71,7 +71,9 @@ void setup()
 
 	PublishQueuePosix::instance().setup();          // Initialize PublishQueuePosixRK
 
-	initializeLoRA();								// Start the LoRA radio
+	sysStatus.structuresVersion = 111;
+
+	initializeLoRA(1);							// Start the LoRA radio (true for Gateway and false for Node)
 
 	// Setup local time and set the publishing schedule
 	LocalTime::instance().withConfig(LocalTimePosixTimezone("EST5EDT,M3.2.0/2:00:00,M11.1.0/2:00:00"));			// East coast of the US
@@ -112,25 +114,30 @@ void loop() {
 
 		case LoRA_STATE: {
 			static system_tick_t startLoRAWindow = 0;
+			static bool successfulReceipt = false;
 
 			if (state != oldState) {
 				publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 				startLoRAWindow = millis();               // Mark when we enter this state - for timeouts
+				successfulReceipt = false;
 				Log.info("Gateway is listening for LoRA messages");
 			} 
 
 			if (listenForLoRAMessageGateway()) {
-				
 				if (frequencyUpdated) {              // If we are to change the update frequency, we need to tell the nodes (or at least one node) about it.
 					frequencyUpdated = false;
+					Log.info("We are updating the publish frequency to %i minutes", sysStatus.frequencyMinutes);
 					publishSchedule.withMinuteOfHour(sysStatus.frequencyMinutes, LocalTimeRange(LocalTimeHMS("06:00:00"), LocalTimeHMS("21:59:59")));	 // Publish every 15 minutes from 6am to 10pm
 					publishSchedule.isScheduledTime(); // Clears this flag
+					successfulReceipt = true;
 				}
-				acknowledgeDataReportGateway(secondsUntilNextEvent());					// Here we send our response based on the type of message received.
-				state = REPORTING_STATE;
+				respondForLoRAMessageGateway(secondsUntilNextEvent());					// Here we send our response based on the type of message received.
 			}
 
-			if ((millis() - startLoRAWindow) > 300000L) state = CONNECTING_STATE;	// This is a fail safe to make sure an off-line client won't prevent gatewat from checking in - and setting its clock
+			if ((millis() - startLoRAWindow) > 300000L) {
+				if (successfulReceipt) state = REPORTING_STATE;	// This is a fail safe to make sure an off-line client won't prevent gatewat from checking in - and setting its clock
+				else state = CONNECTING_STATE;					// Just ensures we will see this node online every once in a while - even if the LoRA network is down
+			}
 
 		} break;
 
@@ -232,7 +239,7 @@ int secondsUntilNextEvent() {											// Time till next scheduled event
 		if (publishSchedule.getNextScheduledTime(localTimeConvert_NEXT)) {
 			long unsigned secondsToReturn = constrain(localTimeConvert_NEXT.time - localTimeConvert_NOW.time, 0L, 86400L);	// Constrain to positive seconds less than or equal to a day.
         	Log.info("time of next event is: %s which is %lu seconds away", localTimeConvert_NEXT.format(TIME_FORMAT_DEFAULT).c_str(), secondsToReturn);
-			return secondsToReturn;
+			return (uint16_t)secondsToReturn;
 		}
 		else return 0;
     }

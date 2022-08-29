@@ -17,16 +17,22 @@
 
 
 // Functions
-bool initializeLoRA();                      // Initialize the LoRA Radio
+bool initializeLoRA(bool gatewayID);                      // Initialize the LoRA Radio
 
-// Gateway Functions
-bool listenForLoRAMessageGateway();                // When we are in listening mode
-bool deciperDataReportGateway();                   // Gateway - decodes data from report
-bool acknowledgeDataReportGateway(int nextSeconds);// Gateway- acknowledged recipt of a data report
+// Generic Gateway Functions
+bool listenForLoRAMessageGateway();                       // When we are in listening mode
+bool respondForLoRAMessageGateway(int nextSeconds);       // When we are responding
+
+// Specific Gateway Message Functions
+bool decipherDataReportGateway();                            // Gateway - decodes data from a data report
+bool decipherJoinRequestGateway();                          // Gateway - decodes data from a join request
+bool acknowledgeDataReportGateway(int nextSeconds);    // Gateway- acknowledged receipt of a data report
+bool acknowledgeJoinRequestGateway(int nextSeconds);   // Gateway - acknowledged receipt of a join request
 
 // Node Functions
 bool composeDataReportNode();                  // Node - Composes data report
 bool receiveAcknowledmentDataReportNode();     // Node - receives acknolwedgement
-
+bool composeJoinRequesttNode();                // Node - Composes Join request
+bool receiveAcknowledmentJoinRequestNode();    // Node - received join request asknowledgement
 
 #endif

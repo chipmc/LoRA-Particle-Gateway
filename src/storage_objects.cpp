@@ -113,6 +113,7 @@ void loadSystemDefaults() {                         // This code is only execute
     Particle.publish("Mode","Loading System Defaults", PRIVATE);
   }
   Log.info("Loading system defaults");              // Letting us know that defaults are being loaded
+  sysStatus.nodeNumber = 2;
   sysStatus.structuresVersion = 1;
   sysStatus.firmwareRelease = 1;
   sysStatus.verboseMode = false;
