@@ -78,9 +78,8 @@ RHMesh manager(driver, GATEWAY_ADDRESS);
 // 
 uint8_t buf[RH_MESH_MAX_MESSAGE_LEN];               // Related to max message size - RadioHead example note: dont put this on the stack:
 uint8_t len = sizeof(buf);
-uint8_t from;
-uint8_t messageFlag = 0;
-
+uint8_t from;  
+uint8_t messageFlag;
 // ************************************************************************
 // *****                      Common Functions                        *****
 // ************************************************************************
@@ -108,9 +107,9 @@ bool initializeLoRA(bool gatewayID) {				// True if Gateway / False if Node
 		sysStatus.deviceID = random(1,65535);			// 16-bit number for deviceID
 		if (gatewayID) {
 			Log.info("setting node number as Gateway");
-			sysStatus.nodeNumber = 0x00;
+			sysStatus.nodeNumber = (uint16_t)0;
 		} 
-		else sysStatus.nodeNumber = random(1,9);	// Random number in - unconfigured - range will trigger a Join request
+		else sysStatus.nodeNumber = random(10,255);	// Random number in - unconfigured - range will trigger a Join request
 		sysStatus.structuresVersion = 128;			// Set the structure to the magic number so we can have a stable deviceID
 	}
 	manager.setThisAddress(sysStatus.nodeNumber);	// Assign the NodeNumber to this node
@@ -123,12 +122,13 @@ bool initializeLoRA(bool gatewayID) {				// True if Gateway / False if Node
 // *****                      Gateway Functions                       *****
 // ************************************************************************
 
-bool listenForLoRAMessageGateway() {
+// Common across message types - these messages are general for send and receive
 
+bool listenForLoRAMessageGateway() {
 	if (manager.recvfromAckTimeout(buf, &len, 3000, &from,__null,__null,&messageFlag))	{	// We have received a message
 		buf[len] = 0;
 		lora_state = (LoRA_State)(0x0F & messageFlag);				// Strip out the overhead byte
-		Log.info("Received from node %d with rssi=%d - a %s message of length %d", from, driver.lastRssi(), loraStateNames[messageFlag] ,len);
+		Log.info("Received from node %d with rssi=%d - a %s message of length of %d bytes", from, driver.lastRssi(), loraStateNames[messageFlag] ,len);
 
 		if (lora_state == DATA_RPT) { if(decipherDataReportGateway()) return true;}
 		if (lora_state == JOIN_REQ) { if(decipherJoinRequestGateway()) return true;}
@@ -146,54 +146,40 @@ bool respondForLoRAMessageGateway(int nextSeconds) {
 	return false; 
 }
 
-bool decipherDataReportGateway() {
-	sysStatus.nodeNumber = buf[2] << 8 | buf[3]; // One time kluge until I implement the join process.
+// These are the receive and respond messages for data reports
 
-	if(sysStatus.nodeNumber == (buf[2] << 8 | buf[3])) {
-		sysStatus.nodeNumber = buf[2] << 8 | buf[3];
-		current.hourly = buf[5] << 8 | buf[6];
-		current.daily = buf[7] << 8 | buf[8];
-		current.stateOfCharge = buf[10];
-		current.batteryState = buf[11];
-		current.internalTempC = buf[9];
-		sysStatus.resetCount = buf[12];
-		sysStatus.lastAlertCode = buf[13];
-		current.rssi = (buf[14] << 8 | buf[15]) - 65535;
-		current.messageNumber = buf[16];
-	}
-	else Log.info("Message intended for another node");
+bool decipherDataReportGateway() {
+
+	current.hourly = buf[5] << 8 | buf[6];
+	current.daily = buf[7] << 8 | buf[8];
+	current.stateOfCharge = buf[10];
+	current.batteryState = buf[11];
+	current.internalTempC = buf[9];
+	current.rssi = (buf[14] << 8 | buf[15]) - 65535;
+	current.messageNumber = buf[16];
+	Log.info("Deciphered %s %d from node %d", loraStateNames[messageFlag], current.messageNumber, from);
 
 	lora_state = DATA_ACK;		// Prepare to respond
 
 	return true;
 }
 
-bool decipherJoinRequestGateway() {
-	// Ths only question here is whether the node with the join request needs a new nodeNumber or is just looking for a clock set
-
-	lora_state = JOIN_ACK;			// Prepare to respond
-
-	return true;
-}
-
 bool acknowledgeDataReportGateway(int nextSeconds) {
-
-	Log.info("Preparing acknowledgement with %i seconds",sysStatus.nextReportSeconds);
 
 	// This is a response to a data message it has a length of 9 and a specific payload and message flag
 	// Send a reply back to the originator client
      
-	buf[0] = buf[16];							// Message number
-	buf[1] = ((uint8_t) ((Time.now()) >> 24)); // Fourth byte - current time
-	buf[2] = ((uint8_t) ((Time.now()) >> 16));	// Third byte
-	buf[3] = ((uint8_t) ((Time.now()) >> 8));	// Second byte
-	buf[4] = ((uint8_t) (Time.now()));		    // First byte			
+	buf[0] = current.messageNumber;			 		// Message number
+	buf[1] = ((uint8_t) ((Time.now()) >> 24)); 		// Fourth byte - current time
+	buf[2] = ((uint8_t) ((Time.now()) >> 16));		// Third byte
+	buf[3] = ((uint8_t) ((Time.now()) >> 8));		// Second byte
+	buf[4] = ((uint8_t) (Time.now()));		    	// First byte			
 	buf[5] = highByte(sysStatus.frequencyMinutes);	// Frequency of reports - for Gateways
 	buf[6] = lowByte(sysStatus.frequencyMinutes);	
 	buf[7] = highByte(sysStatus.nextReportSeconds);	// Seconds until next report - for Nodes
 	buf[8] = lowByte(sysStatus.nextReportSeconds);
 	
-	Log.info("Sent response to client message = %d, time = %s, next report = %u seconds", buf[0], Time.timeStr(buf[1] << 24 | buf[2] << 16 | buf[3] <<8 | buf[4]).c_str(), (buf[7] << 8 | buf[8]));
+	Log.info("Sent response to client message %d, time = %s, next report = %u seconds", buf[0], Time.timeStr(buf[1] << 24 | buf[2] << 16 | buf[3] <<8 | buf[4]).c_str(), (buf[7] << 8 | buf[8]));
 
 	digitalWrite(BLUE_LED,HIGH);			        // Sending data
 
@@ -208,6 +194,16 @@ bool acknowledgeDataReportGateway(int nextSeconds) {
 	digitalWrite(BLUE_LED,LOW);
 	driver.sleep();                             // Here is where we will power down the LoRA radio module
 	return false;
+}
+
+
+// These are the receive and respond messages for join requests
+bool decipherJoinRequestGateway() {
+	// Ths only question here is whether the node with the join request needs a new nodeNumber or is just looking for a clock set
+
+	lora_state = JOIN_ACK;			// Prepare to respond
+
+	return true;
 }
 
 bool acknowledgeJoinRequestGateway(int nextSeconds) {
@@ -254,13 +250,13 @@ bool acknowledgeJoinRequestGateway(int nextSeconds) {
 // *****                         Node Functions                       *****
 // ************************************************************************
 bool composeDataReportNode() {
+	static uint8_t msgCnt = 0;
+
 	Log.info("Sending data report to Gateway");
 	digitalWrite(BLUE_LED,HIGH);
 
-	static uint8_t msgCnt = 0;
-
-	buf[0] = highByte(sysStatus.nodeNumber);								// to be replaced/updated
-	buf[1] = lowByte(sysStatus.nodeNumber);								// to be replaced/updated
+	buf[0] = highByte(sysStatus.nodeNumber);				// NodeID for verification
+	buf[1] = lowByte(sysStatus.nodeNumber);				
 	buf[2] = highByte(sysStatus.deviceID);					// Set for device
 	buf[3] = lowByte(sysStatus.deviceID);
 	buf[4] = 1;						// Set for code release - fix later

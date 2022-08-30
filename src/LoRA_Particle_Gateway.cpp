@@ -11,8 +11,6 @@
 // v0.04 - Works - refactored the LoRA functions
 
 // Particle Libraries
-#include <RHMesh.h>
-#include <RH_RF95.h>						        // https://docs.particle.io/reference/device-os/libraries/r/RH_RF95/
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
 #include "LocalTimeRK.h"					        // https://rickkas7.github.io/LocalTimeRK/
 #include "AB1805_RK.h"                              // Watchdog and Real Time Clock - https://github.com/rickkas7/AB1805_RK
@@ -71,9 +69,9 @@ void setup()
 
 	PublishQueuePosix::instance().setup();          // Initialize PublishQueuePosixRK
 
-	sysStatus.structuresVersion = 111;
+	// sysStatus.structuresVersion = 1;
 
-	initializeLoRA(1);							// Start the LoRA radio (true for Gateway and false for Node)
+	initializeLoRA(true);							// Start the LoRA radio (true for Gateway and false for Node)
 
 	// Setup local time and set the publishing schedule
 	LocalTime::instance().withConfig(LocalTimePosixTimezone("EST5EDT,M3.2.0/2:00:00,M11.1.0/2:00:00"));			// East coast of the US
@@ -90,9 +88,9 @@ void setup()
 void loop() {
 	switch (state) {
 		case IDLE_STATE: {
+			static time_t startLoRAState = 0;
 			if (state != oldState) publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 			if (publishSchedule.isScheduledTime()) state = LoRA_STATE;		   // See Time section in setup for schedule
-			if (userSwitchDectected) state = CONNECTING_STATE;
 		} break;
 
 		case SLEEPING_STATE: {
@@ -114,12 +112,10 @@ void loop() {
 
 		case LoRA_STATE: {
 			static system_tick_t startLoRAWindow = 0;
-			static bool successfulReceipt = false;
 
 			if (state != oldState) {
 				publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 				startLoRAWindow = millis();               // Mark when we enter this state - for timeouts
-				successfulReceipt = false;
 				Log.info("Gateway is listening for LoRA messages");
 			} 
 
@@ -129,14 +125,15 @@ void loop() {
 					Log.info("We are updating the publish frequency to %i minutes", sysStatus.frequencyMinutes);
 					publishSchedule.withMinuteOfHour(sysStatus.frequencyMinutes, LocalTimeRange(LocalTimeHMS("06:00:00"), LocalTimeHMS("21:59:59")));	 // Publish every 15 minutes from 6am to 10pm
 					publishSchedule.isScheduledTime(); // Clears this flag
-					successfulReceipt = true;
 				}
-				respondForLoRAMessageGateway(secondsUntilNextEvent());					// Here we send our response based on the type of message received.
+				uint16_t secondsUntilNextEventShort = secondsUntilNextEvent();
+				Log.info("Sending response with %d seconds until return",secondsUntilNextEventShort);
+				respondForLoRAMessageGateway(secondsUntilNextEventShort);					// Here we send our response based on the type of message received.
+				state = REPORTING_STATE;
 			}
 
 			if ((millis() - startLoRAWindow) > 300000L) {
-				if (successfulReceipt) state = REPORTING_STATE;	// This is a fail safe to make sure an off-line client won't prevent gatewat from checking in - and setting its clock
-				else state = CONNECTING_STATE;					// Just ensures we will see this node online every once in a while - even if the LoRA network is down
+				state = CONNECTING_STATE;
 			}
 
 		} break;
@@ -148,10 +145,7 @@ void loop() {
   			snprintf(data, sizeof(data), "{\"nodeid\":%u, \"hourly\":%u, \"daily\":%u,\"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d, \"alerts\":%d,\"rssi\":%d, \"msg\":%d,\"timestamp\":%lu000}",sysStatus.nodeNumber, current.hourly, current.daily, current.stateOfCharge, batteryContext[current.batteryState], current.internalTempC, sysStatus.resetCount, sysStatus.lastAlertCode, current.rssi, current.messageNumber, Time.now());
   			PublishQueuePosix::instance().publish("Ubidots-LoRA-Hook-v1", data, PRIVATE | WITH_ACK);
 
-			if (!Particle.connected()) state = CONNECTING_STATE;                     // Now we will turn on the cellular radio and connect to Particle
-			else if (sysStatus.lowPowerMode) state = DISCONNECTING_STATE;			// If we are connected but need to go to low power mode, we need to disconnect
-			else state = IDLE_STATE;
-
+			state = IDLE_STATE;
 		} break;
 
 		case CONNECTING_STATE: {
@@ -233,12 +227,11 @@ int secondsUntilNextEvent() {											// Time till next scheduled event
 
         LocalTimeConvert localTimeConvert_NEXT;
         localTimeConvert_NEXT.withCurrentTime().convert();
-
 		publishSchedule.isScheduledTime();								// Clears this flag if set and enabled the next time
 
 		if (publishSchedule.getNextScheduledTime(localTimeConvert_NEXT)) {
 			long unsigned secondsToReturn = constrain(localTimeConvert_NEXT.time - localTimeConvert_NOW.time, 0L, 86400L);	// Constrain to positive seconds less than or equal to a day.
-        	Log.info("time of next event is: %s which is %lu seconds away", localTimeConvert_NEXT.format(TIME_FORMAT_DEFAULT).c_str(), secondsToReturn);
+        	Log.info("local time: %s and next event is %lu seconds away", localTimeConvert_NOW.format(TIME_FORMAT_DEFAULT).c_str(), secondsToReturn);
 			return (uint16_t)secondsToReturn;
 		}
 		else return 0;
