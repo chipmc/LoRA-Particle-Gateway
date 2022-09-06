@@ -81,5 +81,6 @@
         "cinttypes": "cpp"
     },
     "particle.targetPlatform": "boron",
-    "particle.targetDevice": "LoRA-Particle-Gateway"
+    "particle.targetDevice": "LoRA-Particle-Gateway",
+    "particle.firmwareVersion": "4.0.0"
 }

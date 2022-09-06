@@ -24,7 +24,6 @@
 #include "take_measurements.h"						// Manages interactions with the sensors (default is temp for charging)
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
-PRODUCT_ID(PLATFORM_ID);                            // Device needs to be added to product ahead of time.  Remove once we go to deviceOS@4.x
 PRODUCT_VERSION(0);
 char currentPointRelease[6] ="0.04";
 
@@ -32,6 +31,9 @@ char currentPointRelease[6] ="0.04";
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
 void userSwitchISR();                               // interrupt service routime for the user switch
 int secondsUntilNextEvent(); 						// Time till next scheduled event
+
+// System Health Variables
+int outOfMemory = -1;                               // From reference code provided in AN0023 (see above)
 
 // State Machine Variables
 enum State { INITIALIZATION_STATE, ERROR_STATE, IDLE_STATE, SLEEPING_STATE, LoRA_STATE, CONNECTING_STATE, DISCONNECTING_STATE, REPORTING_STATE};
@@ -45,6 +47,7 @@ MB85RC64 fram(Wire, 0);                             // Rickkas' FRAM library
 AB1805 ab1805(Wire);                                // Rickkas' RTC / Watchdog library
 LocalTimeSchedule publishSchedule;					// These allow us to enable a schedule and to use local time
 LocalTimeConvert localTimeConvert_NOW;
+void outOfMemoryHandler(system_event_t event, int param);
 
 // Program Variables
 volatile bool userSwitchDectected = false;		
@@ -67,9 +70,9 @@ void setup()
         ab1805.setWDT(AB1805::WATCHDOG_MAX_SECONDS);// Enable watchdog
     }
 
-	PublishQueuePosix::instance().setup();          // Initialize PublishQueuePosixRK
+	System.on(out_of_memory, outOfMemoryHandler);     // Enabling an out of memory handler is a good safety tip. If we run out of memory a System.reset() is done.
 
-	// sysStatus.structuresVersion = 1;
+	PublishQueuePosix::instance().setup();          // Initialize PublishQueuePosixRK
 
 	initializeLoRA(true);							// Start the LoRA radio (true for Gateway and false for Node)
 
@@ -78,7 +81,7 @@ void setup()
 	localTimeConvert_NOW.withCurrentTime().convert();  				        // Convert to local time for use later
   	publishSchedule.withMinuteOfHour(sysStatus.frequencyMinutes, LocalTimeRange(LocalTimeHMS("06:00:00"), LocalTimeHMS("22:59:59")));	 // Publish every 15 minutes from 6am to 10pm
 
-  	Log.info("Startup complete at %s with battery %4.2f", localTimeConvert_NOW.format(TIME_FORMAT_ISO8601_FULL).c_str(), System.batteryCharge());
+  	Log.info("Gateway startup complete at %s with battery %4.2f", localTimeConvert_NOW.format(TIME_FORMAT_ISO8601_FULL).c_str(), System.batteryCharge());
 
   	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); // We may need to monitor the user switch to change behaviours / modes
 
@@ -86,41 +89,46 @@ void setup()
 }
 
 void loop() {
+
 	switch (state) {
 		case IDLE_STATE: {
-			static time_t startLoRAState = 0;
 			if (state != oldState) publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
-			if (publishSchedule.isScheduledTime()) state = LoRA_STATE;		   // See Time section in setup for schedule
+			if (Time.hour() != Time.hour(sysStatus.lastConnection)) state = CONNECTING_STATE;  // Only Connect once an hour
+			else if (publishSchedule.isScheduledTime()) state = LoRA_STATE;		   // See Time section in setup for schedule
+			else state = SLEEPING_STATE;
 		} break;
 
 		case SLEEPING_STATE: {
 			if (state != oldState) publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 			ab1805.stopWDT();  												   // No watchdogs interrupting our slumber
-			int wakeInSeconds = secondsUntilNextEvent()-10;  		   		   // Subtracting ten seconds to reduce prospect of round tripping to IDLE
-			Log.info("Sleep for %i seconds", wakeInSeconds);
+			int wakeInSeconds = secondsUntilNextEvent();  		   		   	   // Time till next event
+			Log.info("Sleep for %i seconds till next event at %s", wakeInSeconds, Time.timeStr(Time.now()+wakeInSeconds).c_str());
+			delay(2000);									// Make sure message gets out
 			config.mode(SystemSleepMode::ULTRA_LOW_POWER)
 				.gpio(BUTTON_PIN,CHANGE)
 				.duration(wakeInSeconds * 1000L);
 			SystemSleepResult result = System.sleep(config);                   // Put the device to sleep device continues operations from here
 			ab1805.resumeWDT();                                                // Wakey Wakey - WDT can resume
 			if (result.wakeupPin() == BUTTON_PIN) {                            // If the user woke the device we need to get up - device was sleeping so we need to reset opening hours
-				setLowPowerMode("0");                                          // We are waking the device for a reason
 				Log.info("Woke with user button - normal operations");
+				state = LoRA_STATE;
 			}
-			state = IDLE_STATE;
+			else state = IDLE_STATE;
+			delay(2000);
+			Log.info("Awoke at %s with %li free memory", Time.timeStr(Time.now()+wakeInSeconds).c_str(), System.freeMemory());
 		} break;
 
-		case LoRA_STATE: {
+		case LoRA_STATE: {														// Enter this state every reporting period and stay here for 5 minutes
 			static system_tick_t startLoRAWindow = 0;
 
 			if (state != oldState) {
-				publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
-				startLoRAWindow = millis();               // Mark when we enter this state - for timeouts
+				if (oldState != REPORTING_STATE) startLoRAWindow = millis();    // Mark when we enter this state - for timeouts - but multiple messages won't keep us here forever
+				publishStateTransition();                   					// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 				Log.info("Gateway is listening for LoRA messages");
 			} 
 
 			if (listenForLoRAMessageGateway()) {
-				if (frequencyUpdated) {              // If we are to change the update frequency, we need to tell the nodes (or at least one node) about it.
+				if (frequencyUpdated) {              							// If we are to change the update frequency, we need to tell the nodes (or at least one node) about it.
 					frequencyUpdated = false;
 					Log.info("We are updating the publish frequency to %i minutes", sysStatus.frequencyMinutes);
 					publishSchedule.withMinuteOfHour(sysStatus.frequencyMinutes, LocalTimeRange(LocalTimeHMS("06:00:00"), LocalTimeHMS("21:59:59")));	 // Publish every 15 minutes from 6am to 10pm
@@ -133,7 +141,7 @@ void loop() {
 			}
 
 			if ((millis() - startLoRAWindow) > 300000L) {
-				state = CONNECTING_STATE;
+				state = IDLE_STATE;
 			}
 
 		} break;
@@ -142,10 +150,10 @@ void loop() {
 			if (state != oldState) publishStateTransition();
 		  	char data[256];                             // Store the date in this character array - not global
 
-  			snprintf(data, sizeof(data), "{\"nodeid\":%u, \"hourly\":%u, \"daily\":%u,\"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d, \"alerts\":%d,\"rssi\":%d, \"msg\":%d,\"timestamp\":%lu000}",sysStatus.nodeNumber, current.hourly, current.daily, current.stateOfCharge, batteryContext[current.batteryState], current.internalTempC, sysStatus.resetCount, sysStatus.lastAlertCode, current.rssi, current.messageNumber, Time.now());
+  			snprintf(data, sizeof(data), "{\"nodeid\":%u, \"hourly\":%u, \"daily\":%u,\"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"rssi\":%d, \"msg\":%d,\"timestamp\":%lu000}",current.deviceID, current.hourlyCount, current.dailyCount, current.stateOfCharge, batteryContext[current.batteryState], current.internalTempC, sysStatus.resetCount, current.rssi, current.messageNumber, Time.now());
   			PublishQueuePosix::instance().publish("Ubidots-LoRA-Hook-v1", data, PRIVATE | WITH_ACK);
 
-			state = IDLE_STATE;
+			state = LoRA_STATE;
 		} break;
 
 		case CONNECTING_STATE: {
@@ -153,14 +161,13 @@ void loop() {
 
 			if (state != oldState) {
 				publishStateTransition();  
-				Particle.connect();
+				if (!Particle.connected()) Particle.connect();
 				connectingTimeout = millis();
 			}
 
 			if (Particle.connected() || millis() - connectingTimeout > 300000L) {		// Either we will connect or we will timeout 
 				sysStatus.lastConnection = Time.now();
-				if(Particle.connected() && !sysStatus.lowPowerMode) state = IDLE_STATE;	// We are connected and not low power - stay connected
-				else state = DISCONNECTING_STATE;										// Typically, we will disconnect and sleep to save power
+				state = DISCONNECTING_STATE;										// Typically, we will disconnect and sleep to save power
 			}
 
 			} break;
@@ -175,17 +182,18 @@ void loop() {
 
 			if (millis() - stayConnectedWindow > 90000) {							// Stay on-line for 90 seconds
 				disconnectFromParticle();
-				if (sysStatus.lowPowerMode) state = SLEEPING_STATE;
-				else state = IDLE_STATE; 										// Not sure if we need this
+				state = IDLE_STATE; 											// Not sure if we need this
 			}
 		} break;
 	}
 
 	ab1805.loop();                                  // Keeps the RTC synchronized with the Boron's clock
-
+	storageObjectLoop();   							// Compares current system and current objects and stores if the hash changes (once / second) in storage_objects.h
 	PublishQueuePosix::instance().loop();           // Check to see if we need to tend to the message queue
 
-    storageObjectLoop();                            // Compares current system and current objects and stores if the hash changes (once / second) in storage_objects.h
+	if (outOfMemory >= 0) {                         // In this function we are going to reset the system if there is an out of memory error
+		System.reset();
+  	}
 }
 
 /**
@@ -195,8 +203,11 @@ void loop() {
  */
 void publishStateTransition(void)
 {
-	char stateTransitionString[40];
-	snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s", stateNames[oldState],stateNames[state]);
+	char stateTransitionString[256];
+	if (state == IDLE_STATE) {
+		if (!Time.isValid()) snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s with invalid time", stateNames[oldState],stateNames[state]);
+		else snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s for %lu seconds", stateNames[oldState],stateNames[state],(sysStatus.nextReportSeconds - (Time.now() - sysStatus.lastConnection)));
+	}	
 	oldState = state;
 	if (Particle.connected()) {
 		static time_t lastPublish = 0;
@@ -206,6 +217,45 @@ void publishStateTransition(void)
 		}
 	}
 	Log.info(stateTransitionString);
+}
+
+// Here are the various hardware and timer interrupt service routines
+void outOfMemoryHandler(system_event_t event, int param) {
+    outOfMemory = param;
+}
+
+void fragmentationCheck() {
+  static uint32_t free_memory = 0;
+  static uint32_t largest_block = 0;
+  static uint32_t prevCheckMillis = 0;
+  static uint8_t fragmentationPercent = 0;
+  static bool printRightAway = true;
+
+  if (millis() - prevCheckMillis > (60000 * 1) || printRightAway) {
+    runtime_info_t info;
+    memset(&info, 0, sizeof(info));
+    info.size = sizeof(info);
+    HAL_Core_Runtime_Info(&info, NULL);
+    largest_block = info.largest_free_block_heap;
+
+    free_memory = System.freeMemory();
+    fragmentationPercent = (largest_block/free_memory)*100;
+    char memoryCharArray[30];
+    snprintf(memoryCharArray, sizeof(memoryCharArray),
+      "%lu.%lu.%lu.%lu"
+      , (uint32_t)free_memory
+      , (uint32_t)largest_block
+      , (uint32_t)fragmentationPercent
+      , (uint32_t)Time.now()
+    );
+    Log.info(memoryCharArray); 
+    prevCheckMillis = millis();
+    printRightAway = false;
+  }
+  
+  if (fragmentationPercent > 50) {
+    System.reset();
+  }
 }
 
 void userSwitchISR() {
@@ -221,9 +271,6 @@ void userSwitchISR() {
  */
 int secondsUntilNextEvent() {											// Time till next scheduled event
    if (Time.isValid()) {
-
-        localTimeConvert_NOW.withCurrentTime().convert();
-        Log.info("local time: %s", localTimeConvert_NOW.format(TIME_FORMAT_DEFAULT).c_str());
 
         LocalTimeConvert localTimeConvert_NEXT;
         localTimeConvert_NEXT.withCurrentTime().convert();

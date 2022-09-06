@@ -17,6 +17,7 @@
 extern char currentPointRelease[6];
 extern bool frequencyUpdated;
 extern char* batteryContext[8];
+extern char sensorTypeConfigStr[16];
 // extern char wakeTimeStr[8];          // May add this functionality later
 // extern char sleepTimeStr[8];         // May add this functionality later
 
@@ -25,8 +26,9 @@ int setFrequency(String command);
 // int setWakeTime(String command);     // May add this functionality later
 // int setSleepTime(String command);    // May add this functionality later
 int setLowPowerMode(String command);
-// void makeUpStringMessages();
+void makeUpStringMessages();
 bool disconnectFromParticle();
+bool setSensorType();                  // Particle function
 int setVerizonSIM(String command);
 
 #endif

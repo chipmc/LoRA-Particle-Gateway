@@ -19,6 +19,10 @@ extern const pin_t BLUE_LED;
 extern const pin_t WAKEUP_PIN;   
 extern const pin_t TMP36_SENSE_PIN;
 
+// Specific to the sensor
+extern const pin_t INT_PIN;
+extern const pin_t MODULE_POWER_PIN;
+
 bool initializePinModes();
 bool initializePowerCfg();
 

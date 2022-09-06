@@ -34,27 +34,37 @@ struct systemStatus_structure {                     // Where we store the config
   uint16_t lastConnectionDuration;                  // How long - in seconds - did it take to last connect to the Particle cloud
   uint16_t nextReportSeconds;                       // How often do we report ( on a node this is seconds - for a gateway it is minutes on the hour)
   uint16_t frequencyMinutes;                        // When we are reporing at minute increments - what are they - for Gateways
-  uint8_t lastAlertCode;                            // Last alert to be reported (0 indicates no alert)
-  unsigned long lastAlertTime;                      // When was the last alert
+  uint8_t alertCodeGateway;                         // Alert code for Gateway Alerts
+  unsigned long alertTimestampGateway;              // When was the last alert
+  bool sensorType;                                  // PIR sensor, car counter, others?
+  uint8_t openTime;                                 // Open time 24 hours
+  uint8_t closeTime;                                // Close time 24 hours
   bool verizonSIM;                                  // Are we using a Verizon SIM?
 };
 extern struct systemStatus_structure sysStatus;
 
 // Current object values are captured at the moment
 struct current_structure {                          // Where we store values in the current wake cycle
-  uint8_t internalTempC;                              // Enclosure temperature in degrees C
+  uint16_t deviceID;                                // The deviceID of the device providing the current data - not the gateway
+  uint16_t nodeNumber;                              // The nodeNumber of the device providing the current data 
+  uint8_t internalTempC;                            // Enclosure temperature in degrees C
   int stateOfCharge;                                // Battery charge level
   uint8_t batteryState;                             // Stores the current battery state (charging, discharging, etc)
   time_t lastSampleTime;                            // Timestamp of last data collection
   uint16_t rssi;                                    // Latest signal strength value
   uint8_t messageNumber;                            // What message are we on
-  uint16_t hourly;                                  // Current Hourly Count
-  uint16_t daily;                                   // Current Daily Count
+  uint32_t lastCountTime;                           // When did we last record a count
+  uint16_t hourlyCount;                             // Current Hourly Count
+  uint16_t dailyCount;                              // Current Daily Count
+  uint8_t alertCodeNode;                            // Alert code from node
+  unsigned long alertTimestampNode;                 // Timestamp of alert
 };
 extern struct current_structure current;
 
 bool storageObjectStart();                          // Initialize the storage instance
 bool storageObjectLoop();                           // Store the current and sysStatus objects
-void loadSystemDefaults();                  // Initilize the object values for new deployments
+void loadSystemDefaults();                          // Initilize the object values for new deployments
+void resetEverything();                                  // Resets the current hourly and daily counts
+
 
 #endif

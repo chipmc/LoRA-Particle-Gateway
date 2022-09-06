@@ -26,13 +26,19 @@ bool respondForLoRAMessageGateway(int nextSeconds);       // When we are respond
 // Specific Gateway Message Functions
 bool decipherDataReportGateway();                            // Gateway - decodes data from a data report
 bool decipherJoinRequestGateway();                          // Gateway - decodes data from a join request
+bool decipherAlertReportGateway();                          // Gateway - decodes data from an alert report
 bool acknowledgeDataReportGateway(int nextSeconds);    // Gateway- acknowledged receipt of a data report
 bool acknowledgeJoinRequestGateway(int nextSeconds);   // Gateway - acknowledged receipt of a join request
+bool acknowledgeAlertReportGateway(int nextSeconds);   // Gateway - acknowledged receipt of an alert report
 
 // Node Functions
+
+bool listenForLoRAMessageNode();                // Node - sent a message - awiting reply
 bool composeDataReportNode();                  // Node - Composes data report
 bool receiveAcknowledmentDataReportNode();     // Node - receives acknolwedgement
 bool composeJoinRequesttNode();                // Node - Composes Join request
 bool receiveAcknowledmentJoinRequestNode();    // Node - received join request asknowledgement
+bool composeAlertReportNode();                  // Node - Composes alert report
+bool receiveAcknowledmentAlertReportNode();    // Node - received alert report asknowledgement
 
 #endif

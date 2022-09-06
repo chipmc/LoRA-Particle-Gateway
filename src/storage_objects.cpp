@@ -1,5 +1,6 @@
 #include "Particle.h"
 #include "storage_objects.h"
+#include "node_configuration.h"
 
 namespace FRAM {                                    // Moved to namespace instead of #define to limit scope
   enum Addresses {
@@ -28,7 +29,7 @@ bool storageObjectStart() {
   byte tempVersion;
   fram.get(FRAM::versionAddr, tempVersion);         // Load the FRAM memory map version into a variable for comparison
   if (tempVersion != FRAMversionNumber) {           // Check to see if the memory map in the sketch matches the data on the chip
-    Log.info("FRAM mismatch, erasing and locafing defaults if it checks out");
+    Log.info("FRAM mismatch, erasing and loading defaults if it checks out");
     fram.erase();                                   // Reset the FRAM to correct the issue
     fram.put(FRAM::versionAddr, FRAMversionNumber); // Put the right value in
     fram.get(FRAM::versionAddr, tempVersion);       // See if this worked
@@ -60,7 +61,9 @@ bool storageObjectLoop() {                          // Monitors the values of th
   static size_t lastCurrentHash;
   bool returnValue = false;
 
-  if (Time.now() - lastCheckTime) {          // Check once a second
+
+  if (Time.now() - lastCheckTime > 60) {            // Check once a second
+    unsigned long stopwatch = millis();
     lastCheckTime = Time.now();                     // Limit all this math to once a second
     size_t sysStatusHash = std::hash<uint16_t>{}(sysStatus.deviceID) + \
                       std::hash<uint16_t>{}(sysStatus.nodeNumber) + \
@@ -75,25 +78,33 @@ bool storageObjectLoop() {                          // Monitors the values of th
                       std::hash<uint16_t>{}(sysStatus.lastConnectionDuration) + \
                       std::hash<uint16_t>{}(sysStatus.frequencyMinutes) + \
                       std::hash<uint16_t>{}(sysStatus.nextReportSeconds) + \
-                      std::hash<byte>{}(sysStatus.lastAlertCode)+ \
-                      std::hash<uint32_t>{}(sysStatus.lastAlertTime) + \
+                      std::hash<byte>{}(sysStatus.alertCodeGateway)+ \
+                      std::hash<uint32_t>{}(sysStatus.alertTimestampGateway) + \
+                      std::hash<bool>{}(sysStatus.sensorType) + \
+                      std::hash<uint8_t>{}(sysStatus.openTime) + \
+                      std::hash<uint8_t>{}(sysStatus.closeTime) + \
                       std::hash<bool>{}(sysStatus.verizonSIM);
     if (sysStatusHash != lastSysStatusHash) {       // If hashes don't match write to FRAM
-      Log.info("sysStaus object stored and hash updated");
       fram.put(FRAM::systemStatusAddr,sysStatus);
       lastSysStatusHash = sysStatusHash;
+      Log.info("sysStaus object stored and hash updated in %lu mSec", (millis() - stopwatch));
       returnValue = true;                           // In case I want to test whether values changed
+      stopwatch = millis();
     } 
-    size_t currentHash =  std::hash<byte>{}(current.internalTempC) + \
+    size_t currentHash = std::hash<uint16_t>{}(current.deviceID) + \
+                      std::hash<uint16_t>{}(current.nodeNumber) + \
+                      std::hash<byte>{}(current.internalTempC) + \
                       std::hash<int>{}(current.stateOfCharge)+ \
                       std::hash<byte>{}(current.batteryState) + \
                       std::hash<time_t>{}(current.lastSampleTime) + \
                       std::hash<uint16_t>{}(current.rssi) + \
                       std::hash<uint8_t>{}(current.messageNumber) + \
-                      std::hash<uint16_t>{}(current.hourly) + \
-                      std::hash<uint16_t>{}(current.daily);
+                      std::hash<uint16_t>{}(current.hourlyCount) + \
+                      std::hash<uint16_t>{}(current.dailyCount) + \
+                      std::hash<uint8_t>{}(current.alertCodeNode) + \
+                      std::hash<uint32_t>{}(current.alertTimestampNode);
     if (currentHash != lastCurrentHash) {           // If hashes don't match write to FRAM
-      Log.info("current object stored and hash updated");
+      Log.info("current object stored and hash updated in %lu mSec", (millis() - stopwatch));
       fram.put(FRAM::currentStatusAddr,current);
       lastCurrentHash = currentHash;
       returnValue = true;
@@ -102,7 +113,6 @@ bool storageObjectLoop() {                          // Monitors the values of th
   }
   return returnValue;
 }
-
 
 /**
  * @brief This function is called in setup if the version of the FRAM stoage map has been changed
@@ -116,13 +126,31 @@ void loadSystemDefaults() {                         // This code is only execute
   sysStatus.nodeNumber = 2;
   sysStatus.structuresVersion = 1;
   sysStatus.firmwareRelease = 1;
-  sysStatus.verboseMode = false;
   sysStatus.solarPowerMode = true;
   sysStatus.lowPowerMode = true;
   sysStatus.resetCount = 0;
   sysStatus.lastHookResponse = 0;
   sysStatus.frequencyMinutes = 60;
-  sysStatus.lastAlertCode = 0;
-  sysStatus.lastAlertTime = 0;
+  sysStatus.alertCodeGateway = 0;
+  sysStatus.alertTimestampGateway = 0;
+  sysStatus.openTime = 6;
+  sysStatus.closeTime = 22;
   sysStatus.verizonSIM = false;
+
+  setNodeConfiguration();                             // Here we will fix the settings specific to the node
+}
+
+/**
+ * @brief Resets all counts to start a new day.
+ *
+ * @details Once run, it will reset all daily-specific counts and trigger an update in FRAM.
+ */
+void resetEverything() {                                              // The device is waking up in a new day or is a new install
+  Log.info("A new day - resetting everything");
+  current.dailyCount = 0;                                             // Reset the counts in FRAM as well
+  current.hourlyCount = 0;
+  current.lastCountTime = Time.now();                                 // Set the time context to the new day
+  current.alertCodeNode = 0;
+  current.alertTimestampNode = 0;
+  sysStatus.resetCount = 0;                                           // Reset the reset count as well
 }

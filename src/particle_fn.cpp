@@ -65,16 +65,18 @@ void particleInitialize() {
   }
 
 
-  	// Check to see if time is valid - if not, we will connect to the cellular network and sync time - accurate time is important for the gateway to function
+  // Check to see if time is valid - if not, we will connect to the cellular network and sync time - accurate time is important for the gateway to function
+  
 	if (!Time.isValid()) {							// I need to make sure the time is valid here.
 		Particle.connect();
 		if (waitFor(Particle.connected, 600000)) {	// Connect to Particle
 			sysStatus.lastConnection = Time.now();			// Record the last connection time
 			Particle.syncTime();					// Sync time
 			waitUntil(Particle.syncTimeDone);		// Make sure sync is complete
-			if (sysStatus.lowPowerMode) disconnectFromParticle();
+			disconnectFromParticle();
 		}
 	}
+  
 
   takeMeasurements();                               // Initialize sensor values
 
@@ -250,6 +252,7 @@ void makeUpStringMessages() {
 }
 */
 
+
 /**
  * @brief Disconnect from Particle function has one purpose - to disconnect the Boron from Particle, the cellular network and to power down the cellular modem to save power
  * 
@@ -288,4 +291,35 @@ bool disconnectFromParticle()                                          // Ensure
     Log.info("Turned off the cellular modem in %i seconds", (int)(Time.now() - startTime));
     return true;
   }
+}
+
+/**
+ * @brief Set the Sensor Type object
+ *
+ * @details Over time, we may want to develop and deploy other sensot types.  The idea of this code is to allow us to select the sensor
+ * we want via the console so all devices can run the same code.
+ *
+ * @param command a string equal to "0" for pressure sensor and "1" for PIR sensor.  More sensor types possible in the future.
+ *
+ * @return returns 1 if successful and 0 if not.
+ */
+int setSensorType(String command)                                     // Function to force sending data in current hour
+{
+  if (command == "0")
+  {
+    sysStatus.sensorType = 0;
+    strncpy(sensorTypeConfigStr,"Pressure Sensor", sizeof(sensorTypeConfigStr));
+    if (Particle.connected()) Particle.publish("Mode","Set Sensor Mode to Pressure", PRIVATE);
+
+    return 1;
+  }
+  else if (command == "1")
+  {
+    sysStatus.sensorType = 1;
+    strncpy(sensorTypeConfigStr,"PIR Sensor", sizeof(sensorTypeConfigStr));
+    if (Particle.connected()) Particle.publish("Mode","Set Sensor Mode to PIR", PRIVATE);
+    return 1;
+  }
+
+  else return 0;
 }
