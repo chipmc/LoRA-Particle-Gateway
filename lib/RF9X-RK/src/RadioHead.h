@@ -1458,7 +1458,7 @@ these examples and explanations and extend them to suit your needs.
     // 2nd-generation particle defines
     #define RH_PLATFORM RH_PLATFORM_STM32F2
   #endif
-  // #define SPI_HAS_TRANSACTION - Chip changed this to fix an issue with compile warnings
+  #define SPI_HAS_TRANSACTION
 #elif (MPIDE>=150 && defined(ARDUINO))
   // Using ChipKIT Core on Arduino IDE
   #define RH_PLATFORM RH_PLATFORM_CHIPKIT_CORE
@@ -1908,7 +1908,7 @@ these examples and explanations and extend them to suit your needs.
 // Uncomment this is to enable Encryption (see RHEncryptedDriver):
 // But ensure you have installed the Crypto directory from arduinolibs first:
 // http://rweather.github.io/arduinolibs/index.html
-//#define RH_ENABLE_ENCRYPTION_MODULE
+#define RH_ENABLE_ENCRYPTION_MODULE
 
 // Some platforms like RocketScream need this to see debug Serial output from within RH
 // and if it goes to Serial, get a hang after a few minutes.

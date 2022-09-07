@@ -66,7 +66,7 @@ void particleInitialize() {
 
 
   // Check to see if time is valid - if not, we will connect to the cellular network and sync time - accurate time is important for the gateway to function
-  
+  /*
 	if (!Time.isValid()) {							// I need to make sure the time is valid here.
 		Particle.connect();
 		if (waitFor(Particle.connected, 600000)) {	// Connect to Particle
@@ -76,7 +76,7 @@ void particleInitialize() {
 			disconnectFromParticle();
 		}
 	}
-  
+  */
 
   takeMeasurements();                               // Initialize sensor values
 

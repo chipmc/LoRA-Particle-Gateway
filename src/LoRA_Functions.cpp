@@ -206,6 +206,7 @@ bool decipherDataReportGateway() {
 }
 
 bool acknowledgeDataReportGateway(int nextSeconds) {
+	uint16_t nextSecondsShort = (uint16_t)nextSeconds;
 
 	// This is a response to a data message it has a length of 9 and a specific payload and message flag
 	// Send a reply back to the originator client
@@ -217,10 +218,10 @@ bool acknowledgeDataReportGateway(int nextSeconds) {
 	buf[4] = ((uint8_t) (Time.now()));		    	// First byte			
 	buf[5] = highByte(sysStatus.frequencyMinutes);	// Frequency of reports - for Gateways
 	buf[6] = lowByte(sysStatus.frequencyMinutes);	
-	buf[7] = highByte(sysStatus.nextReportSeconds);	// Seconds until next report - for Nodes
-	buf[8] = lowByte(sysStatus.nextReportSeconds);
+	buf[7] = highByte(nextSecondsShort);	// Seconds until next report - for Nodes
+	buf[8] = lowByte(nextSecondsShort);
 	
-	Log.info("Sent response to client message %d, time = %s, next report = %u seconds", buf[0], Time.timeStr(buf[1] << 24 | buf[2] << 16 | buf[3] <<8 | buf[4]).c_str(), (buf[7] << 8 | buf[8]));
+	Log.info("Sent response to client message %d, time = %s, next report = %u seconds", buf[0], Time.timeStr(Time.now()).c_str(), nextSecondsShort);
 
 	digitalWrite(BLUE_LED,HIGH);			        // Sending data
 
@@ -269,7 +270,7 @@ bool acknowledgeJoinRequestGateway(int nextSeconds) {
 	buf[7] = highByte(nextSecondsShort);		// Seconds until next report - for Nodes
 	buf[8] = lowByte(nextSecondsShort);
 	
-	Log.info("Sent response to Node %d, time = %s, next report = %u seconds", newNodeNumber, Time.timeStr(buf[1] << 24 | buf[2] << 16 | buf[3] <<8 | buf[4]).c_str(), (buf[7] << 8 | buf[8]));
+	Log.info("Sent response to Node %d, time = %s, next report = %u seconds", newNodeNumber, Time.timeStr(Time.now()).c_str(), nextSecondsShort);
 
 	digitalWrite(BLUE_LED,HIGH);			        // Sending data
 
@@ -314,7 +315,7 @@ bool acknowledgeAlertReportGateway(int nextSeconds) {
 	buf[5] = highByte(nextSecondsShort);		// Seconds until next report - for Nodes
 	buf[6] = lowByte(nextSecondsShort);
 	
-	Log.info("Sent response to Node %d, time = %s, next report = %u seconds", current.nodeNumber, Time.timeStr(buf[1] << 24 | buf[2] << 16 | buf[3] <<8 | buf[4]).c_str(), (buf[5] << 8 | buf[6]));
+	Log.info("Sent response to Node %d, time = %s, next report = %u seconds", current.nodeNumber, Time.timeStr(Time.now()).c_str(), nextSecondsShort);
 
 	digitalWrite(BLUE_LED,HIGH);			        // Sending data
 
@@ -402,7 +403,7 @@ bool receiveAcknowledmentDataReportNode() {
 	sysStatus.nextReportSeconds = ((buf[7] << 8) | buf[8]);
 	uint32_t newTime = ((buf[1] << 24) | (buf[2] << 16) | (buf[3] << 8) | buf[4]);
 	Time.setTime(newTime);  // Set time based on response from gateway
-	Log.info("Time set to %s and next report is in %u seconds", Time.timeStr(newTime).c_str(),sysStatus.nextReportSeconds);
+	Log.info("Time set to %s and next report is in %u seconds at %s", Time.timeStr(newTime).c_str(),sysStatus.nextReportSeconds, Time.timeStr(newTime + sysStatus.nextReportSeconds).c_str());
 	return true;
 }
 

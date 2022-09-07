@@ -13,7 +13,7 @@
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
 #include "LocalTimeRK.h"					        // https://rickkas7.github.io/LocalTimeRK/
-#include "AB1805_RK.h"                              // Watchdog and Real Time Clock - https://github.com/rickkas7/AB1805_RK
+#include "AB1805_RK.h"                          	// Watchdog and Real Time Clock - https://github.com/rickkas7/AB1805_RK
 #include "MB85RC256V-FRAM-RK.h"                     // Rickkas Particle based FRAM Library
 #include "Particle.h"                               // Because it is a CPP file not INO
 // Application Files
@@ -50,7 +50,8 @@ LocalTimeConvert localTimeConvert_NOW;
 void outOfMemoryHandler(system_event_t event, int param);
 
 // Program Variables
-volatile bool userSwitchDectected = false;		
+volatile bool userSwitchDectected = false;	
+bool nextEventTime = false;	
 
 void setup() 
 {
@@ -66,7 +67,6 @@ void setup()
 
     {                                               // Initialize AB1805 Watchdog and RTC                                 
         ab1805.withFOUT(D8).setup();                // The carrier board has D8 connected to FOUT for wake interrupts
-        ab1805.resetConfig();                       // Reset the AB1805 configuration to default values
         ab1805.setWDT(AB1805::WATCHDOG_MAX_SECONDS);// Enable watchdog
     }
 
@@ -85,7 +85,7 @@ void setup()
 
   	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); // We may need to monitor the user switch to change behaviours / modes
 
-	if (state == INITIALIZATION_STATE) state = LoRA_STATE;  // This is not a bad way to start - could also go to the LoRA_STATE
+	if (state == INITIALIZATION_STATE) state = IDLE_STATE;  // This is not a bad way to start - could also go to the LoRA_STATE
 }
 
 void loop() {
@@ -93,8 +93,10 @@ void loop() {
 	switch (state) {
 		case IDLE_STATE: {
 			if (state != oldState) publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
-			if (Time.hour() != Time.hour(sysStatus.lastConnection)) state = CONNECTING_STATE;  // Only Connect once an hour
-			else if (publishSchedule.isScheduledTime()) state = LoRA_STATE;		   // See Time section in setup for schedule
+			if (nextEventTime) {
+				nextEventTime = false;
+				state = LoRA_STATE;		   // See Time section in setup for schedule
+			}
 			else state = SLEEPING_STATE;
 		} break;
 
@@ -102,19 +104,16 @@ void loop() {
 			if (state != oldState) publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 			ab1805.stopWDT();  												   // No watchdogs interrupting our slumber
 			int wakeInSeconds = secondsUntilNextEvent();  		   		   	   // Time till next event
-			Log.info("Sleep for %i seconds till next event at %s", wakeInSeconds, Time.timeStr(Time.now()+wakeInSeconds).c_str());
+			Log.info("Sleep for %i seconds till next event at %s with %li free memory", wakeInSeconds, Time.timeStr(Time.now()+wakeInSeconds).c_str(),System.freeMemory());
 			delay(2000);									// Make sure message gets out
 			config.mode(SystemSleepMode::ULTRA_LOW_POWER)
 				.gpio(BUTTON_PIN,CHANGE)
 				.duration(wakeInSeconds * 1000L);
 			SystemSleepResult result = System.sleep(config);                   // Put the device to sleep device continues operations from here
 			ab1805.resumeWDT();                                                // Wakey Wakey - WDT can resume
-			if (result.wakeupPin() == BUTTON_PIN) {                            // If the user woke the device we need to get up - device was sleeping so we need to reset opening hours
-				Log.info("Woke with user button - normal operations");
-				state = LoRA_STATE;
-			}
-			else state = IDLE_STATE;
-			delay(2000);
+			state = IDLE_STATE;
+			nextEventTime = true;
+			delay(5000);
 			Log.info("Awoke at %s with %li free memory", Time.timeStr(Time.now()+wakeInSeconds).c_str(), System.freeMemory());
 		} break;
 
@@ -140,8 +139,9 @@ void loop() {
 				state = REPORTING_STATE;
 			}
 
-			if ((millis() - startLoRAWindow) > 300000L) {
-				state = IDLE_STATE;
+			if ((millis() - startLoRAWindow) > 90000L) {
+				if (Time.hour() != Time.hour(sysStatus.lastConnection)) state = CONNECTING_STATE;  // Only Connect once an hour
+				else state = IDLE_STATE;
 			}
 
 		} break;
@@ -182,7 +182,20 @@ void loop() {
 
 			if (millis() - stayConnectedWindow > 90000) {							// Stay on-line for 90 seconds
 				disconnectFromParticle();
-				state = IDLE_STATE; 											// Not sure if we need this
+				Log.info("Going to deep power cycle device for next circuit");
+				state = ERROR_STATE; 											// Not sure if we need this
+			}
+		} break;
+
+		case ERROR_STATE: {
+			static system_tick_t resetTimeout = millis();
+
+			if (state != oldState) publishStateTransition();
+
+			if (millis() - resetTimeout > 30000L) {
+				Log.info("Deep power down device");
+				delay(2000);
+				ab1805.deepPowerDown(); 
 			}
 		} break;
 	}
@@ -206,16 +219,12 @@ void publishStateTransition(void)
 	char stateTransitionString[256];
 	if (state == IDLE_STATE) {
 		if (!Time.isValid()) snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s with invalid time", stateNames[oldState],stateNames[state]);
-		else snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s for %lu seconds", stateNames[oldState],stateNames[state],(sysStatus.nextReportSeconds - (Time.now() - sysStatus.lastConnection)));
-	}	
-	oldState = state;
-	if (Particle.connected()) {
-		static time_t lastPublish = 0;
-		if (millis() - lastPublish > 1000) {
-			lastPublish = millis();
-			Particle.publish("State Transition",stateTransitionString, PRIVATE);
-		}
+		else snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s for %u seconds", stateNames[oldState],stateNames[state],(secondsUntilNextEvent()));	
 	}
+	else snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s", stateNames[oldState],stateNames[state]);
+
+	oldState = state;
+
 	Log.info(stateTransitionString);
 }
 
@@ -270,18 +279,14 @@ void userSwitchISR() {
  * 
  */
 int secondsUntilNextEvent() {											// Time till next scheduled event
-   if (Time.isValid()) {
+	unsigned long secondsToReturn = 0;
+	unsigned long wakeBoundary = sysStatus.frequencyMinutes * 60UL;
+   	if (Time.isValid()) {
 
-        LocalTimeConvert localTimeConvert_NEXT;
-        localTimeConvert_NEXT.withCurrentTime().convert();
-		publishSchedule.isScheduledTime();								// Clears this flag if set and enabled the next time
+		secondsToReturn = constrain( wakeBoundary - Time.now() % wakeBoundary, 0UL, wakeBoundary);  // Adding one second to reduce prospect of round tripping to IDLE
+    
+        Log.info("local time: %s and next event is %lu seconds away", localTimeConvert_NOW.format(TIME_FORMAT_DEFAULT).c_str(), secondsToReturn);
 
-		if (publishSchedule.getNextScheduledTime(localTimeConvert_NEXT)) {
-			long unsigned secondsToReturn = constrain(localTimeConvert_NEXT.time - localTimeConvert_NOW.time, 0L, 86400L);	// Constrain to positive seconds less than or equal to a day.
-        	Log.info("local time: %s and next event is %lu seconds away", localTimeConvert_NOW.format(TIME_FORMAT_DEFAULT).c_str(), secondsToReturn);
-			return (uint16_t)secondsToReturn;
-		}
-		else return 0;
     }
-	else return 0;
+	return secondsToReturn;
 }
