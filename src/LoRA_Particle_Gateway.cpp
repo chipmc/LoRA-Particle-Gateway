@@ -9,12 +9,14 @@
 // v0.02 - Adding sleep and scheduling using localTimeRK
 // v0.03 - Refactored the code to make it more modular
 // v0.04 - Works - refactored the LoRA functions
+// v0.05 - Moved to the Storage Helper library
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
 #include "LocalTimeRK.h"					        // https://rickkas7.github.io/LocalTimeRK/
 #include "AB1805_RK.h"                          	// Watchdog and Real Time Clock - https://github.com/rickkas7/AB1805_RK
 #include "MB85RC256V-FRAM-RK.h"                     // Rickkas Particle based FRAM Library
+// #include "StorageHelperRK.h"						// Abstracting storage
 #include "Particle.h"                               // Because it is a CPP file not INO
 // Application Files
 #include "LoRA_Functions.h"							// Where we store all the information on our LoRA implementation - application specific not a general library
@@ -22,10 +24,11 @@
 #include "particle_fn.h"							// Particle specific functions
 #include "storage_objects.h"						// Manage the initialization and storage of persistent objects
 #include "take_measurements.h"						// Manages interactions with the sensors (default is temp for charging)
+#include "MyPersistentData.h"						// Where my persistent storage files are kept
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.04";
+char currentPointRelease[6] ="0.05";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -43,11 +46,12 @@ State oldState = INITIALIZATION_STATE;
 
 // Initialize Functions
 SystemSleepConfiguration config;                    // Initialize new Sleep 2.0 Api
-MB85RC64 fram(Wire, 0);                             // Rickkas' FRAM library
 AB1805 ab1805(Wire);                                // Rickkas' RTC / Watchdog library
 LocalTimeSchedule publishSchedule;					// These allow us to enable a schedule and to use local time
 LocalTimeConvert localTimeConvert_NOW;
 void outOfMemoryHandler(system_event_t event, int param);
+
+// MB85RC64 fram(Wire, 0);
 
 // Program Variables
 volatile bool userSwitchDectected = false;	
@@ -55,13 +59,19 @@ bool nextEventTime = false;
 
 void setup() 
 {
-	delay(5000);	// Wait for serial 
+	waitFor(Serial.isConnected, 10000);				// Wait for serial connection
 
     initializePinModes();                           // Sets the pinModes
 
     initializePowerCfg();                           // Sets the power configuration for solar
 
-    storageObjectStart();                           // Sets up the storage for system and current status in storage_objects.h
+    // storageObjectStart();                           // Sets up the storage for system and current status in storage_objects.h
+
+  // sysStatus.setup();
+  current.setup();
+  sysStatus.setup();
+
+  sysStatus.set_frequencyMinutes(15);
 
     particleInitialize();                           // Sets up all the Particle functions and variables defined in particle_fn.h
 
@@ -79,7 +89,6 @@ void setup()
 	// Setup local time and set the publishing schedule
 	LocalTime::instance().withConfig(LocalTimePosixTimezone("EST5EDT,M3.2.0/2:00:00,M11.1.0/2:00:00"));			// East coast of the US
 	localTimeConvert_NOW.withCurrentTime().convert();  				        // Convert to local time for use later
-  	publishSchedule.withMinuteOfHour(sysStatus.frequencyMinutes, LocalTimeRange(LocalTimeHMS("06:00:00"), LocalTimeHMS("22:59:59")));	 // Publish every 15 minutes from 6am to 10pm
 
   	Log.info("Gateway startup complete at %s with battery %4.2f", localTimeConvert_NOW.format(TIME_FORMAT_ISO8601_FULL).c_str(), System.batteryCharge());
 
@@ -129,18 +138,17 @@ void loop() {
 			if (listenForLoRAMessageGateway()) {
 				if (frequencyUpdated) {              							// If we are to change the update frequency, we need to tell the nodes (or at least one node) about it.
 					frequencyUpdated = false;
-					Log.info("We are updating the publish frequency to %i minutes", sysStatus.frequencyMinutes);
-					publishSchedule.withMinuteOfHour(sysStatus.frequencyMinutes, LocalTimeRange(LocalTimeHMS("06:00:00"), LocalTimeHMS("21:59:59")));	 // Publish every 15 minutes from 6am to 10pm
-					publishSchedule.isScheduledTime(); // Clears this flag
+					sysStatus.set_frequencyMinutes(updatedFrequencyMins);			// This was the temporary value from the particle function
+					Log.info("We are updating the publish frequency to %i minutes", sysStatus.get_frequencyMinutes());
 				}
 				uint16_t secondsUntilNextEventShort = secondsUntilNextEvent();
 				Log.info("Sending response with %d seconds until return",secondsUntilNextEventShort);
-				respondForLoRAMessageGateway(secondsUntilNextEventShort);					// Here we send our response based on the type of message received.
+				respondForLoRAMessageGateway(secondsUntilNextEventShort);	    // Here we send our response based on the type of message received.
 				state = REPORTING_STATE;
 			}
 
 			if ((millis() - startLoRAWindow) > 90000L) {
-				if (Time.hour() != Time.hour(sysStatus.lastConnection)) state = CONNECTING_STATE;  // Only Connect once an hour
+				if (Time.hour() != Time.hour(sysStatus.get_lastConnection())) state = CONNECTING_STATE;  // Only Connect once an hour
 				else state = IDLE_STATE;
 			}
 
@@ -150,7 +158,8 @@ void loop() {
 			if (state != oldState) publishStateTransition();
 		  	char data[256];                             // Store the date in this character array - not global
 
-  			snprintf(data, sizeof(data), "{\"nodeid\":%u, \"hourly\":%u, \"daily\":%u,\"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"rssi\":%d, \"msg\":%d,\"timestamp\":%lu000}",current.deviceID, current.hourlyCount, current.dailyCount, current.stateOfCharge, batteryContext[current.batteryState], current.internalTempC, sysStatus.resetCount, current.rssi, current.messageNumber, Time.now());
+  			snprintf(data, sizeof(data), "{\"nodeid\":%u, \"hourly\":%u, \"daily\":%u,\"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"rssi\":%d, \"msg\":%d,\"timestamp\":%lu000}", \
+				current.get_deviceID(), current.get_hourlyCount(), current.get_dailyCount(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()], current.get_internalTempC(), sysStatus.get_resetCount(), current.get_RSSI(), current.get_messageNumber(), Time.now());
   			PublishQueuePosix::instance().publish("Ubidots-LoRA-Hook-v1", data, PRIVATE | WITH_ACK);
 
 			state = LoRA_STATE;
@@ -166,7 +175,7 @@ void loop() {
 			}
 
 			if (Particle.connected() || millis() - connectingTimeout > 300000L) {		// Either we will connect or we will timeout 
-				sysStatus.lastConnection = Time.now();
+				sysStatus.set_lastConnection(Time.now());
 				state = DISCONNECTING_STATE;										// Typically, we will disconnect and sleep to save power
 			}
 
@@ -182,6 +191,7 @@ void loop() {
 
 			if (millis() - stayConnectedWindow > 90000) {							// Stay on-line for 90 seconds
 				disconnectFromParticle();
+				// state = IDLE_STATE;
 				Log.info("Going to deep power cycle device for next circuit");
 				state = ERROR_STATE; 											// Not sure if we need this
 			}
@@ -201,8 +211,11 @@ void loop() {
 	}
 
 	ab1805.loop();                                  // Keeps the RTC synchronized with the Boron's clock
-	storageObjectLoop();   							// Compares current system and current objects and stores if the hash changes (once / second) in storage_objects.h
+	// storageObjectLoop();   							// Compares current system and current objects and stores if the hash changes (once / second) in storage_objects.h
 	PublishQueuePosix::instance().loop();           // Check to see if we need to tend to the message queue
+
+	current.loop();
+	sysStatus.loop();
 
 	if (outOfMemory >= 0) {                         // In this function we are going to reset the system if there is an out of memory error
 		System.reset();
@@ -233,40 +246,6 @@ void outOfMemoryHandler(system_event_t event, int param) {
     outOfMemory = param;
 }
 
-void fragmentationCheck() {
-  static uint32_t free_memory = 0;
-  static uint32_t largest_block = 0;
-  static uint32_t prevCheckMillis = 0;
-  static uint8_t fragmentationPercent = 0;
-  static bool printRightAway = true;
-
-  if (millis() - prevCheckMillis > (60000 * 1) || printRightAway) {
-    runtime_info_t info;
-    memset(&info, 0, sizeof(info));
-    info.size = sizeof(info);
-    HAL_Core_Runtime_Info(&info, NULL);
-    largest_block = info.largest_free_block_heap;
-
-    free_memory = System.freeMemory();
-    fragmentationPercent = (largest_block/free_memory)*100;
-    char memoryCharArray[30];
-    snprintf(memoryCharArray, sizeof(memoryCharArray),
-      "%lu.%lu.%lu.%lu"
-      , (uint32_t)free_memory
-      , (uint32_t)largest_block
-      , (uint32_t)fragmentationPercent
-      , (uint32_t)Time.now()
-    );
-    Log.info(memoryCharArray); 
-    prevCheckMillis = millis();
-    printRightAway = false;
-  }
-  
-  if (fragmentationPercent > 50) {
-    System.reset();
-  }
-}
-
 void userSwitchISR() {
   userSwitchDectected = true;                                            // The the flag for the user switch interrupt
 }
@@ -280,13 +259,10 @@ void userSwitchISR() {
  */
 int secondsUntilNextEvent() {											// Time till next scheduled event
 	unsigned long secondsToReturn = 0;
-	unsigned long wakeBoundary = sysStatus.frequencyMinutes * 60UL;
+	unsigned long wakeBoundary = sysStatus.get_frequencyMinutes() * 60UL;
    	if (Time.isValid()) {
-
 		secondsToReturn = constrain( wakeBoundary - Time.now() % wakeBoundary, 0UL, wakeBoundary);  // Adding one second to reduce prospect of round tripping to IDLE
-    
         Log.info("local time: %s and next event is %lu seconds away", localTimeConvert_NOW.format(TIME_FORMAT_DEFAULT).c_str(), secondsToReturn);
-
     }
 	return secondsToReturn;
 }

@@ -16,6 +16,7 @@
 // Variables
 extern char currentPointRelease[6];
 extern bool frequencyUpdated;
+extern uint16_t updatedFrequencyMins;
 extern char* batteryContext[8];
 extern char sensorTypeConfigStr[16];
 // extern char wakeTimeStr[8];          // May add this functionality later

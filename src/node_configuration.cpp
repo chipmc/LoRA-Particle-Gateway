@@ -6,5 +6,5 @@
 #include "storage_objects.h"
 
 void setNodeConfiguration() {
-  sysStatus.sensorType = false; // Default is the car counter (true for PIR)
+  sysStatus.set_sensorType(false); // Default is the car counter (true for PIR)
 }

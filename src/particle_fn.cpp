@@ -21,6 +21,7 @@ SerialLogHandler logHandler(LOG_LEVEL_INFO);     // Easier to see the program fl
 // Serial1LogHandler logHandler1(57600);            // This line is for when we are using the OTII ARC for power analysis
 
 bool frequencyUpdated = false;
+uint16_t updatedFrequencyMins = 60;
 
 /**
  * @brief Particle cacluated variable
@@ -29,7 +30,7 @@ bool frequencyUpdated = false;
  */
 String reportFrequency() {							// Calculated variavble for the report frequency which is an unint16_t and does nto display properly.
     char reportStr[16];
-    snprintf(reportStr, sizeof(reportStr), "%u minures", sysStatus.frequencyMinutes);
+    snprintf(reportStr, sizeof(reportStr), "%u minures", sysStatus.get_frequencyMinutes());
     return reportStr;
 }
 
@@ -44,13 +45,13 @@ void particleInitialize() {
   const char* batteryContext[8] = {"Unknown","Not Charging","Charging","Charged","Discharging","Fault","Diconnected"};
 
   Log.info("Initializing Particle functions and variables");     // Note: Don't have to be connected but these functions need to in first 30 seconds
-  Particle.variable("Low Power Mode",(sysStatus.lowPowerMode) ? "Yes" : "No");
+  Particle.variable("Low Power Mode",(sysStatus.get_lowPowerMode()) ? "Yes" : "No");
   Particle.variable("Release",currentPointRelease);   
   Particle.variable("Signal", signalStr);
-  Particle.variable("stateOfChg", current.stateOfCharge);
-  Particle.variable("BatteryContext",batteryContext[current.batteryState]);
+  Particle.variable("stateOfChg", current.get_stateOfCharge());
+  Particle.variable("BatteryContext",batteryContext[current.get_batteryState()]);
   Particle.variable("Reporting Frequency", reportFrequency);
-  Particle.variable("SIM Card", (sysStatus.verizonSIM) ? "Verizon" : "Particle");
+  Particle.variable("SIM Card", (sysStatus.get_verizonSIM()) ? "Verizon" : "Particle");
 
 
   Particle.function("Set Low Power", setLowPowerMode);
@@ -60,7 +61,7 @@ void particleInitialize() {
   Particle.function("SIM Card", setVerizonSIM);
 
   if (!digitalRead(BUTTON_PIN)) {
-    sysStatus.lowPowerMode = false;     // If the user button is held down while resetting - diable sleep
+    sysStatus.set_lowPowerMode(false);     // If the user button is held down while resetting - diable sleep
     Particle.connect();
   }
 
@@ -100,13 +101,13 @@ int setFrequency(String command)
   char data[256];
   int tempTime = strtol(command,&pEND,10);                       // Looks for the first integer and interprets it
   if ((tempTime < 0) || (tempTime > 120)) return 0;   // Make sure it falls in a valid range or send a "fail" result
-  sysStatus.frequencyMinutes = tempTime;
-  if (sysStatus.frequencyMinutes < 12 && sysStatus.lowPowerMode) {
+  updatedFrequencyMins = tempTime;
+  if (updatedFrequencyMins < 12 && sysStatus.get_lowPowerMode()) {
     Log.info("Short reporting frequency over-rides low power");
-    sysStatus.lowPowerMode = false;
+    sysStatus.set_lowPowerMode(false);
   }
   frequencyUpdated = true;                            // Flag to change frequency after next connection to the nodes
-  snprintf(data, sizeof(data), "Report frequency will be set to %i minutes at next LoRA connect",sysStatus.frequencyMinutes);
+  snprintf(data, sizeof(data), "Report frequency will be set to %i minutes at next LoRA connect",updatedFrequencyMins);
   Log.info(data);
   if (Particle.connected()) Particle.publish("Time",data, PRIVATE);
   return 1;
@@ -186,17 +187,17 @@ int setLowPowerMode(String command)                                   // This is
   char data[64];
   if (command != "1" && command != "0") return 0;                     // Before we begin, let's make sure we have a valid input
   if (command == "1") {                                               // Command calls for enabling sleep
-    sysStatus.lowPowerMode = true;
-    if (sysStatus.frequencyMinutes < 12) {                            // Need to increase reporting frequency to at least 12 mins for low power
+    sysStatus.set_lowPowerMode(true);
+    if (sysStatus.get_frequencyMinutes() < 12 ) {                          // Need to increase reporting frequency to at least 12 mins for low power
       Log.info("Increasing reporting frequency to 12 minutes");
-      sysStatus.frequencyMinutes = 12;
+      sysStatus.set_frequencyMinutes(12);
       frequencyUpdated = true;
     }
   }
   else {                                                             // Command calls for disabling sleep
-    sysStatus.lowPowerMode = false;
+    sysStatus.set_lowPowerMode(false);
   }
-  snprintf(data, sizeof(data), "Is Low Power Mode set? %s", (sysStatus.lowPowerMode) ? "yes" : "no");
+  snprintf(data, sizeof(data), "Is Low Power Mode set? %s", (sysStatus.get_lowPowerMode()) ? "yes" : "no");
   Log.info(data);
   if (Particle.connected()) {
     Particle.publish("Mode",data, PRIVATE);
@@ -214,14 +215,14 @@ int setVerizonSIM(String command)                                   // If we are
 {
   if (command == "1")
   {
-    sysStatus.verizonSIM = true;
+    sysStatus.set_verizonSIM(true);
     Particle.keepAlive(60);                                         // send a ping every minute
     if (Particle.connected()) Particle.publish("Mode","Set to Verizon SIM", PRIVATE);
     return 1;
   }
   else if (command == "0")
   {
-    sysStatus.verizonSIM = false;
+    sysStatus.set_verizonSIM(false);
     Particle.keepAlive(23 * 60);                                     // send a ping every 23 minutes
     if (Particle.connected()) Particle.publish("Mode","Set to Particle SIM", PRIVATE);
     return 1;
@@ -307,7 +308,7 @@ int setSensorType(String command)                                     // Functio
 {
   if (command == "0")
   {
-    sysStatus.sensorType = 0;
+    sysStatus.set_sensorType(0);
     strncpy(sensorTypeConfigStr,"Pressure Sensor", sizeof(sensorTypeConfigStr));
     if (Particle.connected()) Particle.publish("Mode","Set Sensor Mode to Pressure", PRIVATE);
 
@@ -315,7 +316,7 @@ int setSensorType(String command)                                     // Functio
   }
   else if (command == "1")
   {
-    sysStatus.sensorType = 1;
+    sysStatus.set_sensorType(1);
     strncpy(sensorTypeConfigStr,"PIR Sensor", sizeof(sensorTypeConfigStr));
     if (Particle.connected()) Particle.publish("Mode","Set Sensor Mode to PIR", PRIVATE);
     return 1;

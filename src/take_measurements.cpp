@@ -25,8 +25,8 @@ char signalStr[64] = " ";
 bool takeMeasurements() { 
 
     // Temperature inside the enclosure
-    current.internalTempC = (int)tmp36TemperatureC(analogRead(TMP36_SENSE_PIN));
-    snprintf(internalTempStr,sizeof(internalTempStr), "%i C", current.internalTempC);
+    current.set_internalTempC((int)tmp36TemperatureC(analogRead(TMP36_SENSE_PIN)));
+    snprintf(internalTempStr,sizeof(internalTempStr), "%i C", current.get_internalTempC());
     Log.info("Internal Temperature is %s",internalTempStr);
 
     batteryState();
@@ -79,16 +79,16 @@ float tmp36TemperatureC (int adcValue) {
  * @return false - Less than 60% indicates a low battery condition
  */
 bool batteryState() {
-    current.batteryState = System.batteryState();                      // Call before isItSafeToCharge() as it may overwrite the context
+    current.set_batteryState(System.batteryState());                      // Call before isItSafeToCharge() as it may overwrite the context
 
-  if (sysStatus.lowPowerMode) {                                        // Need to take these steps if we are sleeping
+  if (sysStatus.get_lowPowerMode()) {                                        // Need to take these steps if we are sleeping
     fuelGauge.quickStart();                                            // May help us re-establish a baseline for SoC
     delay(500);
   }
 
-  current.stateOfCharge = int(fuelGauge.getSoC());                   // Assign to system value
+  current.set_stateOfCharge(System.batteryCharge());                   // Assign to system value
 
-  if (current.stateOfCharge > 60) return true;
+  if (current.get_stateOfCharge() > 60) return true;
   else return false;
 }
 
@@ -103,9 +103,9 @@ bool batteryState() {
 bool isItSafeToCharge()                             // Returns a true or false if the battery is in a safe charging range.
 {
   PMIC pmic(true);
-  if (current.internalTempC < 0 || current.internalTempC > 37 )  {  // Reference: (32 to 113 but with safety)
+  if (current.get_internalTempC() < 0 || current.get_internalTempC() > 37 )  {  // Reference: (32 to 113 but with safety)
     pmic.disableCharging();                         // It is too cold or too hot to safely charge the battery
-    current.batteryState = 1;                       // Overwrites the values from the batteryState API to reflect that we are "Not Charging"
+    current.set_batteryState(1);                       // Overwrites the values from the batteryState API to reflect that we are "Not Charging"
     return false;
   }
   else {

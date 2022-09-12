@@ -1,7 +1,9 @@
 #include "Particle.h"
 #include "storage_objects.h"
 #include "node_configuration.h"
+#include "MyPersistentData.h"
 
+/*
 namespace FRAM {                                    // Moved to namespace instead of #define to limit scope
   enum Addresses {
     versionAddr           = 0x00,                   // Version of the FRAM memory map
@@ -9,12 +11,13 @@ namespace FRAM {                                    // Moved to namespace instea
     currentStatusAddr     = 0x50                    // Where we store the current counts data structure
   };
 }
+*/
 
-const int FRAMversionNumber = 1;
+// const int FRAMversionNumber = 1;
 
 // These two storage objects are initilized here and are external everywhere else
-struct systemStatus_structure sysStatus;            // See structure definition in storage_objects.h
-struct current_structure current;     
+// struct systemStatus_structure sysStatus;            // See structure definition in storage_objects.h
+// struct current_structure current;     
 
 /**
  * @brief This function is executed in setup to initialize FRAM and load the storage objects from memory
@@ -22,6 +25,7 @@ struct current_structure current;
  * @return true - Functions completed - values loaded or initilized if version number changed
  * @return false - Storage not initialized - need to resolve in an ERROR state
  */
+/*
 bool storageObjectStart() {
     // Next we will load FRAM and check or reset variables to their correct values
   Log.info("Initializing the Object Store");
@@ -42,11 +46,11 @@ bool storageObjectStart() {
   else {
     Log.info("FRAM initialized, loading objects");
     fram.get(FRAM::systemStatusAddr,sysStatus);     // Loads the System Status array from FRAM
-    fram.get(FRAM::currentStatusAddr,current);      // Loads the current values array from FRAM
+    // fram.get(FRAM::currentStatusAddr,current);      // Loads the current values array from FRAM
   }
-
   return true;
 }
+  */
 
 /**
  * @brief In this function, we check each second to see if the values in the storage objects have changed
@@ -54,11 +58,11 @@ bool storageObjectStart() {
  * @return true - One or more of the hash values have changed - object written to FRAM
  * @return false - No change, nothing written to FRAM
  */
-
+/*
 bool storageObjectLoop() {                          // Monitors the values of the two objects and writes to FRAM if changed after a second
   static time_t lastCheckTime = 0;
   static size_t lastSysStatusHash;
-  static size_t lastCurrentHash;
+  // static size_t lastCurrentHash;
   bool returnValue = false;
 
 
@@ -91,6 +95,7 @@ bool storageObjectLoop() {                          // Monitors the values of th
       returnValue = true;                           // In case I want to test whether values changed
       stopwatch = millis();
     } 
+
     size_t currentHash = std::hash<uint16_t>{}(current.deviceID) + \
                       std::hash<uint16_t>{}(current.nodeNumber) + \
                       std::hash<byte>{}(current.internalTempC) + \
@@ -110,9 +115,11 @@ bool storageObjectLoop() {                          // Monitors the values of th
       returnValue = true;
     } 
 
+
   }
   return returnValue;
 }
+*/
 
 /**
  * @brief This function is called in setup if the version of the FRAM stoage map has been changed
@@ -123,19 +130,20 @@ void loadSystemDefaults() {                         // This code is only execute
     Particle.publish("Mode","Loading System Defaults", PRIVATE);
   }
   Log.info("Loading system defaults");              // Letting us know that defaults are being loaded
-  sysStatus.nodeNumber = 2;
-  sysStatus.structuresVersion = 1;
-  sysStatus.firmwareRelease = 1;
-  sysStatus.solarPowerMode = true;
-  sysStatus.lowPowerMode = true;
-  sysStatus.resetCount = 0;
-  sysStatus.lastHookResponse = 0;
-  sysStatus.frequencyMinutes = 60;
-  sysStatus.alertCodeGateway = 0;
-  sysStatus.alertTimestampGateway = 0;
-  sysStatus.openTime = 6;
-  sysStatus.closeTime = 22;
-  sysStatus.verizonSIM = false;
+
+  sysStatus.set_nodeNumber(2);
+  sysStatus.set_structuresVersion(1);
+  sysStatus.set_firmwareRelease(1);
+  sysStatus.set_solarPowerMode(true);
+  sysStatus.set_lowPowerMode(true);
+  sysStatus.set_resetCount(0);
+  sysStatus.set_lastHookResponse(0);
+  sysStatus.set_frequencyMinutes(60);
+  sysStatus.set_alertCodeGateway(0);
+  sysStatus.set_alertTimestampGateway(0);
+  sysStatus.set_openTime(6);
+  sysStatus.set_closeTime(22);
+  sysStatus.set_verizonSIM(false);
 
   setNodeConfiguration();                             // Here we will fix the settings specific to the node
 }
@@ -147,10 +155,15 @@ void loadSystemDefaults() {                         // This code is only execute
  */
 void resetEverything() {                                              // The device is waking up in a new day or is a new install
   Log.info("A new day - resetting everything");
-  current.dailyCount = 0;                                             // Reset the counts in FRAM as well
-  current.hourlyCount = 0;
-  current.lastCountTime = Time.now();                                 // Set the time context to the new day
-  current.alertCodeNode = 0;
-  current.alertTimestampNode = 0;
-  sysStatus.resetCount = 0;                                           // Reset the reset count as well
+  current.set_dailyCount(0);
+  //current.dailyCount = 0;                                             // Reset the counts in FRAM as well
+  current.set_hourlyCount(0);
+  //current.hourlyCount = 0;
+  current.set_lastCountTime(Time.now());
+  //current.lastCountTime = Time.now();                                 // Set the time context to the new day
+  current.set_alertCodeNode(0);
+  //current.alertCodeNode = 0;
+  current.set_alertTimestampNode(Time.now());
+  //current.alertTimestampNode = 0;
+  sysStatus.set_resetCount(0);                                           // Reset the reset count as well
 }

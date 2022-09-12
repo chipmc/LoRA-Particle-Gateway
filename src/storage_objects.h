@@ -16,10 +16,13 @@
 
 #include "Particle.h"
 #include "MB85RC256V-FRAM-RK.h"                     // Include this library if you are using FRAM
+#include "StorageHelperRK.h"
+#include "MyPersistentData.h"
 
-extern MB85RC64 fram;                               // FRAM storage initilized in main source file
+//extern MB85RC64 fram;                               // FRAM storage initilized in main source file
 
 // If you modify the sysStatus or current structures, make sure to update the hash function definitions
+/*
 struct systemStatus_structure {                     // Where we store the configuration / status of the device
   uint16_t deviceID;                                // Unique to the device
   uint16_t nodeNumber;                              // Assigned by the gateway on joining the network
@@ -42,8 +45,9 @@ struct systemStatus_structure {                     // Where we store the config
   bool verizonSIM;                                  // Are we using a Verizon SIM?
 };
 extern struct systemStatus_structure sysStatus;
-
+*/
 // Current object values are captured at the moment
+/*
 struct current_structure {                          // Where we store values in the current wake cycle
   uint16_t deviceID;                                // The deviceID of the device providing the current data - not the gateway
   uint16_t nodeNumber;                              // The nodeNumber of the device providing the current data 
@@ -60,6 +64,7 @@ struct current_structure {                          // Where we store values in 
   unsigned long alertTimestampNode;                 // Timestamp of alert
 };
 extern struct current_structure current;
+*/
 
 bool storageObjectStart();                          // Initialize the storage instance
 bool storageObjectLoop();                           // Store the current and sysStatus objects
