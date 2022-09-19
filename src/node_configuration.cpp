@@ -3,8 +3,11 @@
  * 
  */
 
-#include "storage_objects.h"
+#include "Particle.h"
+#include "MyPersistentData.h"
 
 void setNodeConfiguration() {
-  sysStatus.set_sensorType(false); // Default is the car counter (true for PIR)
+  Log.info("Setting values for the node");
+  sysStatus.set_sensorType(true); // Default is the car counter (true for PIR)
+  // sysStatus.set_deviceID(32148);
 }

@@ -6,6 +6,7 @@ const char* batteryContext[7] = {"Unknown","Not Charging","Charging","Charged","
 #include "Particle.h"
 #include "take_measurements.h"
 #include "device_pinout.h"
+#include "MyPersistentData.h"
 
 FuelGauge fuelGauge;                                // Needed to address issue with updates in low battery state 
 
@@ -134,4 +135,24 @@ void getSignalStrength() {
   float qualityPercentage = sig.getQuality();
 
   snprintf(signalStr,sizeof(signalStr), "%s S:%2.0f%%, Q:%2.0f%% ", radioTech[rat], strengthPercentage, qualityPercentage);
+}
+
+/**
+ * @brief This function is called once a hardware interrupt is triggered by the device's sensor
+ * 
+ * @details The sensor may change based on the settings in sysSettings but the overall concept of operations
+ * is the same regardless.  The sensor will trigger an interrupt, which will set a flag. In the main loop
+ * that flag will call this function which will determine if this event should "count" as a visitor.
+ * 
+ */
+void recordCount() // This is where we check to see if an interrupt is set when not asleep or act on a tap that woke the device
+{
+  pinSetFast(BLUE_LED);                                               // Turn on the blue LED
+
+  current.set_lastCountTime(Time.now());
+  current.set_hourlyCount(current.get_hourlyCount() +1);                                              // Increment the PersonCount
+  current.set_dailyCount(current.get_dailyCount() +1);                                               // Increment the PersonCount
+  Log.info("Count, hourly: %i. daily: %i",current.get_hourlyCount(),current.get_dailyCount());
+  delay(200);
+  pinResetFast(BLUE_LED);
 }

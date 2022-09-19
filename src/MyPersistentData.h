@@ -5,6 +5,10 @@
 #include "MB85RC256V-FRAM-RK.h"
 #include "StorageHelperRK.h"
 
+// Common Storage Functions
+void loadSystemDefaults();                          // Initilize the object values for new deployments
+void resetEverything();                                  // Resets the current hourly and daily counts
+
 //Include other application specific header files
 // #include (no other header files required from other singleton classes)
 

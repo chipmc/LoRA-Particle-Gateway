@@ -10,25 +10,24 @@
 // v0.03 - Refactored the code to make it more modular
 // v0.04 - Works - refactored the LoRA functions
 // v0.05 - Moved to the Storage Helper library
+// v0.06 - Moved the LoRA Functions to a class implementation
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
 #include "LocalTimeRK.h"					        // https://rickkas7.github.io/LocalTimeRK/
 #include "AB1805_RK.h"                          	// Watchdog and Real Time Clock - https://github.com/rickkas7/AB1805_RK
 #include "MB85RC256V-FRAM-RK.h"                     // Rickkas Particle based FRAM Library
-// #include "StorageHelperRK.h"						// Abstracting storage
 #include "Particle.h"                               // Because it is a CPP file not INO
 // Application Files
 #include "LoRA_Functions.h"							// Where we store all the information on our LoRA implementation - application specific not a general library
 #include "device_pinout.h"							// Define pinouts and initialize them
 #include "particle_fn.h"							// Particle specific functions
-#include "storage_objects.h"						// Manage the initialization and storage of persistent objects
 #include "take_measurements.h"						// Manages interactions with the sensors (default is temp for charging)
 #include "MyPersistentData.h"						// Where my persistent storage files are kept
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.05";
+char currentPointRelease[6] ="0.06";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -65,13 +64,10 @@ void setup()
 
     initializePowerCfg();                           // Sets the power configuration for solar
 
+	current.setup();
+  	sysStatus.setup();
+
     // storageObjectStart();                           // Sets up the storage for system and current status in storage_objects.h
-
-  // sysStatus.setup();
-  current.setup();
-  sysStatus.setup();
-
-  sysStatus.set_frequencyMinutes(15);
 
     particleInitialize();                           // Sets up all the Particle functions and variables defined in particle_fn.h
 
@@ -84,7 +80,7 @@ void setup()
 
 	PublishQueuePosix::instance().setup();          // Initialize PublishQueuePosixRK
 
-	initializeLoRA(true);							// Start the LoRA radio (true for Gateway and false for Node)
+	LoRA_Functions::instance().setup(true);			// Start the LoRA radio (true for Gateway and false for Node)
 
 	// Setup local time and set the publishing schedule
 	LocalTime::instance().withConfig(LocalTimePosixTimezone("EST5EDT,M3.2.0/2:00:00,M11.1.0/2:00:00"));			// East coast of the US
@@ -135,7 +131,7 @@ void loop() {
 				Log.info("Gateway is listening for LoRA messages");
 			} 
 
-			if (listenForLoRAMessageGateway()) {
+			if (LoRA_Functions::instance().listenForLoRAMessageGateway()) {
 				if (frequencyUpdated) {              							// If we are to change the update frequency, we need to tell the nodes (or at least one node) about it.
 					frequencyUpdated = false;
 					sysStatus.set_frequencyMinutes(updatedFrequencyMins);			// This was the temporary value from the particle function
@@ -143,11 +139,11 @@ void loop() {
 				}
 				uint16_t secondsUntilNextEventShort = secondsUntilNextEvent();
 				Log.info("Sending response with %d seconds until return",secondsUntilNextEventShort);
-				respondForLoRAMessageGateway(secondsUntilNextEventShort);	    // Here we send our response based on the type of message received.
+				LoRA_Functions::instance().respondForLoRAMessageGateway(secondsUntilNextEventShort);	    // Here we send our response based on the type of message received.
 				state = REPORTING_STATE;
 			}
 
-			if ((millis() - startLoRAWindow) > 90000L) {
+			if ((millis() - startLoRAWindow) > 59000L) {						// 59 seconds as the min frequency is 1 minute
 				if (Time.hour() != Time.hour(sysStatus.get_lastConnection())) state = CONNECTING_STATE;  // Only Connect once an hour
 				else state = IDLE_STATE;
 			}
@@ -171,11 +167,12 @@ void loop() {
 			if (state != oldState) {
 				publishStateTransition();  
 				if (!Particle.connected()) Particle.connect();
+				sysStatus.set_lastConnection(Time.now());			// Consider moving back to space below - for testing
 				connectingTimeout = millis();
 			}
 
 			if (Particle.connected() || millis() - connectingTimeout > 300000L) {		// Either we will connect or we will timeout 
-				sysStatus.set_lastConnection(Time.now());
+				// sysStatus.set_lastConnection(Time.now());
 				state = DISCONNECTING_STATE;										// Typically, we will disconnect and sleep to save power
 			}
 
@@ -211,10 +208,11 @@ void loop() {
 	}
 
 	ab1805.loop();                                  // Keeps the RTC synchronized with the Boron's clock
-	// storageObjectLoop();   							// Compares current system and current objects and stores if the hash changes (once / second) in storage_objects.h
+
 	PublishQueuePosix::instance().loop();           // Check to see if we need to tend to the message queue
 
 	current.loop();
+	
 	sysStatus.loop();
 
 	if (outOfMemory >= 0) {                         // In this function we are going to reset the system if there is an out of memory error
@@ -266,3 +264,4 @@ int secondsUntilNextEvent() {											// Time till next scheduled event
     }
 	return secondsToReturn;
 }
+

@@ -1,7 +1,53 @@
 #include "Particle.h"
+#include "MB85RC256V-FRAM-RK.h"
+#include "StorageHelperRK.h"
 #include "MyPersistentData.h"
+#include "node_configuration.h"
 
 MB85RC64 fram(Wire, 0);   
+
+// Common Functions
+/**
+ * @brief Resets all counts to start a new day.
+ *
+ * @details Once run, it will reset all daily-specific counts and trigger an update in FRAM.
+ */
+void resetEverything() {                                              // The device is waking up in a new day or is a new install
+  Log.info("A new day - resetting everything");
+  current.set_dailyCount(0);                                            // Reset the counts in FRAM as well
+  current.set_hourlyCount(0);
+  current.set_lastCountTime(Time.now());
+  current.set_alertCodeNode(0);
+  current.set_alertTimestampNode(Time.now());
+  sysStatus.set_resetCount(0);                                           // Reset the reset count as well
+}
+
+/**
+ * @brief This function is called in setup if the version of the FRAM stoage map has been changed
+ * 
+ */
+void loadSystemDefaults() {                         // This code is only executed with a new device or a new storage object structure
+  if (Particle.connected()) {
+    Particle.publish("Mode","Loading System Defaults", PRIVATE);
+  }
+  Log.info("Loading system defaults");              // Letting us know that defaults are being loaded
+
+  sysStatus.set_nodeNumber(2);
+  sysStatus.set_structuresVersion(1);
+  sysStatus.set_firmwareRelease(1);
+  sysStatus.set_solarPowerMode(true);
+  sysStatus.set_lowPowerMode(true);
+  sysStatus.set_resetCount(0);
+  sysStatus.set_lastHookResponse(0);
+  sysStatus.set_frequencyMinutes(60);
+  sysStatus.set_alertCodeGateway(0);
+  sysStatus.set_alertTimestampGateway(0);
+  sysStatus.set_openTime(6);
+  sysStatus.set_closeTime(22);
+  sysStatus.set_verizonSIM(false);
+
+  setNodeConfiguration();                             // Here we will fix the settings specific to the node
+}
 
 // *******************  SysStatus Storage Object **********************
 //
@@ -27,6 +73,7 @@ sysStatusData::~sysStatusData() {
 void sysStatusData::setup() {
     fram.begin();
     sysStatus.load();
+    setNodeConfiguration();                             // Here we will fix the settings specific to the node
 }
 
 void sysStatusData::loop() {
@@ -179,7 +226,7 @@ void sysStatusData::set_verizonSIM(bool value) {
 
 
 // *****************  Current Status Storage Object *******************
-//
+// Offset of 50 bytes - make room for SysStatus
 // ********************************************************************
 
 currentStatusData *currentStatusData::_instance;
@@ -192,7 +239,7 @@ currentStatusData &currentStatusData::instance() {
     return *_instance;
 }
 
-currentStatusData::currentStatusData() : StorageHelperRK::PersistentDataFRAM(::fram, 0, &currentData.currentHeader, sizeof(CurrentData), CURRENT_DATA_MAGIC, CURRENT_DATA_VERSION) {
+currentStatusData::currentStatusData() : StorageHelperRK::PersistentDataFRAM(::fram, 50, &currentData.currentHeader, sizeof(CurrentData), CURRENT_DATA_MAGIC, CURRENT_DATA_VERSION) {
 };
 
 currentStatusData::~currentStatusData() {

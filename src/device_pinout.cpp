@@ -47,6 +47,11 @@ const pin_t TMP36_SENSE_PIN   = A4;
 const pin_t BUTTON_PIN        = D4;
 const pin_t BLUE_LED          = D7;
 const pin_t WAKEUP_PIN        = D8;
+// Sensor specific Pins
+// Specific to the sensor
+extern const pin_t INT_PIN = A1;                   // May need to change this
+extern const pin_t MODULE_POWER_PIN = A2;          // Make sure we document this above
+const pin_t LED_POWER_PIN = A3;
 
 bool initializePinModes() {
     Log.info("Initalizing the pinModes");
@@ -54,8 +59,14 @@ bool initializePinModes() {
     pinMode(BUTTON_PIN,INPUT_PULLUP);               // User button on the carrier board - active LOW
     pinMode(WAKEUP_PIN,INPUT);                      // This pin is active HIGH
     pinMode(BLUE_LED,OUTPUT);                       // On the Boron itself
+    pinMode(INT_PIN, INPUT);
+    pinMode(MODULE_POWER_PIN, OUTPUT);
+    pinMode(LED_POWER_PIN,OUTPUT);
+    digitalWrite(LED_POWER_PIN,LOW);                // Turns on the LEd on the PIR sensor
+    digitalWrite(MODULE_POWER_PIN,LOW);             // Enable (LOW) or disable (HIGH) the sensor
     return true;
 }
+
 
 bool initializePowerCfg() {
     Log.info("Initializing Power Config");
