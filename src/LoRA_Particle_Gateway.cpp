@@ -11,12 +11,12 @@
 // v0.04 - Works - refactored the LoRA functions
 // v0.05 - Moved to the Storage Helper library
 // v0.06 - Moved the LoRA Functions to a class implementation
+// v0.07 - Moved to a class implementation for Particle Functions
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
 #include "LocalTimeRK.h"					        // https://rickkas7.github.io/LocalTimeRK/
 #include "AB1805_RK.h"                          	// Watchdog and Real Time Clock - https://github.com/rickkas7/AB1805_RK
-#include "MB85RC256V-FRAM-RK.h"                     // Rickkas Particle based FRAM Library
 #include "Particle.h"                               // Because it is a CPP file not INO
 // Application Files
 #include "LoRA_Functions.h"							// Where we store all the information on our LoRA implementation - application specific not a general library
@@ -27,7 +27,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.06";
+char currentPointRelease[6] ="0.07";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -55,6 +55,7 @@ void outOfMemoryHandler(system_event_t event, int param);
 // Program Variables
 volatile bool userSwitchDectected = false;	
 bool nextEventTime = false;	
+bool testModeFlag = false;
 
 void setup() 
 {
@@ -64,10 +65,10 @@ void setup()
 
     initializePowerCfg();                           // Sets the power configuration for solar
 
-	current.setup();
-  	sysStatus.setup();
-
-    // storageObjectStart();                           // Sets up the storage for system and current status in storage_objects.h
+	{
+		current.setup();
+  		sysStatus.setup();
+	}
 
     particleInitialize();                           // Sets up all the Particle functions and variables defined in particle_fn.h
 
@@ -88,7 +89,17 @@ void setup()
 
   	Log.info("Gateway startup complete at %s with battery %4.2f", localTimeConvert_NOW.format(TIME_FORMAT_ISO8601_FULL).c_str(), System.batteryCharge());
 
-  	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); // We may need to monitor the user switch to change behaviours / modes
+	if (!digitalRead(BUTTON_PIN)) {
+		Log.info("User button pressed, test mode");
+		testModeFlag = true;
+		digitalWrite(BLUE_LED,HIGH);
+		delay(2000);
+		digitalWrite(BLUE_LED,LOW);
+		state = LoRA_STATE;
+	}
+	else Log.info("No user button push detechted");
+	
+	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); // We may need to monitor the user switch to change behaviours / modes
 
 	if (state == INITIALIZATION_STATE) state = IDLE_STATE;  // This is not a bad way to start - could also go to the LoRA_STATE
 }
@@ -124,6 +135,7 @@ void loop() {
 
 		case LoRA_STATE: {														// Enter this state every reporting period and stay here for 5 minutes
 			static system_tick_t startLoRAWindow = 0;
+			static system_tick_t ledTimer = 0;
 
 			if (state != oldState) {
 				if (oldState != REPORTING_STATE) startLoRAWindow = millis();    // Mark when we enter this state - for timeouts - but multiple messages won't keep us here forever
@@ -132,18 +144,29 @@ void loop() {
 			} 
 
 			if (LoRA_Functions::instance().listenForLoRAMessageGateway()) {
+				uint16_t secondsUntilNextEventShort = 0;
 				if (frequencyUpdated) {              							// If we are to change the update frequency, we need to tell the nodes (or at least one node) about it.
 					frequencyUpdated = false;
 					sysStatus.set_frequencyMinutes(updatedFrequencyMins);			// This was the temporary value from the particle function
 					Log.info("We are updating the publish frequency to %i minutes", sysStatus.get_frequencyMinutes());
 				}
-				uint16_t secondsUntilNextEventShort = secondsUntilNextEvent();
+				if (testModeFlag) secondsUntilNextEventShort = 10;
+				else {
+					secondsUntilNextEventShort = secondsUntilNextEvent();
+					state = REPORTING_STATE;
+				}
 				Log.info("Sending response with %d seconds until return",secondsUntilNextEventShort);
-				LoRA_Functions::instance().respondForLoRAMessageGateway(secondsUntilNextEventShort);	    // Here we send our response based on the type of message received.
-				state = REPORTING_STATE;
+				if (LoRA_Functions::instance().respondForLoRAMessageGateway(secondsUntilNextEventShort)) {	// Here we send our response based on the type of message received.
+					pinSetFast(BLUE_LED);
+					ledTimer = millis();
+				}	  
 			}
 
-			if ((millis() - startLoRAWindow) > 59000L) {						// 59 seconds as the min frequency is 1 minute
+			if (millis() - ledTimer > 2000) {
+				pinResetFast(BLUE_LED);
+			}
+
+			if (!testModeFlag && ((millis() - startLoRAWindow) > 59000L)) {						// 59 seconds as the min frequency is 1 minute
 				if (Time.hour() != Time.hour(sysStatus.get_lastConnection())) state = CONNECTING_STATE;  // Only Connect once an hour
 				else state = IDLE_STATE;
 			}
@@ -176,7 +199,7 @@ void loop() {
 				state = DISCONNECTING_STATE;										// Typically, we will disconnect and sleep to save power
 			}
 
-			} break;
+		} break;
 
 		case DISCONNECTING_STATE: {
 			static system_tick_t stayConnectedWindow = 0;
@@ -188,9 +211,9 @@ void loop() {
 
 			if (millis() - stayConnectedWindow > 90000) {							// Stay on-line for 90 seconds
 				disconnectFromParticle();
-				// state = IDLE_STATE;
-				Log.info("Going to deep power cycle device for next circuit");
-				state = ERROR_STATE; 											// Not sure if we need this
+				state = IDLE_STATE;
+				// Log.info("Going to deep power cycle device for next circuit");
+				// state = ERROR_STATE; 											// Not sure if we need this
 			}
 		} break;
 
@@ -218,6 +241,11 @@ void loop() {
 	if (outOfMemory >= 0) {                         // In this function we are going to reset the system if there is an out of memory error
 		System.reset();
   	}
+
+	if (userSwitchDectected) {
+		userSwitchDectected = false;
+		state = CONNECTING_STATE;
+	}
 }
 
 /**

@@ -39,8 +39,8 @@
 ***********************************************************************************************************************/
 
 //Define pins for the RFM9x on my Particle carrier board
-const pin_t RFM95_CS =      A5;                     // SPI Chip select pin - Standard SPI pins otherwise
-const pin_t RFM95_RST =     D3;                     // Radio module reset
+const pin_t RFM95_CS =      D5;                     // SPI Chip select pin - Standard SPI pins otherwise was A5
+const pin_t RFM95_RST =     D6;                     // Radio module reset was D3
 const pin_t RFM95_INT =     D2;                     // Interrupt from radio
 // Carrier Board standard pins
 const pin_t TMP36_SENSE_PIN   = A4;

@@ -51,7 +51,7 @@ RHMesh manager(driver, GATEWAY_ADDRESS);
 
 // Mesh has much greater memory requirements, and you may need to limit the
 // max message length to prevent wierd crashes
-#define RH_MESH_MAX_MESSAGE_LEN 50
+// #define RH_MESH_MAX_MESSAGE_LEN 50
 uint8_t buf[RH_MESH_MAX_MESSAGE_LEN];               // Related to max message size - RadioHead example note: dont put this on the stack:
 
 
@@ -67,13 +67,11 @@ bool LoRA_Functions::setup(bool gatewayID) {
 	if (!(sysStatus.get_structuresVersion() == 128)) {    	// This will be our indication that the deviceID and nodeID has not yet been set
 		randomSeed(sysStatus.get_lastConnection());			// 32-bit number for seed
 		sysStatus.set_deviceID(random(1,65535));			// 16-bit number for deviceID
-		if (gatewayID) {
-			Log.info("Setting node number as Gateway");
-			sysStatus.set_nodeNumber(0);
-		} 
-		else sysStatus.set_nodeNumber(random(10,255));	// Random number in - unconfigured - range will trigger a Join request
+		if (!gatewayID) sysStatus.set_nodeNumber(random(10,255));		// Random number in - unconfigured - range will trigger a Join request
+		else sysStatus.set_nodeNumber(0);
 		sysStatus.set_structuresVersion(128);			// Set the structure to the magic number so we can have a stable deviceID
 	}
+
 	manager.setThisAddress(sysStatus.get_nodeNumber());	// Assign the NodeNumber to this node
 	
 	Log.info("LoRA Radio initialized as NodeNumber of %i and DeviceID of %i and a magic number of %i", manager.thisAddress(), sysStatus.get_deviceID(), sysStatus.get_structuresVersion());
@@ -83,8 +81,6 @@ bool LoRA_Functions::setup(bool gatewayID) {
 void LoRA_Functions::loop() {
     // Put your code to run during the application thread loop here
 }
-
-
 
 // ************************************************************************
 // *****                      Gateway Functions                       *****
@@ -96,13 +92,13 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 	uint8_t len = sizeof(buf);
 	uint8_t from;  
 	uint8_t messageFlag;
-	system_tick_t waitingFor = 0;
+	Log.info(".");
 	if (manager.recvfromAckTimeout(buf, &len, 1000, &from,__null,__null,&messageFlag))	{	// We have received a message
 		buf[len] = 0;
 		current.set_deviceID(buf[0] << 8 | buf[1]);					// Set the current device ID for reporting
 		current.set_nodeNumber(buf[2] << 8 | buf[3]);
 		lora_state = (LoRA_State)(0x0F & messageFlag);				// Strip out the overhead byte
-		Log.info("Received from node %d with rssi=%d - a %s message of length %d and waited for %lu mSec", current.get_nodeNumber(), driver.lastRssi(), loraStateNames[lora_state], len, waitingFor);
+		Log.info("Received from node %d with rssi=%d - a %s message of length %d", current.get_nodeNumber(), driver.lastRssi(), loraStateNames[lora_state], len);
 
 		if (lora_state == DATA_RPT) { if(LoRA_Functions::instance().decipherDataReportGateway()) return true;}
 		if (lora_state == JOIN_REQ) { if(LoRA_Functions::instance().decipherJoinRequestGateway()) return true;}
@@ -142,9 +138,13 @@ bool LoRA_Functions::decipherDataReportGateway() {
 
 bool LoRA_Functions::acknowledgeDataReportGateway(int nextSeconds) {
 	uint16_t nextSecondsShort = (uint16_t)nextSeconds;
+	static int attempts = 0;
+	static int success = 0;
 
 	// This is a response to a data message it has a length of 9 and a specific payload and message flag
 	// Send a reply back to the originator client
+
+	attempts++;
      
 	buf[0] = current.get_messageNumber();			 		// Message number
 	buf[1] = ((uint8_t) ((Time.now()) >> 24)); 		// Fourth byte - current time
@@ -161,15 +161,16 @@ bool LoRA_Functions::acknowledgeDataReportGateway(int nextSeconds) {
 	digitalWrite(BLUE_LED,HIGH);			        // Sending data
 
 	if (manager.sendtoWait(buf, 9, current.get_nodeNumber(), DATA_ACK) == RH_ROUTER_ERROR_NONE) {
-		Log.info("Response received successfully");
+		success++;
+		Log.info("Response received successfully - success rate %4.2f", ((success * 1.0)/ attempts)*100.0);
 		digitalWrite(BLUE_LED,LOW);
-		// driver.sleep();                             // Here is where we will power down the LoRA radio module
+		driver.sleep();                             // Here is where we will power down the LoRA radio module
 		return true;
 	}
 
-	Log.info("Response not acknowledged");
+	Log.info("Response not acknowledged - success rate %4.2f", ((success * 1.0)/ attempts)*100.0);
 	digitalWrite(BLUE_LED,LOW);
-	// driver.sleep();                             // Here is where we will power down the LoRA radio module
+	driver.sleep();                             // Here is where we will power down the LoRA radio module
 	return false;
 }
 
@@ -212,13 +213,13 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway(int nextSeconds) {
 	if (manager.sendtoWait(buf, 9, current.get_nodeNumber(), JOIN_ACK) == RH_ROUTER_ERROR_NONE) {
 		Log.info("Response received successfully");
 		digitalWrite(BLUE_LED,LOW);
-		// driver.sleep();                             // Here is where we will power down the LoRA radio module
+		driver.sleep();                             // Here is where we will power down the LoRA radio module
 		return true;
 	}
 
 	Log.info("Response not acknowledged");
 	digitalWrite(BLUE_LED,LOW);
-	// driver.sleep();                             // Here is where we will power down the LoRA radio module
+	driver.sleep();                             // Here is where we will power down the LoRA radio module
 	return false;
 }
 
@@ -257,13 +258,13 @@ bool LoRA_Functions::acknowledgeAlertReportGateway(int nextSeconds) {
 	if (manager.sendtoWait(buf, 7, current.get_nodeNumber(), ALERT_ACK) == RH_ROUTER_ERROR_NONE) {
 		Log.info("Response received successfully");
 		digitalWrite(BLUE_LED,LOW);
-		// driver.sleep();                             // Here is where we will power down the LoRA radio module
+		driver.sleep();                             // Here is where we will power down the LoRA radio module
 		return true;
 	}
 
 	Log.info("Response not acknowledged");
 	digitalWrite(BLUE_LED,LOW);
-	// driver.sleep();                             // Here is where we will power down the LoRA radio module
+	driver.sleep();                             // Here is where we will power down the LoRA radio module
 	return false;
 }
 
@@ -276,11 +277,10 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 	uint8_t len = sizeof(buf);
 	uint8_t from;  
 	uint8_t messageFlag;	
-	system_tick_t waitingFor = 0;
 	if (manager.recvfromAckTimeout(buf, &len, 1000, &from,__null,__null,&messageFlag)) {
 		buf[len] = 0;
 		lora_state = (LoRA_State)messageFlag;
-		Log.info("Received from node %d with rssi=%d - a %s message wated for %lu mSec", from, driver.lastRssi(), loraStateNames[lora_state], waitingFor);
+		Log.info("Received from node %d with rssi=%d - a %s message", from, driver.lastRssi(), loraStateNames[lora_state]);
 
 		if (lora_state == DATA_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentDataReportNode()) return true;}
 		if (lora_state == JOIN_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentJoinRequestNode()) return true;}
@@ -291,10 +291,13 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 
 
 bool LoRA_Functions::composeDataReportNode() {
+	static int attempts = 0;
+	static int success = 0;
 	static uint8_t msgCnt = 0;
 
 	Log.info("Sending data report to Gateway");
 	digitalWrite(BLUE_LED,HIGH);
+	attempts++;
 
 	buf[0] = highByte(sysStatus.get_deviceID());					// Set for device
 	buf[1] = lowByte(sysStatus.get_deviceID());
@@ -320,13 +323,16 @@ bool LoRA_Functions::composeDataReportNode() {
 	if (manager.sendtoWait(buf, 17, GATEWAY_ADDRESS, DATA_RPT) == RH_ROUTER_ERROR_NONE) {
 		// It has been reliably delivered to the next node.
 		// Now wait for a reply from the ultimate server 
-		Log.info("Node %d - Data report send to gateway %d successfully", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS);
+		success++;
+		Log.info("Node %d - Data report send to gateway %d successfully - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, ((success * 1.0)/ attempts)*100.0);
 		digitalWrite(BLUE_LED, LOW);
+		driver.sleep();                             // Here is where we will power down the LoRA radio module
 		return true;
 	}
 	else {
-		Log.info("Node %d - Data report send to gateway %d failed", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS);
+		Log.info("Node %d - Data report send to gateway %d failed  - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, ((success * 1.0)/ attempts)*100.0);
 		digitalWrite(BLUE_LED, LOW);
+		driver.sleep();                             // Here is where we will power down the LoRA radio module
 		return false;
 	}
 }
@@ -363,11 +369,13 @@ bool LoRA_Functions::composeJoinRequesttNode() {
 		// Now wait for a reply from the ultimate server 
 		Log.info("Data report send to gateway successfully");
 		digitalWrite(BLUE_LED, LOW);
+		driver.sleep();                             // Here is where we will power down the LoRA radio module
 		return true;
 	}
 	else {
 		Log.info("Data report send to Gateway failed");
 		digitalWrite(BLUE_LED, LOW);
+		driver.sleep();                             // Here is where we will power down the LoRA radio module
 		return false;
 	}
 }
@@ -407,11 +415,13 @@ bool LoRA_Functions::composeAlertReportNode() {
 		// Now wait for a reply from the ultimate server 
 		Log.info("Node - Alert report send to gateway successfully");
 		digitalWrite(BLUE_LED, LOW);
+		driver.sleep();                             // Here is where we will power down the LoRA radio module
 		return true;
 	}
 	else {
 		Log.info("Node - Alert Report send to Gateway failed");
 		digitalWrite(BLUE_LED, LOW);
+		driver.sleep();                             // Here is where we will power down the LoRA radio module
 		return false;
 	}
 }

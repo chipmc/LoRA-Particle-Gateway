@@ -60,10 +60,12 @@ void particleInitialize() {
   // Particle.function("Set Sleep Time", setSleepTime);
   Particle.function("SIM Card", setVerizonSIM);
 
+/*
   if (!digitalRead(BUTTON_PIN)) {
     sysStatus.set_lowPowerMode(false);     // If the user button is held down while resetting - diable sleep
     Particle.connect();
   }
+  */
 
 
   // Check to see if time is valid - if not, we will connect to the cellular network and sync time - accurate time is important for the gateway to function
