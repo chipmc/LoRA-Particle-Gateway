@@ -104,6 +104,24 @@ buf[10] = lowByte(driver.lastRssi());
  */
 class LoRA_Functions {
 public:
+
+    /**
+     * @brief Clear whatever message is in the buffer - good for waking
+     * 
+     * @details calls the driver and iterates through the message queue
+     * 
+    */
+    void clearBuffer();
+
+    /**
+     * @brief Class to put the LoRA Radio to sleep when we exit the LoRa state
+     * 
+     * @details May help prevent the radio locking up based on local LoRA traffic interference
+     * 
+    */
+    void sleepLoRaRadio();
+
+
     /**
      * @brief Gets the singleton instance of this class, allocating it if necessary
      * 

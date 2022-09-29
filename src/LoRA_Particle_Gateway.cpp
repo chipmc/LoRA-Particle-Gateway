@@ -13,6 +13,7 @@
 // v0.06 - Moved the LoRA Functions to a class implementation
 // v0.07 - Moved to a class implementation for Particle Functions
 // v0.08 - Simplified wake timing
+// v0.09 - Added LoRA functions to clear the buffer and sleep the LoRA radio
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
@@ -28,7 +29,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.08";
+char currentPointRelease[6] ="0.09";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -140,12 +141,14 @@ void loop() {
 			if (state != oldState) {
 				if (oldState != REPORTING_STATE) startLoRAWindow = millis();    // Mark when we enter this state - for timeouts - but multiple messages won't keep us here forever
 				publishStateTransition();                   					// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
+				LoRA_Functions::instance().clearBuffer();						// Clear the buffer before we start the LoRA state
 				Log.info("Gateway is listening for LoRA messages");
 			} 
 
 			if (LoRA_Functions::instance().listenForLoRAMessageGateway()) state = REPORTING_STATE; // Received and acknowledged data from a node - report
 
 			if (!testModeFlag && ((millis() - startLoRAWindow) > 150000L)) { 								// Keeps us in listening mode for the specified windpw - then back to idle unless in test mode - keeps listening
+				LoRA_Functions::instance().sleepLoRaRadio();												// Done with the LoRA phase - put the radio to sleep
 				if (Time.hour() != Time.hour(sysStatus.get_lastConnection())) state = CONNECTING_STATE;  	// Only Connect once an hour after the LoRA window is over
 				else state = IDLE_STATE;
 			}
@@ -169,12 +172,11 @@ void loop() {
 			if (state != oldState) {
 				publishStateTransition();  
 				if (!Particle.connected()) Particle.connect();
-				sysStatus.set_lastConnection(Time.now());			// Consider moving back to space below - for testing
 				connectingTimeout = millis();
 			}
 
 			if (Particle.connected() || millis() - connectingTimeout > 300000L) {		// Either we will connect or we will timeout 
-				// sysStatus.set_lastConnection(Time.now());
+				sysStatus.set_lastConnection(Time.now());
 				state = DISCONNECTING_STATE;										// Typically, we will disconnect and sleep to save power
 			}
 
@@ -191,8 +193,6 @@ void loop() {
 			if (millis() - stayConnectedWindow > 90000) {							// Stay on-line for 90 seconds
 				disconnectFromParticle();
 				state = IDLE_STATE;
-				// Log.info("Going to deep power cycle device for next circuit");
-				// state = ERROR_STATE; 											// Not sure if we need this
 			}
 		} break;
 

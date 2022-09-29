@@ -83,6 +83,24 @@ void LoRA_Functions::loop() {
     // Put your code to run during the application thread loop here
 }
 
+
+// ************************************************************************
+// *****					Common LoRA Functions					*******
+// ************************************************************************
+
+
+void LoRA_Functions::clearBuffer() {
+	uint8_t bufT[RH_RF95_MAX_MESSAGE_LEN];
+	uint8_t lenT;
+
+	while(driver.recv(bufT, &lenT)) {};
+}
+
+void LoRA_Functions::sleepLoRaRadio() {
+	driver.sleep();                             // Here is where we will power down the LoRA radio module
+}
+
+
 // ************************************************************************
 // *****                      Gateway Functions                       *****
 // ************************************************************************
@@ -173,13 +191,11 @@ bool LoRA_Functions::acknowledgeDataReportGateway() {
 		success++;
 		Log.info("Response received successfully - success rate %4.2f", ((success * 1.0)/ attempts)*100.0);
 		digitalWrite(BLUE_LED,LOW);
-		driver.sleep();                             // Here is where we will power down the LoRA radio module
 		return true;
 	}
 
 	Log.info("Response not acknowledged - success rate %4.2f", ((success * 1.0)/ attempts)*100.0);
 	digitalWrite(BLUE_LED,LOW);
-	driver.sleep();                             // Here is where we will power down the LoRA radio module
 	return false;
 }
 
@@ -221,13 +237,11 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	if (manager.sendtoWait(buf, 9, current.get_nodeNumber(), JOIN_ACK) == RH_ROUTER_ERROR_NONE) {
 		Log.info("Response received successfully");
 		digitalWrite(BLUE_LED,LOW);
-		driver.sleep();                             // Here is where we will power down the LoRA radio module
 		return true;
 	}
 
 	Log.info("Response not acknowledged");
 	digitalWrite(BLUE_LED,LOW);
-	driver.sleep();                             // Here is where we will power down the LoRA radio module
 	return false;
 }
 
@@ -262,12 +276,10 @@ bool LoRA_Functions::acknowledgeAlertReportGateway() {
 	if (manager.sendtoWait(buf, 7, current.get_nodeNumber(), ALERT_ACK) == RH_ROUTER_ERROR_NONE) {
 		Log.info("Sent acknowledgment to Node %d, time = %s and frequency %d minutes", current.get_nodeNumber(), Time.timeStr().c_str(), sysStatus.get_frequencyMinutes());
 		digitalWrite(BLUE_LED,LOW);
-		driver.sleep();                             // Here is where we will power down the LoRA radio module
 		return true;
 	}
 
 	Log.info("Response not acknowledged");
 	digitalWrite(BLUE_LED,LOW);
-	driver.sleep();                             // Here is where we will power down the LoRA radio module
 	return false;
 }
