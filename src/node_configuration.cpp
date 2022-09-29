@@ -10,5 +10,5 @@ void setNodeConfiguration() {
   Log.info("Setting values for the node");
   sysStatus.set_sensorType(true); // Default is the car counter (true for PIR)
   // sysStatus.set_deviceID(32148);
-  sysStatus.set_frequencyMinutes(15);
+  sysStatus.set_frequencyMinutes(10);
 }

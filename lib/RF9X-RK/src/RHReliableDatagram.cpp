@@ -137,6 +137,7 @@ bool RHReliableDatagram::recvfromAck(uint8_t* buf, uint8_t* len, uint8_t* from, 
 	// Never ACK an ACK
 	if (!(_flags & RH_FLAGS_ACK))
 	{
+		Log.info("and from the RHReliableDatagram.cpp file");
 	    // Its a normal message not an ACK
 	    if (_to ==_thisAddress)
 	    {

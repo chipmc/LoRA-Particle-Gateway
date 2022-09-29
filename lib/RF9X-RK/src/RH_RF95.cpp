@@ -322,6 +322,7 @@ bool RH_RF95::recv(uint8_t* buf, uint8_t* len)
 	ATOMIC_BLOCK_END;
     }
     clearRxBuf(); // This message accepted and cleared
+    Log.info("Received something in the RH_RF95.cpp file");
     RH_MUTEX_UNLOCK(lock);
     return true;
 }

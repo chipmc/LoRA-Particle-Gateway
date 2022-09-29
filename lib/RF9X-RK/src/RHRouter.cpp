@@ -218,6 +218,7 @@ bool RHRouter::recvfromAck(uint8_t* buf, uint8_t* len, uint8_t* source, uint8_t*
     uint8_t _flags;
     if (RHReliableDatagram::recvfromAck((uint8_t*)&_tmpMessage, &tmpMessageLen, &_from, &_to, &_id, &_flags))
     {
+	Log.info("Saw something in the RHRouter.cpp file");
 	// Here we simulate networks with limited visibility between nodes
 	// so we can test routing
 #ifdef RH_TEST_NETWORK

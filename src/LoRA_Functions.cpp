@@ -3,6 +3,7 @@
 #include <RH_RF95.h>						        // https://docs.particle.io/reference/device-os/libraries/r/RH_RF95/
 #include "device_pinout.h"
 #include "MyPersistentData.h"
+#include "particle_fn.h"
 
 
 // Singleton instantiation - from template
@@ -91,29 +92,40 @@ void LoRA_Functions::loop() {
 bool LoRA_Functions::listenForLoRAMessageGateway() {
 	uint8_t len = sizeof(buf);
 	uint8_t from;  
+	uint8_t dest;
+	uint8_t id;
 	uint8_t messageFlag;
-	Log.info(".");
-	if (manager.recvfromAckTimeout(buf, &len, 1000, &from,__null,__null,&messageFlag))	{	// We have received a message
+	uint8_t hops;
+	if (manager.recvfromAck(buf, &len, &from, &dest, &id, &messageFlag, &hops))	{	// We have received a message
 		buf[len] = 0;
 		current.set_deviceID(buf[0] << 8 | buf[1]);					// Set the current device ID for reporting
 		current.set_nodeNumber(buf[2] << 8 | buf[3]);
 		lora_state = (LoRA_State)(0x0F & messageFlag);				// Strip out the overhead byte
-		Log.info("Received from node %d with rssi=%d - a %s message of length %d", current.get_nodeNumber(), driver.lastRssi(), loraStateNames[lora_state], len);
+		Log.info("From node %d / id %d to %d with rssi=%d - a %s message of length %d in %d hops", current.get_nodeNumber(), id, dest, driver.lastRssi(), loraStateNames[lora_state], len, hops);
 
-		if (lora_state == DATA_RPT) { if(LoRA_Functions::instance().decipherDataReportGateway()) return true;}
-		if (lora_state == JOIN_REQ) { if(LoRA_Functions::instance().decipherJoinRequestGateway()) return true;}
-		if (lora_state == ALERT_RPT) { if(LoRA_Functions::instance().decipherAlertReportGateway()) return true;}
+		if (lora_state == DATA_RPT) { if(!LoRA_Functions::instance().decipherDataReportGateway()) return false;}
+		if (lora_state == JOIN_REQ) { if(!LoRA_Functions::instance().decipherJoinRequestGateway()) return false;}
+		if (lora_state == ALERT_RPT) { if(!LoRA_Functions::instance().decipherAlertReportGateway()) return false;}
+
+		if (frequencyUpdated) {              							// If we are to change the update frequency, we need to tell the nodes (or at least one node) about it.
+			frequencyUpdated = false;
+			sysStatus.set_frequencyMinutes(updatedFrequencyMins);		// This was the temporary value from the particle function
+			Log.info("We are updating the publish frequency to %i minutes", sysStatus.get_frequencyMinutes());
+		}
+
+		if (LoRA_Functions::instance().respondForLoRAMessageGateway()) return true;
+
 	}
 	return false; 
 }
 
-bool LoRA_Functions::respondForLoRAMessageGateway(int nextSeconds) {
+bool LoRA_Functions::respondForLoRAMessageGateway() {
 
 	Log.info("Responding using the %s message type", loraStateNames[lora_state]);
 
-	if (lora_state == DATA_ACK) { if(LoRA_Functions::instance().acknowledgeDataReportGateway(nextSeconds)) return true;}
-	if (lora_state == JOIN_ACK) { if(LoRA_Functions::instance().acknowledgeJoinRequestGateway(nextSeconds)) return true;}
-	if (lora_state == ALERT_ACK) { if(LoRA_Functions::instance().acknowledgeAlertReportGateway(nextSeconds)) return true;}
+	if (lora_state == DATA_ACK) { if(LoRA_Functions::instance().acknowledgeDataReportGateway()) return true;}
+	if (lora_state == JOIN_ACK) { if(LoRA_Functions::instance().acknowledgeJoinRequestGateway()) return true;}
+	if (lora_state == ALERT_ACK) { if(LoRA_Functions::instance().acknowledgeAlertReportGateway()) return true;}
 
 	return false; 
 }
@@ -136,8 +148,7 @@ bool LoRA_Functions::decipherDataReportGateway() {
 	return true;
 }
 
-bool LoRA_Functions::acknowledgeDataReportGateway(int nextSeconds) {
-	uint16_t nextSecondsShort = (uint16_t)nextSeconds;
+bool LoRA_Functions::acknowledgeDataReportGateway() {
 	static int attempts = 0;
 	static int success = 0;
 
@@ -153,10 +164,8 @@ bool LoRA_Functions::acknowledgeDataReportGateway(int nextSeconds) {
 	buf[4] = ((uint8_t) (Time.now()));		    	// First byte			
 	buf[5] = highByte(sysStatus.get_frequencyMinutes());	// Frequency of reports - for Gateways
 	buf[6] = lowByte(sysStatus.get_frequencyMinutes());	
-	buf[7] = highByte(nextSecondsShort);	// Seconds until next report - for Nodes
-	buf[8] = lowByte(nextSecondsShort);
 	
-	Log.info("Sent response to client message %d, time = %s, next report = %u seconds", buf[0], Time.timeStr(Time.now()).c_str(), nextSecondsShort);
+	Log.info("Sent response to client message %d, time = %s and frequency %d minutes", buf[0], Time.timeStr(Time.now()).c_str(), sysStatus.get_frequencyMinutes());
 
 	digitalWrite(BLUE_LED,HIGH);			        // Sending data
 
@@ -184,9 +193,8 @@ bool LoRA_Functions::decipherJoinRequestGateway() {
 	return true;
 }
 
-bool LoRA_Functions::acknowledgeJoinRequestGateway(int nextSeconds) {
+bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	uint16_t newNodeNumber = 0;
-	uint16_t nextSecondsShort = (uint16_t)nextSeconds;
 
 	if (current.get_nodeNumber() < 10) {							// Device needs a new node number
 		randomSeed(sysStatus.get_lastHookResponse());
@@ -200,13 +208,13 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway(int nextSeconds) {
 	buf[1] = ((uint8_t) ((Time.now()) >> 24));  // Fourth byte - current time
 	buf[2] = ((uint8_t) ((Time.now()) >> 16));	// Third byte
 	buf[3] = ((uint8_t) ((Time.now()) >> 8));	// Second byte
-	buf[4] = ((uint8_t) (Time.now()));		    // First byte			
-	buf[5] = highByte(newNodeNumber);			// New Node Number for device
-	buf[6] = lowByte(newNodeNumber);	
-	buf[7] = highByte(nextSecondsShort);		// Seconds until next report - for Nodes
-	buf[8] = lowByte(nextSecondsShort);
+	buf[4] = ((uint8_t) (Time.now()));		    // First byte		
+	buf[5] = highByte(sysStatus.get_frequencyMinutes());	// Frequency of reports - for Gateways
+	buf[6] = lowByte(sysStatus.get_frequencyMinutes());	
+	buf[7] = highByte(newNodeNumber);			// New Node Number for device
+	buf[8] = lowByte(newNodeNumber);	
 	
-	Log.info("Sent response to Node %d, time = %s, next report = %u seconds", newNodeNumber, Time.timeStr(Time.now()).c_str(), nextSecondsShort);
+	Log.info("Sent response to Node %d, time = %s and frequency %d minutes", newNodeNumber, Time.timeStr().c_str(), sysStatus.get_frequencyMinutes());
 
 	digitalWrite(BLUE_LED,HIGH);			        // Sending data
 
@@ -235,10 +243,8 @@ bool LoRA_Functions::decipherAlertReportGateway() {
 	return true;
 }
 
-bool LoRA_Functions::acknowledgeAlertReportGateway(int nextSeconds) {
-	uint16_t nextSecondsShort = (uint16_t)nextSeconds;
-	Log.info("Preparing acknowledgement with %i seconds",nextSecondsShort);
-
+bool LoRA_Functions::acknowledgeAlertReportGateway() {
+	// uint16_t nextSecondsShort = (uint16_t)nextSeconds;
 
 	// This is a response to a data message it has a length of 9 and a specific payload and message flag
 	// Send a reply back to the originator client
@@ -247,16 +253,14 @@ bool LoRA_Functions::acknowledgeAlertReportGateway(int nextSeconds) {
 	buf[1] = ((uint8_t) ((Time.now()) >> 24));  // Fourth byte - current time
 	buf[2] = ((uint8_t) ((Time.now()) >> 16));	// Third byte
 	buf[3] = ((uint8_t) ((Time.now()) >> 8));	// Second byte
-	buf[4] = ((uint8_t) (Time.now()));		    // First byte			
-	buf[5] = highByte(nextSecondsShort);		// Seconds until next report - for Nodes
-	buf[6] = lowByte(nextSecondsShort);
+	buf[4] = ((uint8_t) (Time.now()));		    // First byte	
+	buf[5] = highByte(sysStatus.get_frequencyMinutes());	// Frequency of reports - for Gateways
+	buf[6] = lowByte(sysStatus.get_frequencyMinutes());			
 	
-	Log.info("Sent response to Node %d, time = %s, next report = %u seconds", current.get_nodeNumber(), Time.timeStr(Time.now()).c_str(), nextSecondsShort);
-
 	digitalWrite(BLUE_LED,HIGH);			        // Sending data
 
 	if (manager.sendtoWait(buf, 7, current.get_nodeNumber(), ALERT_ACK) == RH_ROUTER_ERROR_NONE) {
-		Log.info("Response received successfully");
+		Log.info("Sent acknowledgment to Node %d, time = %s and frequency %d minutes", current.get_nodeNumber(), Time.timeStr().c_str(), sysStatus.get_frequencyMinutes());
 		digitalWrite(BLUE_LED,LOW);
 		driver.sleep();                             // Here is where we will power down the LoRA radio module
 		return true;
@@ -267,174 +271,3 @@ bool LoRA_Functions::acknowledgeAlertReportGateway(int nextSeconds) {
 	driver.sleep();                             // Here is where we will power down the LoRA radio module
 	return false;
 }
-
-
-
-// ************************************************************************
-// *****                         Node Functions                       *****
-// ************************************************************************
-bool LoRA_Functions::listenForLoRAMessageNode() {
-	uint8_t len = sizeof(buf);
-	uint8_t from;  
-	uint8_t messageFlag;	
-	if (manager.recvfromAckTimeout(buf, &len, 1000, &from,__null,__null,&messageFlag)) {
-		buf[len] = 0;
-		lora_state = (LoRA_State)messageFlag;
-		Log.info("Received from node %d with rssi=%d - a %s message", from, driver.lastRssi(), loraStateNames[lora_state]);
-
-		if (lora_state == DATA_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentDataReportNode()) return true;}
-		if (lora_state == JOIN_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentJoinRequestNode()) return true;}
-		if (lora_state == ALERT_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentAlertReportNode()) return true;}
-	}
-	return false;
-}
-
-
-bool LoRA_Functions::composeDataReportNode() {
-	static int attempts = 0;
-	static int success = 0;
-	static uint8_t msgCnt = 0;
-
-	Log.info("Sending data report to Gateway");
-	digitalWrite(BLUE_LED,HIGH);
-	attempts++;
-
-	buf[0] = highByte(sysStatus.get_deviceID());					// Set for device
-	buf[1] = lowByte(sysStatus.get_deviceID());
-	buf[2] = highByte(sysStatus.get_nodeNumber());				// NodeID for verification
-	buf[3] = lowByte(sysStatus.get_nodeNumber());				
-	buf[4] = 1;						// Set for code release - fix later
-	buf[5] = highByte(current.get_hourlyCount());
-	buf[6] = lowByte(current.get_hourlyCount()); 
-	buf[7] = highByte(current.get_dailyCount());
-	buf[8] = lowByte(current.get_dailyCount()); 
-	buf[9] = current.get_internalTempC();
-	buf[10] = current.get_stateOfCharge();
-	buf[11] = current.get_batteryState();	
-	buf[12] = sysStatus.get_resetCount();
-	buf[13] = 1;				// reserved for later
-	buf[14] = highByte(driver.lastRssi());
-	buf[15] = lowByte(driver.lastRssi()); 
-	buf[16] = msgCnt++;
-
-	// Send a message to manager_server
-  	// A route to the destination will be automatically discovered.
-	Log.info("sending message number %d", buf[16]);
-	if (manager.sendtoWait(buf, 17, GATEWAY_ADDRESS, DATA_RPT) == RH_ROUTER_ERROR_NONE) {
-		// It has been reliably delivered to the next node.
-		// Now wait for a reply from the ultimate server 
-		success++;
-		Log.info("Node %d - Data report send to gateway %d successfully - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, ((success * 1.0)/ attempts)*100.0);
-		digitalWrite(BLUE_LED, LOW);
-		driver.sleep();                             // Here is where we will power down the LoRA radio module
-		return true;
-	}
-	else {
-		Log.info("Node %d - Data report send to gateway %d failed  - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, ((success * 1.0)/ attempts)*100.0);
-		digitalWrite(BLUE_LED, LOW);
-		driver.sleep();                             // Here is where we will power down the LoRA radio module
-		return false;
-	}
-}
-
-bool LoRA_Functions::receiveAcknowledmentDataReportNode() {
-
-	Log.info("Node %d - Receiving acknowledgment - Data Report", sysStatus.get_nodeNumber());
-		
-	sysStatus.set_nextReportSeconds((buf[7] << 8) | buf[8]);
-	uint32_t newTime = ((buf[1] << 24) | (buf[2] << 16) | (buf[3] << 8) | buf[4]);
-	Time.setTime(newTime);  // Set time based on response from gateway
-	Log.info("Time set to %s and next report is in %u seconds at %s", Time.timeStr(newTime).c_str(),sysStatus.get_nextReportSeconds(), Time.timeStr(newTime + sysStatus.get_nextReportSeconds()).c_str());
-	return true;
-}
-
-bool LoRA_Functions::composeJoinRequesttNode() {
-	Log.info("Sending data report to Gateway");
-	digitalWrite(BLUE_LED,HIGH);
-
-	buf[0] = highByte(sysStatus.get_deviceID());                      // deviceID is unique to the device
-	buf[1] = lowByte(sysStatus.get_deviceID());
-	buf[2] = highByte(sysStatus.get_nodeNumber());                  			// Node Number
-	buf[3] = lowByte(sysStatus.get_nodeNumber());
-	buf[4] = sysStatus.get_structuresVersion();						// Needs to equal 128
-	buf[5] = highByte(driver.lastRssi());				        // Signal strength
-	buf[6] = lowByte(driver.lastRssi()); 
-
-	
-	// Send a message to manager_server
-  	// A route to the destination will be automatically discovered.
-	Log.info("Sending join request because %s",(sysStatus.get_nodeNumber() < 10) ? "a NodeNumber is needed" : "the clock is not set");
-	if (manager.sendtoWait(buf, 7, GATEWAY_ADDRESS, JOIN_REQ) == RH_ROUTER_ERROR_NONE) {
-		// It has been reliably delivered to the next node.
-		// Now wait for a reply from the ultimate server 
-		Log.info("Data report send to gateway successfully");
-		digitalWrite(BLUE_LED, LOW);
-		driver.sleep();                             // Here is where we will power down the LoRA radio module
-		return true;
-	}
-	else {
-		Log.info("Data report send to Gateway failed");
-		digitalWrite(BLUE_LED, LOW);
-		driver.sleep();                             // Here is where we will power down the LoRA radio module
-		return false;
-	}
-}
-
-bool LoRA_Functions::receiveAcknowledmentJoinRequestNode() {
-	Log.info("Receiving acknowledgment - Join Request");
-
-	if (sysStatus.get_nodeNumber() < 10 && buf[0] == 128) sysStatus.set_nodeNumber((buf[5] << 8 | buf[6]));
-	sysStatus.set_nextReportSeconds((buf[7] << 8) | buf[8]);
-	uint32_t newTime = ((buf[1] << 24) | (buf[2] << 16) | (buf[3] << 8) | buf[4]);
-	Time.setTime(newTime);  // Set time based on response from gateway
-	Log.info("Time set to %s, node is %d and next report is in %u seconds", Time.timeStr(newTime).c_str(),sysStatus.get_nodeNumber(), sysStatus.get_nextReportSeconds());
-	return true;
-}
-
-bool LoRA_Functions::composeAlertReportNode() {
-	Log.info("Node - Sending Alert Report to Gateway");
-	digitalWrite(BLUE_LED,HIGH);
-
-	buf[0] = highByte(sysStatus.get_deviceID());       // deviceID is unique to the device
-	buf[1] = lowByte(sysStatus.get_deviceID());
-	buf[2] = highByte(sysStatus.get_nodeNumber());     // Node Number
-	buf[3] = lowByte(sysStatus.get_nodeNumber());
-	buf[4] = highByte(current.get_alertCodeNode());   // Node's Alert Code
-	buf[5] = ((uint8_t) ((Time.now()) >> 24));  // Fourth byte - current time
-	buf[6] = ((uint8_t) ((Time.now()) >> 16));	// Third byte
-	buf[7] = ((uint8_t) ((Time.now()) >> 8));	// Second byte
-	buf[8] = ((uint8_t) (Time.now()));		    // First byte			
-	buf[9] = highByte(driver.lastRssi());		// Signal strength
-	buf[10] = lowByte(driver.lastRssi()); 
-
-	// Send a message to manager_server
-  	// A route to the destination will be automatically discovered.
-	Log.info("Sending Alert Report number %d to gateway at %d", current.get_alertCodeNode(), GATEWAY_ADDRESS);
-	if (manager.sendtoWait(buf, 11, GATEWAY_ADDRESS, ALERT_RPT) == RH_ROUTER_ERROR_NONE) {
-		// It has been reliably delivered to the next node.
-		// Now wait for a reply from the ultimate server 
-		Log.info("Node - Alert report send to gateway successfully");
-		digitalWrite(BLUE_LED, LOW);
-		driver.sleep();                             // Here is where we will power down the LoRA radio module
-		return true;
-	}
-	else {
-		Log.info("Node - Alert Report send to Gateway failed");
-		digitalWrite(BLUE_LED, LOW);
-		driver.sleep();                             // Here is where we will power down the LoRA radio module
-		return false;
-	}
-}
-
-bool LoRA_Functions::receiveAcknowledmentAlertReportNode() {
-
-	Log.info("Receiving acknowledgment - Alert Report");
-
-	uint32_t newTime = ((buf[1] << 24) | (buf[2] << 16) | (buf[3] << 8) | buf[4]);
-	sysStatus.set_nextReportSeconds((buf[5] << 8) | buf[6]);
-	Time.setTime(newTime);  // Set time based on response from gateway
-	Log.info("Time set to %s, node is %d and next report is in %u seconds", Time.timeStr(newTime).c_str(),sysStatus.get_nodeNumber(), sysStatus.get_nextReportSeconds());
-	return true;
-}
-
-

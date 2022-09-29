@@ -37,8 +37,7 @@ buf[16] = msgCnt++;						       	// Sequential message number
 	buf[4] = ((uint8_t) (Time.now()));		    	// First byte	
 	buf[5] = highByte(sysStat.freqencyMinutes);		// For the Gateway minutes on the hour
 	buf[6] = lowByte(sysStatus.frequencyMinutes);	// 16-bit minutes		
-	buf[5] = highByte(sysStatus.nextReportSeconds);	// Seconds until next report - 16-bit number can go over 2 days
-	buf[6] = lowByte(sysStatus.nextReportSeconds);	// 16-bit minutes
+
 */
 // Format of a join request
 /*
@@ -56,11 +55,12 @@ buf[4] = lowByte(rssi);
 	buf[1] = ((uint8_t) ((Time.now()) >> 24));  // Fourth byte - current time
 	buf[2] = ((uint8_t) ((Time.now()) >> 16));	// Third byte
 	buf[3] = ((uint8_t) ((Time.now()) >> 8));	// Second byte
-	buf[4] = ((uint8_t) (Time.now()));		    // First byte			
-	buf[5] = highByte(newNodeNumber);			// New Node Number for device
-	buf[6] = lowByte(newNodeNumber);	
-	buf[7] = highByte(nextSecondsShort);		// Seconds until next report - for Nodes
-	buf[8] = lowByte(nextSecondsShort);
+	buf[4] = ((uint8_t) (Time.now()));		    // First byte	
+    buf[5] = highByte(sysStat.freqencyMinutes);		// For the Gateway minutes on the hour
+	buf[6] = lowByte(sysStatus.frequencyMinutes);	// 16-bit minutes			
+	buf[6] = highByte(newNodeNumber);			// New Node Number for device
+	buf[7] = lowByte(newNodeNumber);	
+
 */
 // Format for an alert Report
 /*
@@ -82,9 +82,10 @@ buf[10] = lowByte(driver.lastRssi());
 	buf[1] = ((uint8_t) ((Time.now()) >> 24));  // Fourth byte - current time
 	buf[2] = ((uint8_t) ((Time.now()) >> 16));	// Third byte
 	buf[3] = ((uint8_t) ((Time.now()) >> 8));	// Second byte
-	buf[4] = ((uint8_t) (Time.now()));		    // First byte			
-	buf[5] = highByte(nextSecondsShort);		// Seconds until next report - for Nodes
-	buf[6] = lowByte(nextSecondsShort);
+	buf[4] = ((uint8_t) (Time.now()));		    // First byte	
+    buf[5] = highByte(sysStat.freqencyMinutes);		// For the Gateway minutes on the hour
+	buf[6] = lowByte(sysStatus.frequencyMinutes);	// 16-bit minutes			
+
 */
 
 #ifndef __LORA_FUNCTIONS_H
@@ -144,7 +145,7 @@ public:
      * @return true - response acknowledged
      * @return false 
      */
-    bool respondForLoRAMessageGateway(int nextSeconds);  
+    bool respondForLoRAMessageGateway();  
 
     // Specific Gateway Message Functions
     /**
@@ -176,7 +177,7 @@ public:
      * @return true 
      * @return false 
      */
-    bool acknowledgeDataReportGateway(int nextSeconds);    // Gateway- acknowledged receipt of a data report
+    bool acknowledgeDataReportGateway();    // Gateway- acknowledged receipt of a data report
     /**
      * @brief Sends an acknolwedgement from the gateway to the node after successfully unpacking a data report.
      * Also sends the number of seconds until next transmission window.
@@ -184,7 +185,7 @@ public:
      * @return true 
      * @return false 
      */
-    bool acknowledgeJoinRequestGateway(int nextSeconds);   // Gateway - acknowledged receipt of a join request
+    bool acknowledgeJoinRequestGateway();   // Gateway - acknowledged receipt of a join request
     /**
      * @brief Sends an acknolwedgement from the gateway to the node after successfully unpacking a join request.
      * Also sends the number of seconds until next transmission window.
@@ -192,59 +193,9 @@ public:
      * @return true 
      * @return false 
      */
-    bool acknowledgeAlertReportGateway(int nextSeconds);   // Gateway - acknowledged receipt of an alert report
+    bool acknowledgeAlertReportGateway();   // Gateway - acknowledged receipt of an alert report
 
-    // Node Functions
-    /**
-     * @brief Listens for the gateway to respond to the node - takes note of message flag
-     * 
-     * @return true 
-     * @return false 
-     */
-    bool listenForLoRAMessageNode();                // Node - sent a message - awiting reply
-    /**
-     * @brief Composes a Data Report and sends to the Gateway
-     * 
-     * @return true 
-     * @return false 
-     */
-    bool composeDataReportNode();                  // Node - Composes data report
-    /**
-     * @brief Acknowledges the response from the Gateway that acknowledges receipt of a data report
-     * 
-     * @return true 
-     * @return false 
-     */
-    bool receiveAcknowledmentDataReportNode();     // Node - receives acknolwedgement
-    /**
-     * @brief Composes a Join Request and sends to the Gateway
-     * 
-     * @return true 
-     * @return false 
-     */
-    bool composeJoinRequesttNode();                // Node - Composes Join request
-    /**
-     * @brief Acknowledges the response from the Gateway that acknowledges receipt of a Join Request
-     * 
-     * @return true 
-     * @return false 
-     */
-    bool receiveAcknowledmentJoinRequestNode();    // Node - received join request asknowledgement
-    /**
-     * @brief Composes an alert report and sends to the Gateway
-     * 
-     * @return true 
-     * @return false 
-     */
-    bool composeAlertReportNode();                  // Node - Composes alert report
-    /**
-      * @brief Acknowledges the response from the Gateway that acknowledges receipt of an alert report
-     * 
-     * @return true 
-     * @return false 
-     */
-    bool receiveAcknowledmentAlertReportNode();    // Node - received alert report asknowledgement
-
+    
 
 protected:
     /**

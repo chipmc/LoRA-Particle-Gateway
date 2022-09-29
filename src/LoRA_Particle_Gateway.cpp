@@ -12,6 +12,7 @@
 // v0.05 - Moved to the Storage Helper library
 // v0.06 - Moved the LoRA Functions to a class implementation
 // v0.07 - Moved to a class implementation for Particle Functions
+// v0.08 - Simplified wake timing
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
@@ -27,7 +28,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.07";
+char currentPointRelease[6] ="0.08";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -127,15 +128,14 @@ void loop() {
 				.duration(wakeInSeconds * 1000L);
 			SystemSleepResult result = System.sleep(config);                   // Put the device to sleep device continues operations from here
 			ab1805.resumeWDT();                                                // Wakey Wakey - WDT can resume
+			waitFor(Serial.isConnected, 10000);				// Wait for serial connection
 			state = IDLE_STATE;
 			nextEventTime = true;
-			delay(5000);
 			Log.info("Awoke at %s with %li free memory", Time.timeStr(Time.now()+wakeInSeconds).c_str(), System.freeMemory());
 		} break;
 
 		case LoRA_STATE: {														// Enter this state every reporting period and stay here for 5 minutes
 			static system_tick_t startLoRAWindow = 0;
-			static system_tick_t ledTimer = 0;
 
 			if (state != oldState) {
 				if (oldState != REPORTING_STATE) startLoRAWindow = millis();    // Mark when we enter this state - for timeouts - but multiple messages won't keep us here forever
@@ -143,31 +143,10 @@ void loop() {
 				Log.info("Gateway is listening for LoRA messages");
 			} 
 
-			if (LoRA_Functions::instance().listenForLoRAMessageGateway()) {
-				uint16_t secondsUntilNextEventShort = 0;
-				if (frequencyUpdated) {              							// If we are to change the update frequency, we need to tell the nodes (or at least one node) about it.
-					frequencyUpdated = false;
-					sysStatus.set_frequencyMinutes(updatedFrequencyMins);			// This was the temporary value from the particle function
-					Log.info("We are updating the publish frequency to %i minutes", sysStatus.get_frequencyMinutes());
-				}
-				if (testModeFlag) secondsUntilNextEventShort = 10;
-				else {
-					secondsUntilNextEventShort = secondsUntilNextEvent();
-					state = REPORTING_STATE;
-				}
-				Log.info("Sending response with %d seconds until return",secondsUntilNextEventShort);
-				if (LoRA_Functions::instance().respondForLoRAMessageGateway(secondsUntilNextEventShort)) {	// Here we send our response based on the type of message received.
-					pinSetFast(BLUE_LED);
-					ledTimer = millis();
-				}	  
-			}
+			if (LoRA_Functions::instance().listenForLoRAMessageGateway()) state = REPORTING_STATE; // Received and acknowledged data from a node - report
 
-			if (millis() - ledTimer > 2000) {
-				pinResetFast(BLUE_LED);
-			}
-
-			if (!testModeFlag && ((millis() - startLoRAWindow) > 59000L)) {						// 59 seconds as the min frequency is 1 minute
-				if (Time.hour() != Time.hour(sysStatus.get_lastConnection())) state = CONNECTING_STATE;  // Only Connect once an hour
+			if (!testModeFlag && ((millis() - startLoRAWindow) > 150000L)) { 								// Keeps us in listening mode for the specified windpw - then back to idle unless in test mode - keeps listening
+				if (Time.hour() != Time.hour(sysStatus.get_lastConnection())) state = CONNECTING_STATE;  	// Only Connect once an hour after the LoRA window is over
 				else state = IDLE_STATE;
 			}
 
@@ -241,11 +220,6 @@ void loop() {
 	if (outOfMemory >= 0) {                         // In this function we are going to reset the system if there is an out of memory error
 		System.reset();
   	}
-
-	if (userSwitchDectected) {
-		userSwitchDectected = false;
-		state = CONNECTING_STATE;
-	}
 }
 
 /**
@@ -279,16 +253,17 @@ void userSwitchISR() {
 /**
  * @brief Function to compute time to next scheduled event
  * 
- * @details - Computes seconds and returns 0 if no event is scheduled or time is invalid
+ * @details - Computes seconds and returns 10 if the device is in test mode or time is invalid
  * 
  * 
  */
 int secondsUntilNextEvent() {											// Time till next scheduled event
-	unsigned long secondsToReturn = 0;
+	unsigned long secondsToReturn = 10;									// Minimum is 10 seconds to avoid transmit loop
+
 	unsigned long wakeBoundary = sysStatus.get_frequencyMinutes() * 60UL;
-   	if (Time.isValid()) {
-		secondsToReturn = constrain( wakeBoundary - Time.now() % wakeBoundary, 0UL, wakeBoundary);  // Adding one second to reduce prospect of round tripping to IDLE
-        Log.info("local time: %s and next event is %lu seconds away", localTimeConvert_NOW.format(TIME_FORMAT_DEFAULT).c_str(), secondsToReturn);
+   	if (Time.isValid() && !testModeFlag) {
+		secondsToReturn = constrain( wakeBoundary - Time.now() % wakeBoundary, 10UL, wakeBoundary);  // In test mode, we will set a minimum of 10 seconds
+        Log.info("Time: %s and next event is %lu seconds away", Time.timeStr().c_str(), secondsToReturn);
     }
 	return secondsToReturn;
 }
