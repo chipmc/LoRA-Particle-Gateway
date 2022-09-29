@@ -33,9 +33,9 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, READONLY, DEBUGGING, OCTETS
  14 .debug_macro  0005ec34  00000000  00000000  00364540  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 15 .debug_line   00092309  00000000  00000000  003c3174  2**0
+ 15 .debug_line   0009230b  00000000  00000000  003c3174  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 16 .debug_str    0016c985  00000000  00000000  0045547d  2**0
+ 16 .debug_str    0016c985  00000000  00000000  0045547f  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
  17 .debug_frame  0000e484  00000000  00000000  005c1e04  2**2
                   CONTENTS, READONLY, DEBUGGING, OCTETS
@@ -1947,7 +1947,7 @@ inline particle::Flags<TagT, ValueT> particle::Flags<TagT, ValueT>::operator|(Fl
    b4d58:	4b3a      	ldr	r3, [pc, #232]	; (b4e44 <loop+0x458>)
    b4d5a:	781b      	ldrb	r3, [r3, #0]
    b4d5c:	2b05      	cmp	r3, #5
-   b4d5e:	d014      	beq.n	b4d8a <loop+0x39e>
+   b4d5e:	d00a      	beq.n	b4d76 <loop+0x38a>
 				publishStateTransition();  
    b4d60:	f7ff fdfc 	bl	b495c <_Z22publishStateTransitionv>
     static void sleep(Spark_Sleep_TypeDef sleepMode, long seconds=0) __attribute__ ((deprecated("Please use System.sleep() instead.")))
@@ -1963,22 +1963,22 @@ inline particle::Flags<TagT, ValueT> particle::Flags<TagT, ValueT>::operator|(Fl
     static void connect(void) {
         spark_cloud_flag_connect();
    b4d6a:	f005 ffaf 	bl	baccc <spark_cloud_flag_connect>
-				sysStatus.set_lastConnection(Time.now());			// Consider moving back to space below - for testing
-   b4d6e:	f000 fb2f 	bl	b53d0 <_ZN13sysStatusData8instanceEv>
-   b4d72:	4604      	mov	r4, r0
-   b4d74:	f008 ff55 	bl	bdc22 <_ZN9TimeClass3nowEv>
-   b4d78:	17c3      	asrs	r3, r0, #31
-   b4d7a:	4602      	mov	r2, r0
-   b4d7c:	4620      	mov	r0, r4
-   b4d7e:	f000 fd56 	bl	b582e <_ZN13sysStatusData18set_lastConnectionEx>
-   b4d82:	f005 fcb7 	bl	ba6f4 <HAL_Timer_Get_Milli_Seconds>
+   b4d6e:	f005 fcc1 	bl	ba6f4 <HAL_Timer_Get_Milli_Seconds>
 				connectingTimeout = millis();
-   b4d86:	4b35      	ldr	r3, [pc, #212]	; (b4e5c <loop+0x470>)
-   b4d88:	6018      	str	r0, [r3, #0]
+   b4d72:	4b3a      	ldr	r3, [pc, #232]	; (b4e5c <loop+0x470>)
+   b4d74:	6018      	str	r0, [r3, #0]
     static bool connected(void) { return spark_cloud_flag_connected(); }
-   b4d8a:	f005 ffa7 	bl	bacdc <spark_cloud_flag_connected>
+   b4d76:	f005 ffb1 	bl	bacdc <spark_cloud_flag_connected>
 			if (Particle.connected() || millis() - connectingTimeout > 300000L) {		// Either we will connect or we will timeout 
-   b4d8e:	b108      	cbz	r0, b4d94 <loop+0x3a8>
+   b4d7a:	b158      	cbz	r0, b4d94 <loop+0x3a8>
+				sysStatus.set_lastConnection(Time.now());
+   b4d7c:	f000 fb28 	bl	b53d0 <_ZN13sysStatusData8instanceEv>
+   b4d80:	4604      	mov	r4, r0
+   b4d82:	f008 ff4e 	bl	bdc22 <_ZN9TimeClass3nowEv>
+   b4d86:	17c3      	asrs	r3, r0, #31
+   b4d88:	4602      	mov	r2, r0
+   b4d8a:	4620      	mov	r0, r4
+   b4d8c:	f000 fd4f 	bl	b582e <_ZN13sysStatusData18set_lastConnectionEx>
 				state = DISCONNECTING_STATE;										// Typically, we will disconnect and sleep to save power
    b4d90:	2306      	movs	r3, #6
    b4d92:	e64c      	b.n	b4a2e <loop+0x42>
@@ -1989,7 +1989,7 @@ inline particle::Flags<TagT, ValueT> particle::Flags<TagT, ValueT>::operator|(Fl
    b4d9c:	1ac0      	subs	r0, r0, r3
    b4d9e:	4b30      	ldr	r3, [pc, #192]	; (b4e60 <loop+0x474>)
    b4da0:	4298      	cmp	r0, r3
-   b4da2:	d8f5      	bhi.n	b4d90 <loop+0x3a4>
+   b4da2:	d8eb      	bhi.n	b4d7c <loop+0x390>
    b4da4:	e644      	b.n	b4a30 <loop+0x44>
 			if (state != oldState) {
    b4da6:	4b27      	ldr	r3, [pc, #156]	; (b4e44 <loop+0x458>)
