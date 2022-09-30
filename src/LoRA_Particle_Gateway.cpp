@@ -14,6 +14,7 @@
 // v0.07 - Moved to a class implementation for Particle Functions
 // v0.08 - Simplified wake timing
 // v0.09 - Added LoRA functions to clear the buffer and sleep the LoRA radio
+// v0.10 - Stable - adding functionality
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
@@ -113,7 +114,7 @@ void loop() {
 			if (state != oldState) publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 			if (nextEventTime) {
 				nextEventTime = false;
-				state = LoRA_STATE;		   // See Time section in setup for schedule
+				state = LoRA_STATE;		   										// See Time section in setup for schedule
 			}
 			else state = SLEEPING_STATE;
 		} break;
@@ -157,7 +158,7 @@ void loop() {
 
 		case REPORTING_STATE: {
 			if (state != oldState) publishStateTransition();
-		  	char data[256];                             // Store the date in this character array - not global
+		  	char data[256];                             						// Store the date in this character array - not global
 
   			snprintf(data, sizeof(data), "{\"nodeid\":%u, \"hourly\":%u, \"daily\":%u,\"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"rssi\":%d, \"msg\":%d,\"timestamp\":%lu000}", \
 				current.get_deviceID(), current.get_hourlyCount(), current.get_dailyCount(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()], current.get_internalTempC(), sysStatus.get_resetCount(), current.get_RSSI(), current.get_messageNumber(), Time.now());
@@ -263,7 +264,7 @@ int secondsUntilNextEvent() {											// Time till next scheduled event
 	unsigned long wakeBoundary = sysStatus.get_frequencyMinutes() * 60UL;
    	if (Time.isValid() && !testModeFlag) {
 		secondsToReturn = constrain( wakeBoundary - Time.now() % wakeBoundary, 10UL, wakeBoundary);  // In test mode, we will set a minimum of 10 seconds
-        Log.info("Time: %s and next event is %lu seconds away", Time.timeStr().c_str(), secondsToReturn);
+        Log.info("Report frequency %d mins, next event in %lu seconds", sysStatus.get_frequencyMinutes(), secondsToReturn);
     }
 	return secondsToReturn;
 }

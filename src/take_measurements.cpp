@@ -28,7 +28,6 @@ bool takeMeasurements() {
     // Temperature inside the enclosure
     current.set_internalTempC((int)tmp36TemperatureC(analogRead(TMP36_SENSE_PIN)));
     snprintf(internalTempStr,sizeof(internalTempStr), "%i C", current.get_internalTempC());
-    Log.info("Internal Temperature is %s",internalTempStr);
 
     batteryState();
 
@@ -80,12 +79,10 @@ float tmp36TemperatureC (int adcValue) {
  * @return false - Less than 60% indicates a low battery condition
  */
 bool batteryState() {
-    current.set_batteryState(System.batteryState());                      // Call before isItSafeToCharge() as it may overwrite the context
+  current.set_batteryState(System.batteryState());                      // Call before isItSafeToCharge() as it may overwrite the context
 
-  if (sysStatus.get_lowPowerMode()) {                                        // Need to take these steps if we are sleeping
-    fuelGauge.quickStart();                                            // May help us re-establish a baseline for SoC
-    delay(500);
-  }
+  fuelGauge.quickStart();                                               // May help us re-establish a baseline for SoC
+  delay(500);
 
   current.set_stateOfCharge(System.batteryCharge());                   // Assign to system value
 

@@ -2,7 +2,7 @@
 #include "MB85RC256V-FRAM-RK.h"
 #include "StorageHelperRK.h"
 #include "MyPersistentData.h"
-#include "node_configuration.h"
+#include "gateway_configuration.h"
 
 MB85RC64 fram(Wire, 0);   
 
@@ -46,7 +46,7 @@ void loadSystemDefaults() {                         // This code is only execute
   sysStatus.set_closeTime(22);
   sysStatus.set_verizonSIM(false);
 
-  setNodeConfiguration();                             // Here we will fix the settings specific to the node
+  setGatewayConfiguration();                             // Here we will fix the settings specific to the gateway
 }
 
 // *******************  SysStatus Storage Object **********************
@@ -73,7 +73,7 @@ sysStatusData::~sysStatusData() {
 void sysStatusData::setup() {
     fram.begin();
     sysStatus.load();
-    setNodeConfiguration();                             // Here we will fix the settings specific to the node
+    setGatewayConfiguration();                             // Here we will fix the settings specific to the node
 }
 
 void sysStatusData::loop() {

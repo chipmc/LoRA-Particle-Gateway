@@ -3,6 +3,6 @@
 
 #include "Particle.h"
 
-void setNodeConfiguration();    // These are the settings specific to the node
+void setGatewayConfiguration();    // These are the settings specific to the node
 
 #endif

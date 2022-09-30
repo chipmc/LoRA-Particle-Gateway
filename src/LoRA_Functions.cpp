@@ -75,7 +75,8 @@ bool LoRA_Functions::setup(bool gatewayID) {
 
 	manager.setThisAddress(sysStatus.get_nodeNumber());	// Assign the NodeNumber to this node
 	
-	Log.info("LoRA Radio initialized as NodeNumber of %i and DeviceID of %i and a magic number of %i", manager.thisAddress(), sysStatus.get_deviceID(), sysStatus.get_structuresVersion());
+	if (manager.thisAddress() > 0) Log.info("LoRA Radio initialized as node %i and with a DeviceID of %i", manager.thisAddress(), sysStatus.get_deviceID());
+	else Log.info("LoRA Radio initialized as a gateway with a deviceID of %i", sysStatus.get_deviceID());
 	return true;
 }
 
@@ -119,7 +120,7 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 		current.set_deviceID(buf[0] << 8 | buf[1]);					// Set the current device ID for reporting
 		current.set_nodeNumber(buf[2] << 8 | buf[3]);
 		lora_state = (LoRA_State)(0x0F & messageFlag);				// Strip out the overhead byte
-		Log.info("From node %d / id %d to %d with rssi=%d - a %s message of length %d in %d hops", current.get_nodeNumber(), id, dest, driver.lastRssi(), loraStateNames[lora_state], len, hops);
+		Log.info("From node %d to %d with rssi=%d - a %s message of length %d in %d hops", current.get_nodeNumber(), dest, driver.lastRssi(), loraStateNames[lora_state], len, hops);
 
 		if (lora_state == DATA_RPT) { if(!LoRA_Functions::instance().decipherDataReportGateway()) return false;}
 		if (lora_state == JOIN_REQ) { if(!LoRA_Functions::instance().decipherJoinRequestGateway()) return false;}
@@ -183,7 +184,7 @@ bool LoRA_Functions::acknowledgeDataReportGateway() {
 	buf[5] = highByte(sysStatus.get_frequencyMinutes());	// Frequency of reports - for Gateways
 	buf[6] = lowByte(sysStatus.get_frequencyMinutes());	
 	
-	Log.info("Sent response to client message %d, time = %s and frequency %d minutes", buf[0], Time.timeStr(Time.now()).c_str(), sysStatus.get_frequencyMinutes());
+	Log.info("Sent response to node %d message %d, time = %s and frequency %d minutes", current.get_nodeNumber(), buf[0], Time.timeStr(Time.now()).c_str(), sysStatus.get_frequencyMinutes());
 
 	digitalWrite(BLUE_LED,HIGH);			        // Sending data
 
@@ -230,7 +231,7 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	buf[7] = highByte(newNodeNumber);			// New Node Number for device
 	buf[8] = lowByte(newNodeNumber);	
 	
-	Log.info("Sent response to Node %d, time = %s and frequency %d minutes", newNodeNumber, Time.timeStr().c_str(), sysStatus.get_frequencyMinutes());
+	Log.info("Sent response to node %d, time = %s and frequency %d minutes", newNodeNumber, Time.timeStr().c_str(), sysStatus.get_frequencyMinutes());
 
 	digitalWrite(BLUE_LED,HIGH);			        // Sending data
 
