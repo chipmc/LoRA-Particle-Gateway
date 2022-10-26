@@ -20,6 +20,17 @@ void resetEverything() {                                              // The dev
   current.set_alertCodeNode(0);
   current.set_alertTimestampNode(Time.now());
   sysStatus.set_resetCount(0);                                           // Reset the reset count as well
+
+  Log.info("clearing the nodeID data");
+  nodeID.set_nodeNumber_1(1);
+  nodeID.set_deviceID_1(0);
+  nodeID.set_lastConnection_1(0);
+  nodeID.set_nodeNumber_2(2);
+  nodeID.set_deviceID_2(0);
+  nodeID.set_lastConnection_2(0);
+  nodeID.set_nodeNumber_3(3);
+  nodeID.set_deviceID_3(0);
+  nodeID.set_lastConnection_3(0);
 }
 
 /**
@@ -32,10 +43,10 @@ void loadSystemDefaults() {                         // This code is only execute
   }
   Log.info("Loading system defaults");              // Letting us know that defaults are being loaded
 
-  sysStatus.set_nodeNumber(2);
+  sysStatus.set_nodeNumber(0);                     // Default for a Gateway
   sysStatus.set_structuresVersion(1);
+  sysStatus.set_magicNumber(27617);
   sysStatus.set_firmwareRelease(1);
-  sysStatus.set_solarPowerMode(true);
   sysStatus.set_lowPowerMode(true);
   sysStatus.set_resetCount(0);
   sysStatus.set_lastHookResponse(0);
@@ -80,20 +91,12 @@ void sysStatusData::loop() {
     sysStatus.flush(false);
 }
 
-uint16_t sysStatusData::get_deviceID() const {
-    return getValue<uint16_t>(offsetof(SysData, deviceID));
+uint8_t sysStatusData::get_nodeNumber() const {
+    return getValue<uint8_t>(offsetof(SysData, nodeNumber));
 }
 
-void sysStatusData::set_deviceID(uint16_t value) {
-    setValue<uint16_t>(offsetof(SysData, deviceID), value);
-}
-
-uint16_t sysStatusData::get_nodeNumber() const {
-    return getValue<uint16_t>(offsetof(SysData, nodeNumber));
-}
-
-void sysStatusData::set_nodeNumber(uint16_t value) {
-    setValue<uint16_t>(offsetof(SysData, nodeNumber), value);
+void sysStatusData::set_nodeNumber(uint8_t value) {
+    setValue<uint8_t>(offsetof(SysData, nodeNumber), value);
 }
 
 uint8_t sysStatusData::get_structuresVersion() const {
@@ -104,20 +107,20 @@ void sysStatusData::set_structuresVersion(uint8_t value) {
     setValue<uint8_t>(offsetof(SysData, structuresVersion), value);
 }
 
+uint16_t sysStatusData::get_magicNumber() const {
+    return getValue<uint16_t>(offsetof(SysData, magicNumber));
+}
+
+void sysStatusData::set_magicNumber(uint16_t value) {
+    setValue<uint16_t>(offsetof(SysData, magicNumber), value);
+}
+
 uint8_t sysStatusData::get_firmwareRelease() const {
     return getValue<uint8_t>(offsetof(SysData, firmwareRelease));
 }
 
 void sysStatusData::set_firmwareRelease(uint8_t value) {
     setValue<uint8_t>(offsetof(SysData, firmwareRelease), value);
-}
-
-bool sysStatusData::get_solarPowerMode() const {
-    return getValue<bool>(offsetof(SysData, solarPowerMode));
-}
-
-void sysStatusData::set_solarPowerMode(bool value) {
-    setValue<bool>(offsetof(SysData, solarPowerMode), value);
 }
 
 bool sysStatusData::get_lowPowerMode() const {
@@ -158,14 +161,6 @@ uint16_t sysStatusData::get_lastConnectionDuration() const {
 
 void sysStatusData::set_lastConnectionDuration(uint16_t value) {
     setValue<uint16_t>(offsetof(SysData,lastConnectionDuration), value);
-}
-
-uint16_t sysStatusData::get_nextReportSeconds() const {
-    return getValue<uint16_t>(offsetof(SysData,nextReportSeconds ));
-}
-
-void sysStatusData::set_nextReportSeconds(uint16_t value) {
-    setValue<uint16_t>(offsetof(SysData, nextReportSeconds), value);
 }
 
 uint16_t sysStatusData::get_frequencyMinutes() const {
@@ -254,21 +249,20 @@ void currentStatusData::loop() {
     sysStatus.flush(false);
 }
 
-
-uint16_t currentStatusData::get_deviceID() const {
-    return getValue<uint16_t>(offsetof(CurrentData, deviceID));
+uint8_t currentStatusData::get_nodeNumber() const {
+    return getValue<uint8_t>(offsetof(CurrentData, nodeNumber));
 }
 
-void currentStatusData::set_deviceID(uint16_t value) {
-    setValue<uint16_t>(offsetof(CurrentData, deviceID), value);
+void currentStatusData::set_nodeNumber(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, nodeNumber), value);
 }
 
-uint16_t currentStatusData::get_nodeNumber() const {
-    return getValue<uint16_t>(offsetof(CurrentData, nodeNumber));
+uint8_t currentStatusData::get_tempNodeNumber() const {
+    return getValue<uint8_t>(offsetof(CurrentData, tempNodeNumber));
 }
 
-void currentStatusData::set_nodeNumber(uint16_t value) {
-    setValue<uint16_t>(offsetof(CurrentData, nodeNumber), value);
+void currentStatusData::set_tempNodeNumber(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, tempNodeNumber), value);
 }
 
 uint8_t currentStatusData::get_internalTempC() const {
@@ -293,6 +287,14 @@ uint8_t currentStatusData::get_batteryState() const {
 
 void currentStatusData::set_batteryState(uint8_t value) {
     setValue<uint8_t>(offsetof(CurrentData, batteryState), value);
+}
+
+uint8_t currentStatusData::get_resetCount() const {
+    return getValue<uint8_t>(offsetof(CurrentData, resetCount));
+}
+
+void currentStatusData::set_resetCount(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, resetCount), value);
 }
 
 time_t currentStatusData::get_lastSampleTime() const {
@@ -360,6 +362,115 @@ void currentStatusData::set_alertTimestampNode(time_t value) {
 }
 
 void currentStatusData::logData(const char *msg) {
-    Log.info("Current Structure values - %d, %d, %d, %4.2f", currentData.deviceID, currentData.nodeNumber, currentData.internalTempC, currentData.stateOfCharge);
+    Log.info("Current Structure values - %d, %d, %4.2f", currentData.nodeNumber, currentData.internalTempC, currentData.stateOfCharge);
+}
+
+
+// *******************  SysStatus Storage Object **********************
+//
+// ******************** Offset of 150         ************************
+
+nodeIDData *nodeIDData::_instance;
+
+// [static]
+nodeIDData &nodeIDData::instance() {
+    if (!_instance) {
+        _instance = new nodeIDData();
+    }
+    return *_instance;
+}
+
+nodeIDData::nodeIDData() : StorageHelperRK::PersistentDataFRAM(::fram, 150, &nodeData.nodeHeader, sizeof(NodeData), NODEID_DATA_MAGIC, NODEID_DATA_VERSION) {
+
+};
+
+nodeIDData::~nodeIDData() {
+}
+
+void nodeIDData::setup() {
+    fram.begin();
+    nodeID.load();
+}
+
+void nodeIDData::loop() {
+    nodeID.flush(false);
+}
+
+uint8_t nodeIDData::get_nodeNumber_1() const {
+    return getValue<uint8_t>(offsetof(NodeData, nodeNumber_1));
+}
+
+void nodeIDData::set_nodeNumber_1(uint8_t value) {
+    setValue<uint8_t>(offsetof(NodeData, nodeNumber_1), value);
+}
+
+String nodeIDData::get_deviceID_1() const {
+	String result;
+	getValueString(offsetof(NodeData, deviceID_1), sizeof(NodeData::deviceID_1), result);
+	return result;
+}
+
+bool nodeIDData::set_deviceID_1(const char *str) {
+	return setValueString(offsetof(NodeData, deviceID_1), sizeof(NodeData::deviceID_1), str);
+}
+
+time_t nodeIDData::get_lastConnection_1() const {
+    return getValue<time_t>(offsetof(NodeData, lastConnection_1));
+}
+
+void nodeIDData::set_lastConnection_1(time_t value) {
+    setValue<time_t>(offsetof(NodeData, lastConnection_1), value);
+}
+	
+uint8_t nodeIDData::get_nodeNumber_2() const {
+    return getValue<uint8_t>(offsetof(NodeData, nodeNumber_2));
+}
+
+void nodeIDData::set_nodeNumber_2(uint8_t value) {
+    setValue<uint8_t>(offsetof(NodeData, nodeNumber_2), value);
+}
+
+String nodeIDData::get_deviceID_2() const {
+	String result;
+	getValueString(offsetof(NodeData, deviceID_2), sizeof(NodeData::deviceID_2), result);
+	return result;
+}
+
+bool nodeIDData::set_deviceID_2(const char *str) {
+	return setValueString(offsetof(NodeData, deviceID_2), sizeof(NodeData::deviceID_2), str);
+}
+
+time_t nodeIDData::get_lastConnection_2() const {
+    return getValue<time_t>(offsetof(NodeData, lastConnection_2));
+}
+
+void nodeIDData::set_lastConnection_2(time_t value) {
+    setValue<time_t>(offsetof(NodeData, lastConnection_2), value);
+}
+
+uint8_t nodeIDData::get_nodeNumber_3() const {
+    return getValue<uint8_t>(offsetof(NodeData, nodeNumber_3));
+}
+
+void nodeIDData::set_nodeNumber_3(uint8_t value) {
+    setValue<uint8_t>(offsetof(NodeData, nodeNumber_3), value);
+}
+
+String nodeIDData::get_deviceID_3() const {
+	String result;
+	getValueString(offsetof(NodeData, deviceID_3), sizeof(NodeData::deviceID_3), result);
+	return result;
+}
+
+bool nodeIDData::set_deviceID_3(const char *str) {
+	return setValueString(offsetof(NodeData, deviceID_3), sizeof(NodeData::deviceID_3), str);
+}
+
+time_t nodeIDData::get_lastConnection_3() const {
+    return getValue<time_t>(offsetof(NodeData, lastConnection_3));
+}
+
+void nodeIDData::set_lastConnection_3(time_t value) {
+    setValue<time_t>(offsetof(NodeData, lastConnection_3), value);
 }
 

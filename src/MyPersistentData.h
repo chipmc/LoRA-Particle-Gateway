@@ -7,7 +7,7 @@
 
 // Common Storage Functions
 void loadSystemDefaults();                          // Initilize the object values for new deployments
-void resetEverything();                                  // Resets the current hourly and daily counts
+void resetEverything();                             // Resets the current hourly and daily counts
 
 //Include other application specific header files
 // #include (no other header files required from other singleton classes)
@@ -19,6 +19,7 @@ extern MB85RC64 fram;
 // This way you can do "data.setup()" instead of "MyPersistentData::instance().setup()" as an example
 #define current currentStatusData::instance()
 #define sysStatus sysStatusData::instance()
+#define nodeID nodeIDData::instance()
 
 /**
  * This class is a singleton; you do not create one as a global, on the stack, or with new.
@@ -66,17 +67,16 @@ public:
 		// Your fields go here. Once you've added a field you cannot add fields
 		// (except at the end), insert fields, remove fields, change size of a field.
 		// Doing so will cause the data to be corrupted!
-		uint16_t deviceID;                                // Unique to the device
-		uint16_t nodeNumber;                              // Assigned by the gateway on joining the network
+		uint8_t nodeNumber;                              // Assigned by the gateway on joining the network
 		uint8_t structuresVersion;                        // Version of the data structures (system and data)
+		uint16_t magicNumber;							                // A way to identify nodes and gateways so they can trust each other
 		uint8_t firmwareRelease;                          // Version of the device firmware (integer - aligned to particle prodict firmware)
-		bool solarPowerMode;                              // Powered by a solar panel or utility power
+		uint8_t tempNodeNumber;                           // Used when an unconfigured node joins the network
 		bool lowPowerMode;                                // Does the device need to run disconnected to save battery
 		uint8_t resetCount;                               // reset count of device (0-256)
 		time_t lastHookResponse;                   		  // Last time we got a valid Webhook response
 		time_t lastConnection;                     		  // Last time we successfully connected to Particle
 		uint16_t lastConnectionDuration;                  // How long - in seconds - did it take to last connect to the Particle cloud
-		uint16_t nextReportSeconds;                       // How often do we report ( on a node this is seconds - for a gateway it is minutes on the hour)
 		uint16_t frequencyMinutes;                        // When we are reporing at minute increments - what are they - for Gateways
 		uint8_t alertCodeGateway;                         // Alert code for Gateway Alerts
 		time_t alertTimestampGateway;              		  // When was the last alert
@@ -85,7 +85,6 @@ public:
 		uint8_t closeTime;                                // Close time 24 hours
 		bool verizonSIM;                                  // Are we using a Verizon SIM?
 	};
-
 	SysData sysData;
 
 	// 	******************* Get and Set Functions for each variable in the storage object ***********
@@ -112,20 +111,17 @@ public:
 	 * 
 	 */
 
-	uint16_t get_deviceID() const;
-	void set_deviceID(uint16_t value);
-
-	uint16_t get_nodeNumber() const;
-	void set_nodeNumber(uint16_t value);
+	uint8_t get_nodeNumber() const;
+	void set_nodeNumber(uint8_t value);
 
 	uint8_t get_structuresVersion() const ;
 	void set_structuresVersion(uint8_t value);
 
+	uint16_t get_magicNumber() const ;
+	void set_magicNumber(uint16_t value);
+
 	uint8_t get_firmwareRelease() const;
 	void set_firmwareRelease(uint8_t value);
-
-	bool get_solarPowerMode() const;
-	void set_solarPowerMode(bool value);
 
 	bool get_lowPowerMode() const;
 	void set_lowPowerMode(bool value);
@@ -141,9 +137,6 @@ public:
 
 	uint16_t get_lastConnectionDuration() const;
 	void set_lastConnectionDuration(uint16_t value);
-
-	uint16_t get_nextReportSeconds() const;
-	void set_nextReportSeconds(uint16_t value);
 
 	uint16_t get_frequencyMinutes() const;
 	void set_frequencyMinutes(uint16_t value);
@@ -198,7 +191,7 @@ protected:
     static sysStatusData *_instance;
 
     //Since these variables are only used internally - They can be private. 
-	static const uint32_t SYS_DATA_MAGIC = 0x20a99e73;
+	static const uint32_t SYS_DATA_MAGIC = 0x20a99e74;
 	static const uint16_t SYS_DATA_VERSION = 1;
 
 };
@@ -242,12 +235,13 @@ public:
 		// (except at the end), insert fields, remove fields, change size of a field.
 		// Doing so will cause the data to be corrupted!
 		// You may want to keep a version number in your data.
-		uint16_t deviceID;                                // The deviceID of the device providing the current data - not the gateway
-		uint16_t nodeNumber;                              // The nodeNumber of the device providing the current data 
+		uint8_t nodeNumber;                              // The nodeNumber of the device providing the current data 
+		uint8_t tempNodeNumber;                           // Used when an unconfigured node joins the network
 		uint8_t internalTempC;                            // Enclosure temperature in degrees C
-		double stateOfCharge;                                // Battery charge level
+		double stateOfCharge;                             // Battery charge level
 		uint8_t batteryState;                             // Stores the current battery state (charging, discharging, etc)
 		time_t lastSampleTime;                            // Timestamp of last data collection
+		uint8_t resetCount;								  // This is the number of resets for the node publishing data
 		uint16_t RSSI;                                    // Latest signal strength value
 		uint8_t messageNumber;                            // What message are we on
 		time_t lastCountTime;                             // When did we last record a count
@@ -284,11 +278,11 @@ public:
 	 */
 
 
-	uint16_t get_deviceID() const;
-	void set_deviceID(uint16_t value);
+	uint8_t get_nodeNumber() const;
+	void set_nodeNumber(uint8_t value);
 
-	uint16_t get_nodeNumber() const;
-	void set_nodeNumber(uint16_t value);
+	uint8_t get_tempNodeNumber() const;
+	void set_tempNodeNumber(uint8_t value);
 
 	uint8_t get_internalTempC() const ;
 	void set_internalTempC(uint8_t value);
@@ -298,6 +292,9 @@ public:
 
 	uint8_t get_batteryState() const;
 	void set_batteryState(uint8_t value);
+
+	uint8_t get_resetCount() const;
+	void set_resetCount(uint8_t value);
 
 	time_t get_lastSampleTime() const;
 	void set_lastSampleTime(time_t value);
@@ -357,8 +354,146 @@ protected:
     static currentStatusData *_instance;
 
     //Since these variables are only used internally - They can be private. 
-	static const uint32_t CURRENT_DATA_MAGIC = 0x20a99e73;
+	static const uint32_t CURRENT_DATA_MAGIC = 0x20a99e74;
 	static const uint16_t CURRENT_DATA_VERSION = 1;
+};
+
+
+// *****************  nodeID Data Storage Object **********************
+//
+// ********************************************************************
+
+class nodeIDData : public StorageHelperRK::PersistentDataFRAM {
+public:
+
+    /**
+     * @brief Gets the singleton instance of this class, allocating it if necessary
+     * 
+     * Use MyPersistentData::instance() to instantiate the singleton.
+     */
+    static nodeIDData &instance();
+
+    /**
+     * @brief Perform setup operations; call this from global application setup()
+     * 
+     * You typically use MyPersistentData::instance().setup();
+     */
+    void setup();
+
+    /**
+     * @brief Perform application loop operations; call this from global application loop()
+     * 
+     * You typically use MyPersistentData::instance().loop();
+     */
+    void loop();
+
+
+	class NodeData {
+	public:
+		// This structure must always begin with the header (16 bytes)
+		StorageHelperRK::PersistentDataBase::SavedDataHeader nodeHeader;
+		// Your fields go here. Once you've added a field you cannot add fields
+		// (except at the end), insert fields, remove fields, change size of a field.
+		// Doing so will cause the data to be corrupted!
+		char deviceID_1[25];                                // Unique to the device
+		uint8_t nodeNumber_1;                              // Assigned by the gateway on joining the network
+		time_t lastConnection_1;							// When did we last hear from this node
+		char deviceID_2[25];                                // Unique to the device
+		uint8_t nodeNumber_2;                              // Assigned by the gateway on joining the network
+		time_t lastConnection_2;							// When did we last hear from this node
+		char deviceID_3[25];                                // Unique to the device
+		uint8_t nodeNumber_3;                              // Assigned by the gateway on joining the network
+		time_t lastConnection_3;							// When did we last hear from this node
+	};
+	NodeData nodeData;
+
+	// 	******************* Get and Set Functions for each variable in the storage object ***********
+    
+	/**
+	 * @brief For the Get functions, used to retrieve the value of the variable
+	 * 
+	 * @details Specific to the location in the object and the type of the variable
+	 * 
+	 * @param Nothing needed
+	 * 
+	 * @returns The value of the variable in the corret type
+	 * 
+	 */
+
+	/**
+	 * @brief For the Set functions, used to set the value of the variable
+	 * 
+	 * @details Specific to the location in the object and the type of the variable
+	 * 
+	 * @param Value to set the variable - correct type - for Strings they are truncated if too long
+	 * 
+	 * @returns None needed
+	 * 
+	 */
+
+	uint8_t get_nodeNumber_1() const;
+	void set_nodeNumber_1(uint8_t value);
+
+	String get_deviceID_1() const;
+	bool set_deviceID_1(const char *str);
+
+	time_t get_lastConnection_1() const;
+	void set_lastConnection_1(time_t value);
+
+	uint8_t get_nodeNumber_2() const;
+	void set_nodeNumber_2(uint8_t value);
+
+	String get_deviceID_2() const;
+	bool set_deviceID_2(const char *str);
+
+	time_t get_lastConnection_2() const;
+	void set_lastConnection_2(time_t value);
+
+	uint8_t get_nodeNumber_3() const;
+	void set_nodeNumber_3(uint8_t value);
+
+	String get_deviceID_3() const;
+	bool set_deviceID_3(const char *str);
+
+	time_t get_lastConnection_3() const;
+	void set_lastConnection_3(time_t value);
+	
+
+	//Members here are internal only and therefore protected
+protected:
+    /**
+     * @brief The constructor is protected because the class is a singleton
+     * 
+     * Use MyPersistentData::instance() to instantiate the singleton.
+     */
+    nodeIDData();
+
+    /**
+     * @brief The destructor is protected because the class is a singleton and cannot be deleted
+     */
+    virtual ~nodeIDData();
+
+    /**
+     * This class is a singleton and cannot be copied
+     */
+    nodeIDData(const nodeIDData&) = delete;
+
+    /**
+     * This class is a singleton and cannot be copied
+     */
+    nodeIDData& operator=(const nodeIDData&) = delete;
+
+    /**
+     * @brief Singleton instance of this class
+     * 
+     * The object pointer to this class is stored here. It's NULL at system boot.
+     */
+    static nodeIDData *_instance;
+
+    //Since these variables are only used internally - They can be private. 
+	static const uint32_t NODEID_DATA_MAGIC = 0x20a99e74;
+	static const uint16_t NODEID_DATA_VERSION = 1;
+
 };
 
 

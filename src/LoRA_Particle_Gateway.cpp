@@ -15,6 +15,7 @@
 // v0.08 - Simplified wake timing
 // v0.09 - Added LoRA functions to clear the buffer and sleep the LoRA radio
 // v0.10 - Stable - adding functionality
+// v0.11 - Big changes to messaging and storage.  Onboards upto to 3 nodes.  Works!
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
@@ -30,7 +31,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.09";
+char currentPointRelease[6] ="0.11";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -71,14 +72,18 @@ void setup()
 	{
 		current.setup();
   		sysStatus.setup();
+		nodeID.setup();
 	}
 
     particleInitialize();                           // Sets up all the Particle functions and variables defined in particle_fn.h
+	resetEverything();		// This is a test function
 
     {                                               // Initialize AB1805 Watchdog and RTC                                 
         ab1805.withFOUT(D8).setup();                // The carrier board has D8 connected to FOUT for wake interrupts
         ab1805.setWDT(AB1805::WATCHDOG_MAX_SECONDS);// Enable watchdog
     }
+
+	Log.info("RTC initialized, time is %s and RTC %s set", Time.timeStr(Time.now()).c_str(), (ab1805.isRTCSet()) ? "is" : "is not");
 
 	System.on(out_of_memory, outOfMemoryHandler);     // Enabling an out of memory handler is a good safety tip. If we run out of memory a System.reset() is done.
 
@@ -89,6 +94,8 @@ void setup()
 	// Setup local time and set the publishing schedule
 	LocalTime::instance().withConfig(LocalTimePosixTimezone("EST5EDT,M3.2.0/2:00:00,M11.1.0/2:00:00"));			// East coast of the US
 	localTimeConvert_NOW.withCurrentTime().convert();  				        // Convert to local time for use later
+
+	Log.info("LocalTime initialized, time is %s and RTC %s set", Time.timeStr(Time.now()).c_str(), (ab1805.isRTCSet()) ? "is" : "is not");
 
   	Log.info("Gateway startup complete at %s with battery %4.2f", localTimeConvert_NOW.format(TIME_FORMAT_ISO8601_FULL).c_str(), System.batteryCharge());
 
@@ -159,9 +166,14 @@ void loop() {
 		case REPORTING_STATE: {
 			if (state != oldState) publishStateTransition();
 		  	char data[256];                             						// Store the date in this character array - not global
+			uint8_t nodeNumber = current.get_nodeNumber();
 
-  			snprintf(data, sizeof(data), "{\"nodeid\":%u, \"hourly\":%u, \"daily\":%u,\"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"rssi\":%d, \"msg\":%d,\"timestamp\":%lu000}", \
-				current.get_deviceID(), current.get_hourlyCount(), current.get_dailyCount(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()], current.get_internalTempC(), sysStatus.get_resetCount(), current.get_RSSI(), current.get_messageNumber(), Time.now());
+  			snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"hourly\":%u, \"daily\":%u,\"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"rssi\":%d, \"msg\":%d,\"timestamp\":%lu000}",\
+			LoRA_Functions::instance().findDeviceID(nodeNumber).c_str(), current.get_hourlyCount(), current.get_dailyCount(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
+			current.get_internalTempC(), sysStatus.get_resetCount(), current.get_RSSI(), current.get_messageNumber(), Time.now());
+
+			Log.info(data);
+
   			PublishQueuePosix::instance().publish("Ubidots-LoRA-Hook-v1", data, PRIVATE | WITH_ACK);
 
 			state = LoRA_STATE;
@@ -215,8 +227,8 @@ void loop() {
 	PublishQueuePosix::instance().loop();           // Check to see if we need to tend to the message queue
 
 	current.loop();
-	
 	sysStatus.loop();
+	nodeID.loop();
 
 	if (outOfMemory >= 0) {                         // In this function we are going to reset the system if there is an out of memory error
 		System.reset();

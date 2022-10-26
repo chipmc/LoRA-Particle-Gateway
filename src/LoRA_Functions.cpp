@@ -27,10 +27,10 @@ LoRA_Functions::~LoRA_Functions() {
 // ************************************************************************
 // *****                      LoRA Setup                              *****
 // ************************************************************************
-// In this implementation - we have one gateway and two nodes (will generalize later) - nodes are numbered 2 to ...
-// 2- 9 for new nodes making a join request
-// 10 - 255 nodes assigned to the mesh
-const uint8_t GATEWAY_ADDRESS = 0;			 // Gateway addess is always zero
+// In this implementation - we have one gateway with a fixed node  number of 0 and up to 10 nodes with node numbers 1-10 ...
+// In an unconfigured node, there will be a node number of greater than 10 triggering a join request
+// Configured nodes will be stored in a JSON object by the gateway with three fields: node number, Particle deviceID and Time stamp of last contact
+//
 const double RF95_FREQ = 915.0;				 // Frequency - ISM
 
 // Define the message flags
@@ -42,7 +42,7 @@ static LoRA_State lora_state = NULL_STATE;
 RH_RF95 driver(RFM95_CS, RFM95_INT);
 
 // Class to manage message delivery and receipt, using the driver declared above
-RHMesh manager(driver, GATEWAY_ADDRESS);
+RHMesh manager(driver, sysStatus.get_nodeNumber());
 
 // Mesh has much greater memory requirements, and you may need to limit the
 // max message length to prevent wierd crashes
@@ -64,19 +64,9 @@ bool LoRA_Functions::setup(bool gatewayID) {
 	}
 	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
 	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
-
-	if (!(sysStatus.get_structuresVersion() == 128)) {    	// This will be our indication that the deviceID and nodeID has not yet been set
-		randomSeed(sysStatus.get_lastConnection());			// 32-bit number for seed
-		sysStatus.set_deviceID(random(1,65535));			// 16-bit number for deviceID
-		if (!gatewayID) sysStatus.set_nodeNumber(random(10,255));		// Random number in - unconfigured - range will trigger a Join request
-		else sysStatus.set_nodeNumber(0);
-		sysStatus.set_structuresVersion(128);			// Set the structure to the magic number so we can have a stable deviceID
-	}
-
-	manager.setThisAddress(sysStatus.get_nodeNumber());	// Assign the NodeNumber to this node
 	
-	if (manager.thisAddress() > 0) Log.info("LoRA Radio initialized as node %i and with a DeviceID of %i", manager.thisAddress(), sysStatus.get_deviceID());
-	else Log.info("LoRA Radio initialized as a gateway with a deviceID of %i", sysStatus.get_deviceID());
+	if (manager.thisAddress() > 0) Log.info("LoRA Radio initialized as node %i and with a DeviceID of %s", manager.thisAddress(), System.deviceID().c_str());
+	else Log.info("LoRA Radio initialized as a gateway with a deviceID of %s", System.deviceID().c_str());
 	return true;
 }
 
@@ -117,10 +107,15 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 	uint8_t hops;
 	if (manager.recvfromAck(buf, &len, &from, &dest, &id, &messageFlag, &hops))	{	// We have received a message
 		buf[len] = 0;
-		current.set_deviceID(buf[0] << 8 | buf[1]);					// Set the current device ID for reporting
-		current.set_nodeNumber(buf[2] << 8 | buf[3]);
+
+		if (!((buf[0] << 8 | buf[1]) == sysStatus.get_magicNumber())) {
+			Log.info("Message did not match the Magic Number - Ignoring");
+			return false;
+		}
+
+		current.set_nodeNumber(from);
 		lora_state = (LoRA_State)(0x0F & messageFlag);				// Strip out the overhead byte
-		Log.info("From node %d to %d with rssi=%d - a %s message of length %d in %d hops", current.get_nodeNumber(), dest, driver.lastRssi(), loraStateNames[lora_state], len, hops);
+		Log.info("From node %d with rssi=%d - a %s message of length %d in %d hops", current.get_nodeNumber(), driver.lastRssi(), loraStateNames[lora_state], len, hops);
 
 		if (lora_state == DATA_RPT) { if(!LoRA_Functions::instance().decipherDataReportGateway()) return false;}
 		if (lora_state == JOIN_REQ) { if(!LoRA_Functions::instance().decipherJoinRequestGateway()) return false;}
@@ -132,13 +127,13 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 			Log.info("We are updating the publish frequency to %i minutes", sysStatus.get_frequencyMinutes());
 		}
 
-		if (LoRA_Functions::instance().respondForLoRAMessageGateway()) return true;
+		if (LoRA_Functions::instance().respondToLoRAMessageGateway()) return true;
 
 	}
 	return false; 
 }
 
-bool LoRA_Functions::respondForLoRAMessageGateway() {
+bool LoRA_Functions::respondToLoRAMessageGateway() {
 
 	Log.info("Responding using the %s message type", loraStateNames[lora_state]);
 
@@ -153,13 +148,15 @@ bool LoRA_Functions::respondForLoRAMessageGateway() {
 
 bool LoRA_Functions::decipherDataReportGateway() {
 
-	current.set_hourlyCount(buf[5] << 8 | buf[6]);
-	current.set_dailyCount(buf[7] << 8 | buf[8]);
-	current.set_stateOfCharge(buf[10]);
-	current.set_batteryState(buf[11]);
-	current.set_internalTempC(buf[9]);
-	current.set_RSSI((buf[14] << 8 | buf[15]) - 65535);
-	current.set_messageNumber(buf[16]);
+	current.set_hourlyCount(buf[3] << 8 | buf[4]);
+	current.set_dailyCount(buf[5] << 8 | buf[6]);
+	current.set_internalTempC(buf[7]);
+	current.set_stateOfCharge(buf[8]);
+	current.set_batteryState(buf[9]);
+	current.set_resetCount(buf[10]);
+	current.set_messageNumber(buf[11]);
+	current.set_RSSI(driver.lastRssi());
+
 	Log.info("Deciphered data report %d from node %d", current.get_messageNumber(), current.get_nodeNumber());
 
 	lora_state = DATA_ACK;		// Prepare to respond
@@ -171,18 +168,21 @@ bool LoRA_Functions::acknowledgeDataReportGateway() {
 	static int attempts = 0;
 	static int success = 0;
 
+	// Format of a data acknowledgement
+
+
 	// This is a response to a data message it has a length of 9 and a specific payload and message flag
 	// Send a reply back to the originator client
 
 	attempts++;
      
-	buf[0] = current.get_messageNumber();			 		// Message number
-	buf[1] = ((uint8_t) ((Time.now()) >> 24)); 		// Fourth byte - current time
-	buf[2] = ((uint8_t) ((Time.now()) >> 16));		// Third byte
-	buf[3] = ((uint8_t) ((Time.now()) >> 8));		// Second byte
-	buf[4] = ((uint8_t) (Time.now()));		    	// First byte			
-	buf[5] = highByte(sysStatus.get_frequencyMinutes());	// Frequency of reports - for Gateways
-	buf[6] = lowByte(sysStatus.get_frequencyMinutes());	
+	buf[2] = ((uint8_t) ((Time.now()) >> 24)); 		// Fourth byte - current time
+	buf[3] = ((uint8_t) ((Time.now()) >> 16));		// Third byte
+	buf[4] = ((uint8_t) ((Time.now()) >> 8));		// Second byte
+	buf[5] = ((uint8_t) (Time.now()));		    	// First byte			
+	buf[6] = highByte(sysStatus.get_frequencyMinutes());	// Frequency of reports - for Gateways
+	buf[7] = lowByte(sysStatus.get_frequencyMinutes());	
+	buf[8] = current.get_messageNumber();			 // Message number
 	
 	Log.info("Sent response to node %d message %d, time = %s and frequency %d minutes", current.get_nodeNumber(), buf[0], Time.timeStr(Time.now()).c_str(), sysStatus.get_frequencyMinutes());
 
@@ -203,39 +203,49 @@ bool LoRA_Functions::acknowledgeDataReportGateway() {
 
 // These are the receive and respond messages for join requests
 bool LoRA_Functions::decipherJoinRequestGateway() {
+
+	char nodeDeviceID[25];
 	// Ths only question here is whether the node with the join request needs a new nodeNumber or is just looking for a clock set
 
 	lora_state = JOIN_ACK;			// Prepare to respond
+	// Need to store the deviceID here
+	for (uint8_t i=0; i<sizeof(nodeDeviceID); i++) {
+		nodeDeviceID[i] = buf[i+2];
+	}
+
+	current.set_tempNodeNumber(current.get_nodeNumber());			// Store the old node number for the ack - also differentiates between unconfigured node and time set
+
+	if (current.get_nodeNumber() > 10) {							// An unconfigured node
+		current.set_nodeNumber(findNodeNumber(nodeDeviceID));		// Look up the new node number
+		Log.info("Received from deviceID of %s an unconfigured will change from %d to %d",  nodeDeviceID, current.get_tempNodeNumber(), current.get_nodeNumber());
+	}
+	else Log.info("Join request from node %d - setting clock", current.get_nodeNumber());
+
+	Log.info("DeviceID is %s",LoRA_Functions::instance().findDeviceID(1).c_str());
 
 	return true;
 }
 
 bool LoRA_Functions::acknowledgeJoinRequestGateway() {
-	uint16_t newNodeNumber = 0;
-
-	if (current.get_nodeNumber() < 10) {							// Device needs a new node number
-		randomSeed(sysStatus.get_lastHookResponse());
-		newNodeNumber = random(10,255);
-	}
 
 	// This is a response to a data message it has a length of 9 and a specific payload and message flag
 	// Send a reply back to the originator client
      
-	buf[0] = 128;								// Magic number - so you can trust me
-	buf[1] = ((uint8_t) ((Time.now()) >> 24));  // Fourth byte - current time
-	buf[2] = ((uint8_t) ((Time.now()) >> 16));	// Third byte
-	buf[3] = ((uint8_t) ((Time.now()) >> 8));	// Second byte
-	buf[4] = ((uint8_t) (Time.now()));		    // First byte		
-	buf[5] = highByte(sysStatus.get_frequencyMinutes());	// Frequency of reports - for Gateways
-	buf[6] = lowByte(sysStatus.get_frequencyMinutes());	
-	buf[7] = highByte(newNodeNumber);			// New Node Number for device
-	buf[8] = lowByte(newNodeNumber);	
+	buf[0] = highByte(sysStatus.get_magicNumber());					// Magic number - so you can trust me
+	buf[1] = lowByte(sysStatus.get_magicNumber());					// Magic number - so you can trust me
+	buf[2] = ((uint8_t) ((Time.now()) >> 24));  					// Fourth byte - current time
+	buf[3] = ((uint8_t) ((Time.now()) >> 16));						// Third byte
+	buf[4] = ((uint8_t) ((Time.now()) >> 8));						// Second byte
+	buf[5] = ((uint8_t) (Time.now()));		    					// First byte		
+	buf[6] = highByte(sysStatus.get_frequencyMinutes());			// Frequency of reports - for Gateways
+	buf[7] = lowByte(sysStatus.get_frequencyMinutes());	
+	buf[8] = current.get_nodeNumber();
 	
-	Log.info("Sent response to node %d, time = %s and frequency %d minutes", newNodeNumber, Time.timeStr().c_str(), sysStatus.get_frequencyMinutes());
+	Log.info("Sent response to node %d, time = %s and frequency %d minutes", current.get_tempNodeNumber(), Time.timeStr().c_str(), sysStatus.get_frequencyMinutes());
 
 	digitalWrite(BLUE_LED,HIGH);			        // Sending data
 
-	if (manager.sendtoWait(buf, 9, current.get_nodeNumber(), JOIN_ACK) == RH_ROUTER_ERROR_NONE) {
+	if (manager.sendtoWait(buf, 9, current.get_tempNodeNumber(), JOIN_ACK) == RH_ROUTER_ERROR_NONE) {
 		Log.info("Response received successfully");
 		digitalWrite(BLUE_LED,LOW);
 		return true;
@@ -248,9 +258,9 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 
 
 bool LoRA_Functions::decipherAlertReportGateway() {
-	current.set_alertCodeNode(buf[0]);
-	current.set_alertTimestampNode(buf[1] << 24 | buf[2] << 16 | buf[3] <<8 | buf[4]);
-	current.set_RSSI((buf[5] << 8 | buf[6]) - 65535);
+	current.set_alertCodeNode(buf[2]);
+	current.set_alertTimestampNode(Time.now());
+	current.set_RSSI(driver.lastRssi() );
 	Log.info("Deciphered alert report from node %d", current.get_nodeNumber());
 
 	lora_state = ALERT_ACK;		// Prepare to respond
@@ -263,18 +273,20 @@ bool LoRA_Functions::acknowledgeAlertReportGateway() {
 
 	// This is a response to a data message it has a length of 9 and a specific payload and message flag
 	// Send a reply back to the originator client
-     
-	buf[0] = 0;									// Reserved
-	buf[1] = ((uint8_t) ((Time.now()) >> 24));  // Fourth byte - current time
-	buf[2] = ((uint8_t) ((Time.now()) >> 16));	// Third byte
-	buf[3] = ((uint8_t) ((Time.now()) >> 8));	// Second byte
-	buf[4] = ((uint8_t) (Time.now()));		    // First byte	
-	buf[5] = highByte(sysStatus.get_frequencyMinutes());	// Frequency of reports - for Gateways
-	buf[6] = lowByte(sysStatus.get_frequencyMinutes());			
+
+	buf[0] = highByte(sysStatus.get_magicNumber());				// Magic number - so you can trust me
+	buf[1] = lowByte(sysStatus.get_magicNumber());				// Magic number - so you can trust me
+	buf[2] = ((uint8_t) ((Time.now()) >> 24));  				// Fourth byte - current time
+	buf[3] = ((uint8_t) ((Time.now()) >> 16));					// Third byte
+	buf[4] = ((uint8_t) ((Time.now()) >> 8));					// Second byte
+	buf[5] = ((uint8_t) (Time.now()));		    				// First byte	
+	buf[6] = highByte(sysStatus.get_frequencyMinutes());		// Frequency of reports - for Gateways
+	buf[7] = lowByte(sysStatus.get_frequencyMinutes());			
+	buf[8] = 0;													// Send a zero for the alertcode to reset it
 	
 	digitalWrite(BLUE_LED,HIGH);			        // Sending data
 
-	if (manager.sendtoWait(buf, 7, current.get_nodeNumber(), ALERT_ACK) == RH_ROUTER_ERROR_NONE) {
+	if (manager.sendtoWait(buf, 9, current.get_nodeNumber(), ALERT_ACK) == RH_ROUTER_ERROR_NONE) {
 		Log.info("Sent acknowledgment to Node %d, time = %s and frequency %d minutes", current.get_nodeNumber(), Time.timeStr().c_str(), sysStatus.get_frequencyMinutes());
 		digitalWrite(BLUE_LED,LOW);
 		return true;
@@ -283,4 +295,55 @@ bool LoRA_Functions::acknowledgeAlertReportGateway() {
 	Log.info("Response not acknowledged");
 	digitalWrite(BLUE_LED,LOW);
 	return false;
+}
+
+
+uint8_t LoRA_Functions::findNodeNumber(const char* deviceID) {
+
+	if (strncmp(deviceID,nodeID.get_deviceID_1(),24) == 0) {
+		Log.info("deviceID on file - retreiving nodeID number %d", nodeID.get_nodeNumber_1());
+		nodeID.set_lastConnection_1(Time.now());
+		return 1;
+	}
+	else if (strncmp(deviceID,nodeID.get_deviceID_2(),24) == 0) {
+		Log.info("deviceID on file - retreiving nodeID number %d", nodeID.get_nodeNumber_2());
+		nodeID.set_lastConnection_1(Time.now());
+		return 2;
+	}
+	else if (strncmp(deviceID,nodeID.get_deviceID_3(),24) == 0) {		
+		Log.info("deviceID on file - retreiving nodeID number %d", nodeID.get_nodeNumber_3());
+		nodeID.set_lastConnection_1(Time.now());
+		return 3;
+	}
+	else {
+		if (nodeID.get_lastConnection_1() == 0) {
+			Log.info("deviceID not on file - saving as nodeID nuber %d", nodeID.get_nodeNumber_1());
+			nodeID.set_nodeNumber_1(1);
+			nodeID.set_deviceID_1(deviceID);
+			nodeID.set_lastConnection_1(Time.now());
+			return 1;
+		}
+		else if (nodeID.get_lastConnection_2() == 0) {
+			Log.info("deviceID not on file - saving as nodeID nuber %d", nodeID.get_nodeNumber_3());
+			nodeID.set_nodeNumber_2(2);
+			nodeID.set_deviceID_2(deviceID);
+			nodeID.set_lastConnection_2(Time.now());
+			return 2;
+		}
+		else {
+			Log.info("deviceID not on file - saving as nodeID nuber %d", 3);
+			nodeID.set_nodeNumber_3(3);
+			nodeID.set_deviceID_3(deviceID);
+			nodeID.set_lastConnection_3(Time.now());
+			return 3;
+		}	
+	}
+	return 0;
+}
+
+String LoRA_Functions::findDeviceID(uint8_t nodeNumber) {
+	if (nodeNumber == nodeID.get_nodeNumber_1()) return nodeID.get_deviceID_1();
+	else if (nodeNumber == nodeID.get_nodeNumber_2()) return nodeID.get_deviceID_2();
+	else if (nodeNumber == nodeID.get_nodeNumber_3()) return nodeID.get_deviceID_3();
+	else return "null";
 }
