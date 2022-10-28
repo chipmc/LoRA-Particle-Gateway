@@ -32,6 +32,7 @@ LoRA_Functions::~LoRA_Functions() {
 // Configured nodes will be stored in a JSON object by the gateway with three fields: node number, Particle deviceID and Time stamp of last contact
 //
 const double RF95_FREQ = 915.0;				 // Frequency - ISM
+const uint8_t GATEWAY_ADDRESS = 0;
 
 // Define the message flags
 typedef enum { NULL_STATE, JOIN_REQ, JOIN_ACK, DATA_RPT, DATA_ACK, ALERT_RPT, ALERT_ACK} LoRA_State;
@@ -42,7 +43,7 @@ static LoRA_State lora_state = NULL_STATE;
 RH_RF95 driver(RFM95_CS, RFM95_INT);
 
 // Class to manage message delivery and receipt, using the driver declared above
-RHMesh manager(driver, sysStatus.get_nodeNumber());
+RHMesh manager(driver, GATEWAY_ADDRESS);
 
 // Mesh has much greater memory requirements, and you may need to limit the
 // max message length to prevent wierd crashes
@@ -65,8 +66,19 @@ bool LoRA_Functions::setup(bool gatewayID) {
 	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
 	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
 	
-	if (manager.thisAddress() > 0) Log.info("LoRA Radio initialized as node %i and with a DeviceID of %s", manager.thisAddress(), System.deviceID().c_str());
-	else Log.info("LoRA Radio initialized as a gateway with a deviceID of %s", System.deviceID().c_str());
+	if (gatewayID == true) {
+		sysStatus.set_nodeNumber(GATEWAY_ADDRESS);							// Gateway - Manager is initialized by default with GATEWAY_ADDRESS - make sure it is stored in FRAM
+		Log.info("LoRA Radio initialized as a gateway with a deviceID of %s", System.deviceID().c_str());
+	}
+	else if (sysStatus.get_nodeNumber() > 0 && sysStatus.get_nodeNumber() <= 10) {
+		manager.setThisAddress(sysStatus.get_nodeNumber());// Node - use the Node address in valid range from memory
+		Log.info("LoRA Radio initialized as node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
+	}
+	else {																						// Else, we will set as an unconfigured node
+		sysStatus.set_nodeNumber(11);
+		manager.setThisAddress(11);
+		Log.info("LoRA Radio initialized as an unconfigured node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
+	}
 	return true;
 }
 
@@ -317,21 +329,21 @@ uint8_t LoRA_Functions::findNodeNumber(const char* deviceID) {
 	}
 	else {
 		if (nodeID.get_lastConnection_1() == 0) {
-			Log.info("deviceID not on file - saving as nodeID nuber %d", nodeID.get_nodeNumber_1());
+			Log.info("deviceID not on file - saving as nodeID number %d", nodeID.get_nodeNumber_1());
 			nodeID.set_nodeNumber_1(1);
 			nodeID.set_deviceID_1(deviceID);
 			nodeID.set_lastConnection_1(Time.now());
 			return 1;
 		}
 		else if (nodeID.get_lastConnection_2() == 0) {
-			Log.info("deviceID not on file - saving as nodeID nuber %d", nodeID.get_nodeNumber_3());
+			Log.info("deviceID not on file - saving as nodeID number %d", nodeID.get_nodeNumber_2());
 			nodeID.set_nodeNumber_2(2);
 			nodeID.set_deviceID_2(deviceID);
 			nodeID.set_lastConnection_2(Time.now());
 			return 2;
 		}
 		else {
-			Log.info("deviceID not on file - saving as nodeID nuber %d", 3);
+			Log.info("deviceID not on file - saving as nodeID number %d", nodeID.get_nodeNumber_3());
 			nodeID.set_nodeNumber_3(3);
 			nodeID.set_deviceID_3(deviceID);
 			nodeID.set_lastConnection_3(Time.now());

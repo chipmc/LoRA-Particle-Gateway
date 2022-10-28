@@ -16,6 +16,7 @@
 // v0.09 - Added LoRA functions to clear the buffer and sleep the LoRA radio
 // v0.10 - Stable - adding functionality
 // v0.11 - Big changes to messaging and storage.  Onboards upto to 3 nodes.  Works!
+// v0.12 - Added mandatory sync time on connect and check for empty queue before disconnect and node number mgt.
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
@@ -31,7 +32,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.11";
+char currentPointRelease[6] ="0.12";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -95,9 +96,13 @@ void setup()
 	LocalTime::instance().withConfig(LocalTimePosixTimezone("EST5EDT,M3.2.0/2:00:00,M11.1.0/2:00:00"));			// East coast of the US
 	localTimeConvert_NOW.withCurrentTime().convert();  				        // Convert to local time for use later
 
-	Log.info("LocalTime initialized, time is %s and RTC %s set", Time.timeStr(Time.now()).c_str(), (ab1805.isRTCSet()) ? "is" : "is not");
-
-  	Log.info("Gateway startup complete at %s with battery %4.2f", localTimeConvert_NOW.format(TIME_FORMAT_ISO8601_FULL).c_str(), System.batteryCharge());
+	if (Time.isValid()) {
+		Log.info("LocalTime initialized, time is %s and RTC %s set", Time.timeStr(Time.now()).c_str(), (ab1805.isRTCSet()) ? "is" : "is not");
+	}
+	else {
+		Log.info("LocalTime not initialized so will need to Connect to Particle");
+		state = CONNECTING_STATE;
+	}
 
 	if (!digitalRead(BUTTON_PIN)) {
 		Log.info("User button pressed, test mode");
@@ -190,7 +195,8 @@ void loop() {
 
 			if (Particle.connected() || millis() - connectingTimeout > 300000L) {		// Either we will connect or we will timeout 
 				sysStatus.set_lastConnection(Time.now());
-				state = DISCONNECTING_STATE;										// Typically, we will disconnect and sleep to save power
+				Particle.syncTime();													// To prevent large connections, we will sync every hour when we connect to the cellular network.
+				state = DISCONNECTING_STATE;											// Typically, we will disconnect and sleep to save power - publishes occur during the 90 seconds before disconnect
 			}
 
 		} break;
@@ -203,7 +209,7 @@ void loop() {
 				stayConnectedWindow = millis(); 
 			}
 
-			if (millis() - stayConnectedWindow > 90000) {							// Stay on-line for 90 seconds
+			if ((millis() - stayConnectedWindow > 90000) && PublishQueuePosix::instance().getCanSleep()) {	// Stay on-line for 90 seconds and until we are done clearing the queue
 				disconnectFromParticle();
 				state = IDLE_STATE;
 			}
