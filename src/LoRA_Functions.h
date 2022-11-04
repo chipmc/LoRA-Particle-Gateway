@@ -14,11 +14,12 @@ buf[0 - 1] magicNumber                      // Magic number for devices
 buf[2] firmVersion                          // Set for code release
 buf[3 - 4] hourly                           // Hourly count
 buf[5 - 6] = daily                          // Daily Count
-buf[7] temp;                                // Enclosure temp
-buf[8] battChg;                             // State of charge
-buf[9] battState;                           // Battery State
-buf[10] resets                              // Reset count
-buf[11] msgCnt++;                           // Sequential message number
+buf[7] sensorType                           // What sensor type is it
+buf[8] temp;                                // Enclosure temp
+buf[9] battChg;                             // State of charge
+buf[10] battState;                           // Battery State
+buf[11] resets                              // Reset count
+buf[12] msgCnt++;                           // Sequential message number
 */
 
 // Format of a data acknowledgement
@@ -26,13 +27,16 @@ buf[11] msgCnt++;                           // Sequential message number
     buf[0 - 1 ] magicNumber                 // Magic Number
     buf[2 - 5 ] Time.now()                  // Set the time 
     buf[6 - 7] frequencyMinutes             // For the Gateway minutes on the hour
-    buf[8] message number                   // Parrot this back to see if it matches
+    buf[8] openHours                        // From the Gateway to the node - is the park open?
+    buf[9] alertCode                        // This lets the Gateway trigger an alert on the node - typically a join request
+    buf[10] message number                  // Parrot this back to see if it matches
 */
 
 // Format of a join request
 /*
 buf[0-1] magicNumber;                       // Magic Number
 buf[2- 26] Particle deviceID;               // deviceID is unique to the device
+buf[27] sensorType				// Identifies sensor type to Gateway
 */
 
 // Format for a join acknowledgement
@@ -41,6 +45,7 @@ buf[2- 26] Particle deviceID;               // deviceID is unique to the device
     buf[2 - 5 ] Time.now()                  // Set the time 
     buf[6 - 7] frequencyMinutes             // For the Gateway minutes on the hour  
     buf[8]  newNodeNumber                   // New Node Number for device
+    buf[9] sensorType				// Gateway confirms sensor type
 */
 
 // Format for an alert Report

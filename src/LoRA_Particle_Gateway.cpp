@@ -17,6 +17,7 @@
 // v0.10 - Stable - adding functionality
 // v0.11 - Big changes to messaging and storage.  Onboards upto to 3 nodes.  Works!
 // v0.12 - Added mandatory sync time on connect and check for empty queue before disconnect and node number mgt.
+// v0.13 - Different webhooks for nodes and gateways. added reporting on cellular connection time and signal.  Added sensor type to join reques - need to figure out how to trigger
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
@@ -32,12 +33,13 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.12";
+char currentPointRelease[6] ="0.13";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
 void userSwitchISR();                               // interrupt service routime for the user switch
 int secondsUntilNextEvent(); 						// Time till next scheduled event
+void publishWebhook(uint8_t nodeNumber);			// Publish data based on node number
 
 // System Health Variables
 int outOfMemory = -1;                               // From reference code provided in AN0023 (see above)
@@ -51,8 +53,7 @@ State oldState = INITIALIZATION_STATE;
 // Initialize Functions
 SystemSleepConfiguration config;                    // Initialize new Sleep 2.0 Api
 AB1805 ab1805(Wire);                                // Rickkas' RTC / Watchdog library
-LocalTimeSchedule publishSchedule;					// These allow us to enable a schedule and to use local time
-LocalTimeConvert localTimeConvert_NOW;
+LocalTimeConvert conv;								// For determining if the park should be opened or closed - need local time
 void outOfMemoryHandler(system_event_t event, int param);
 
 // MB85RC64 fram(Wire, 0);
@@ -77,14 +78,11 @@ void setup()
 	}
 
     particleInitialize();                           // Sets up all the Particle functions and variables defined in particle_fn.h
-	resetEverything();		// This is a test function
 
     {                                               // Initialize AB1805 Watchdog and RTC                                 
         ab1805.withFOUT(D8).setup();                // The carrier board has D8 connected to FOUT for wake interrupts
         ab1805.setWDT(AB1805::WATCHDOG_MAX_SECONDS);// Enable watchdog
     }
-
-	Log.info("RTC initialized, time is %s and RTC %s set", Time.timeStr(Time.now()).c_str(), (ab1805.isRTCSet()) ? "is" : "is not");
 
 	System.on(out_of_memory, outOfMemoryHandler);     // Enabling an out of memory handler is a good safety tip. If we run out of memory a System.reset() is done.
 
@@ -94,10 +92,10 @@ void setup()
 
 	// Setup local time and set the publishing schedule
 	LocalTime::instance().withConfig(LocalTimePosixTimezone("EST5EDT,M3.2.0/2:00:00,M11.1.0/2:00:00"));			// East coast of the US
-	localTimeConvert_NOW.withCurrentTime().convert();  				        // Convert to local time for use later
+	conv.withCurrentTime().convert();  				        // Convert to local time for use later
 
 	if (Time.isValid()) {
-		Log.info("LocalTime initialized, time is %s and RTC %s set", Time.timeStr(Time.now()).c_str(), (ab1805.isRTCSet()) ? "is" : "is not");
+		Log.info("LocalTime initialized, time is %s and RTC %s set", conv.format("%I:%M:%S%p").c_str(), (ab1805.isRTCSet()) ? "is" : "is not");
 	}
 	else {
 		Log.info("LocalTime not initialized so will need to Connect to Particle");
@@ -155,10 +153,13 @@ void loop() {
 				if (oldState != REPORTING_STATE) startLoRAWindow = millis();    // Mark when we enter this state - for timeouts - but multiple messages won't keep us here forever
 				publishStateTransition();                   					// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 				LoRA_Functions::instance().clearBuffer();						// Clear the buffer before we start the LoRA state
-				Log.info("Gateway is listening for LoRA messages");
+				conv.withCurrentTime().convert();								// Get the time and convert to Local
+				if (conv.getLocalTimeHMS().hour >= sysStatus.get_openTime() && conv.getLocalTimeHMS().hour < sysStatus.get_closeTime()) current.set_openHours(true);
+				else current.set_openHours(false);
+				Log.info("Gateway is listening for LoRA messages and the park is %s (%d / %d / %d)", (current.get_openHours()) ? "open":"closed", conv.getLocalTimeHMS().hour, sysStatus.get_openTime(), sysStatus.get_closeTime());
 			} 
 
-			if (LoRA_Functions::instance().listenForLoRAMessageGateway()) state = REPORTING_STATE; // Received and acknowledged data from a node - report
+			if (LoRA_Functions::instance().listenForLoRAMessageGateway() && current.get_alertCodeNode() != 1) state = REPORTING_STATE; 			// Received and acknowledged data from a node - report unless there is Alert Code 1 (Unconfigured Node)
 
 			if (!testModeFlag && ((millis() - startLoRAWindow) > 150000L)) { 								// Keeps us in listening mode for the specified windpw - then back to idle unless in test mode - keeps listening
 				LoRA_Functions::instance().sleepLoRaRadio();												// Done with the LoRA phase - put the radio to sleep
@@ -170,16 +171,12 @@ void loop() {
 
 		case REPORTING_STATE: {
 			if (state != oldState) publishStateTransition();
-		  	char data[256];                             						// Store the date in this character array - not global
-			uint8_t nodeNumber = current.get_nodeNumber();
 
-  			snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"hourly\":%u, \"daily\":%u,\"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"rssi\":%d, \"msg\":%d,\"timestamp\":%lu000}",\
-			LoRA_Functions::instance().findDeviceID(nodeNumber).c_str(), current.get_hourlyCount(), current.get_dailyCount(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
-			current.get_internalTempC(), sysStatus.get_resetCount(), current.get_RSSI(), current.get_messageNumber(), Time.now());
+			uint8_t nodeNumber = current.get_nodeNumber();						// Put this here to reduce line length
 
-			Log.info(data);
+			publishWebhook(nodeNumber);
 
-  			PublishQueuePosix::instance().publish("Ubidots-LoRA-Hook-v1", data, PRIVATE | WITH_ACK);
+			sysStatus.set_messageCount(sysStatus.get_messageCount() + 1);		// Increment the message counter 
 
 			state = LoRA_STATE;
 		} break;
@@ -189,13 +186,25 @@ void loop() {
 
 			if (state != oldState) {
 				publishStateTransition();  
-				if (!Particle.connected()) Particle.connect();
+				if (Time.day(sysStatus.get_lastConnection()) != conv.getLocalTimeYMD().getDay()) {
+					resetEverything();
+					Log.info("New Day - Resetting everything");
+				}
+				publishWebhook(sysStatus.get_nodeNumber());								// Before we connect - let's send the gateway's webhook
+				if (!Particle.connected()) Particle.connect();							// Time to connect to Particle
 				connectingTimeout = millis();
 			}
 
-			if (Particle.connected() || millis() - connectingTimeout > 300000L) {		// Either we will connect or we will timeout 
+			if (Particle.connected() || millis() - connectingTimeout > 600000L) {		// Either we will connect or we will timeout - will try for 10 minutes 
 				sysStatus.set_lastConnection(Time.now());
-				Particle.syncTime();													// To prevent large connections, we will sync every hour when we connect to the cellular network.
+				sysStatus.set_lastConnectionDuration((millis() - connectingTimeout) / 1000);	// Record connection time in seconds
+				if (Particle.connected()) {
+					Particle.syncTime();													// To prevent large connections, we will sync every hour when we connect to the cellular network.
+					waitUntil(Particle.syncTimeDone);										// Make sure sync is complete
+					CellularSignal sig = Cellular.RSSI();
+					sysStatus.set_RSSI(sig.getStrength());
+				}
+
 				state = DISCONNECTING_STATE;											// Typically, we will disconnect and sleep to save power - publishes occur during the 90 seconds before disconnect
 			}
 
@@ -266,7 +275,7 @@ void outOfMemoryHandler(system_event_t event, int param) {
 }
 
 void userSwitchISR() {
-  userSwitchDectected = true;                                            // The the flag for the user switch interrupt
+	userSwitchDectected = true;
 }
 
 /**
@@ -285,5 +294,36 @@ int secondsUntilNextEvent() {											// Time till next scheduled event
         Log.info("Report frequency %d mins, next event in %lu seconds", sysStatus.get_frequencyMinutes(), secondsToReturn);
     }
 	return secondsToReturn;
+}
+
+/**
+ * @brief Publish Webhook will put the webhook data into the publish queue
+ * 
+ * @details Nodes and Gateways will use the same format for this webook - data sources will change
+ * 
+ * 
+ */
+
+void publishWebhook(uint8_t nodeNumber) {
+	char data[256];                             						// Store the date in this character array - not global
+
+	if (nodeNumber > 0) {												// Webhook for a node
+		snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"hourly\":%u, \"daily\":%u, \"sensortype\":%d, \"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"rssi\":%d, \"msg\":%d,\"timestamp\":%lu000}",\
+		LoRA_Functions::instance().findDeviceID(nodeNumber).c_str(), current.get_hourlyCount(), current.get_dailyCount(), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
+		current.get_internalTempC(), current.get_resetCount(), current.get_RSSI(), current.get_messageNumber(), Time.now());
+		PublishQueuePosix::instance().publish("Ubidots-LoRA-Node-v1", data, PRIVATE | WITH_ACK);
+	}
+	else {																// Webhook for the gateway
+		snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"hourly\":%u, \"daily\":%u, \"sensortype\":%d, \"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"rssi\":%d, \"msg\":%d,\"timestamp\":%lu000}",\
+		Particle.deviceID().c_str(), 0, 0, sysStatus.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
+		current.get_internalTempC(), sysStatus.get_resetCount(), sysStatus.get_RSSI(), sysStatus.get_messageCount(), Time.now());
+		PublishQueuePosix::instance().publish("Ubidots-LoRA-Gateway-v1", data, PRIVATE | WITH_ACK);
+	}
+
+	Log.info(data);
+
+
+
+	return;
 }
 

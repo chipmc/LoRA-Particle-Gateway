@@ -121,7 +121,7 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 		buf[len] = 0;
 
 		if (!((buf[0] << 8 | buf[1]) == sysStatus.get_magicNumber())) {
-			Log.info("Message did not match the Magic Number - Ignoring");
+			Log.info("Message magic number of %d did not match the Magic Number in memory %d - Ignoring", (buf[0] << 8 | buf[1]), sysStatus.get_magicNumber());
 			return false;
 		}
 
@@ -162,11 +162,12 @@ bool LoRA_Functions::decipherDataReportGateway() {
 
 	current.set_hourlyCount(buf[3] << 8 | buf[4]);
 	current.set_dailyCount(buf[5] << 8 | buf[6]);
-	current.set_internalTempC(buf[7]);
-	current.set_stateOfCharge(buf[8]);
-	current.set_batteryState(buf[9]);
-	current.set_resetCount(buf[10]);
-	current.set_messageNumber(buf[11]);
+	current.set_sensorType(buf[7]);
+	current.set_internalTempC(buf[8]);
+	current.set_stateOfCharge(buf[9]);
+	current.set_batteryState(buf[10]);
+	current.set_resetCount(buf[11]);
+	current.set_messageNumber(buf[12]);
 	current.set_RSSI(driver.lastRssi());
 
 	Log.info("Deciphered data report %d from node %d", current.get_messageNumber(), current.get_nodeNumber());
@@ -194,13 +195,42 @@ bool LoRA_Functions::acknowledgeDataReportGateway() {
 	buf[5] = ((uint8_t) (Time.now()));		    	// First byte			
 	buf[6] = highByte(sysStatus.get_frequencyMinutes());	// Frequency of reports - for Gateways
 	buf[7] = lowByte(sysStatus.get_frequencyMinutes());	
-	buf[8] = current.get_messageNumber();			 // Message number
+	buf[8] = current.get_openHours();
+	// Next we will check to make sure that node number is properly configured in the nodeID object
+	buf[9] = 0;										// Default is that there is no alert code
+	switch (current.get_nodeNumber()) {
+		case 1:
+			if (strncmp(nodeID.get_deviceID_1(),"000000000000000000000000",24) == 0) {					// This means that the node is not configured in the Gateway's table of nodes and deviceIDs
+			Log.info("Node 1 deviceID not set - setting alert");
+				buf[9] = 1;											// Sets Alert Code 1 to force a Join Request Message
+			}
+			break;
+		case 2:
+			if (strncmp(nodeID.get_deviceID_2(),"000000000000000000000000",24) == 0) {					// This means that the node is not configured in the Gateway's table of nodes and deviceIDs
+				Log.info("Node 2 deviceID not set - setting alert");
+				buf[9] = 1;											// Sets Alert Code 1 to force a Join Request Message
+			}
+			break;
+		case 3:
+			if (strncmp(nodeID.get_deviceID_3(),"000000000000000000000000",24) == 0) {					// This means that the node is not configured in the Gateway's table of nodes and deviceIDs
+				Log.info("Node 2 deviceID not set - setting alert");
+				buf[9] = 1;											// Sets Alert Code 1 to force a Join Request Message
+			}
+			break;
+		default: 
+			Log.info("Node number not configured - setting alert");
+			buf[9] = 1;
+			break;
+	}
+	current.set_alertCodeNode(buf[9]);								// Store as this will impact reporting
+	if (buf[9] > 0) current.set_alertTimestampNode(Time.now());
+	buf[10] = current.get_messageNumber();			 // Message number
 	
-	Log.info("Sent response to node %d message %d, time = %s and frequency %d minutes", current.get_nodeNumber(), buf[0], Time.timeStr(Time.now()).c_str(), sysStatus.get_frequencyMinutes());
+	Log.info("Acknowlegment to %snode %d message %d, time = %s and frequency %d minutes", (buf[9] > 0) ? "misconfigured ":"", current.get_nodeNumber(), buf[10], Time.timeStr(Time.now()).c_str(), sysStatus.get_frequencyMinutes());
 
 	digitalWrite(BLUE_LED,HIGH);			        // Sending data
 
-	if (manager.sendtoWait(buf, 9, current.get_nodeNumber(), DATA_ACK) == RH_ROUTER_ERROR_NONE) {
+	if (manager.sendtoWait(buf, 11, current.get_nodeNumber(), DATA_ACK) == RH_ROUTER_ERROR_NONE) {
 		success++;
 		Log.info("Response received successfully - success rate %4.2f", ((success * 1.0)/ attempts)*100.0);
 		digitalWrite(BLUE_LED,LOW);
@@ -224,17 +254,27 @@ bool LoRA_Functions::decipherJoinRequestGateway() {
 	for (uint8_t i=0; i<sizeof(nodeDeviceID); i++) {
 		nodeDeviceID[i] = buf[i+2];
 	}
-
 	current.set_tempNodeNumber(current.get_nodeNumber());			// Store the old node number for the ack - also differentiates between unconfigured node and time set
 
 	if (current.get_nodeNumber() > 10) {							// An unconfigured node
 		current.set_nodeNumber(findNodeNumber(nodeDeviceID));		// Look up the new node number
-		Log.info("Received from deviceID of %s an unconfigured will change from %d to %d",  nodeDeviceID, current.get_tempNodeNumber(), current.get_nodeNumber());
+		Log.info("Received from deviceID of %s will change node number from %d to %d",  nodeDeviceID, current.get_tempNodeNumber(), current.get_nodeNumber());
 	}
-	else Log.info("Join request from node %d - setting clock", current.get_nodeNumber());
+	else  {															// Node is already configured - set the clock and record the sensorType - note sensorType is ignored until the node number is set
 
-	Log.info("DeviceID is %s",LoRA_Functions::instance().findDeviceID(1).c_str());
-
+	switch (current.get_nodeNumber()) {								// Will need to find a better way to do this as the node capacity grows
+		case 1:
+			nodeID.set_sensorType_1(buf[27]);
+			break;
+		case 2:
+			nodeID.set_sensorType_2(buf[27]);
+			break;
+		case 3:
+			nodeID.set_sensorType_3(buf[27]);
+			break;
+	}
+		Log.info("Join request from deviceID %s with node %d - setting clock and setting sensorType to %d", LoRA_Functions::instance().findDeviceID(1).c_str(), current.get_nodeNumber(), buf[27]);
+	}
 	return true;
 }
 
@@ -252,18 +292,30 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	buf[6] = highByte(sysStatus.get_frequencyMinutes());			// Frequency of reports - for Gateways
 	buf[7] = lowByte(sysStatus.get_frequencyMinutes());	
 	buf[8] = current.get_nodeNumber();
+	switch (current.get_nodeNumber()) {								// Will need to find a better way to do this as the node capacity grows
+		case 1:
+			buf[9] = nodeID.get_sensorType_1();
+			break;
+		case 2:
+			buf[9] = nodeID.get_sensorType_2();
+			break;
+		case 3:
+			buf[9] = nodeID.get_sensorType_3();
+			break;
+	}
 	
-	Log.info("Sent response to node %d, time = %s and frequency %d minutes", current.get_tempNodeNumber(), Time.timeStr().c_str(), sysStatus.get_frequencyMinutes());
+	Log.info("Sent response to sensorType %d node %d, time = %s and frequency %d minutes",  buf[9], current.get_tempNodeNumber(), Time.timeStr().c_str(), sysStatus.get_frequencyMinutes());
 
 	digitalWrite(BLUE_LED,HIGH);			        // Sending data
 
-	if (manager.sendtoWait(buf, 9, current.get_tempNodeNumber(), JOIN_ACK) == RH_ROUTER_ERROR_NONE) {
+	if (manager.sendtoWait(buf, 10, current.get_tempNodeNumber(), JOIN_ACK) == RH_ROUTER_ERROR_NONE) {
 		Log.info("Response received successfully");
+		current.set_tempNodeNumber(current.get_nodeNumber());		// Temp no longer needed
 		digitalWrite(BLUE_LED,LOW);
 		return true;
 	}
 
-	Log.info("Response not acknowledged");
+	Log.info("Response not acknowledged");							// Acknowledgement not received - this needs more attention as node is in undefined state
 	digitalWrite(BLUE_LED,LOW);
 	return false;
 }

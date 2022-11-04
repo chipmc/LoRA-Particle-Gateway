@@ -8,7 +8,5 @@
 
 void setGatewayConfiguration() {
   Log.info("Setting values for the Gateway");
-  sysStatus.set_sensorType(true); // Default is the car counter (true for PIR)
-  // sysStatus.set_deviceID(32148);
   sysStatus.set_frequencyMinutes(10);
 }

@@ -5,8 +5,8 @@
 #include "take_measurements.h"
 #include "MyPersistentData.h"
 
-// char wakeTimeStr[8] = " ";
-// char sleepTimeStr[8] = " ";
+char openTimeStr[8] = " ";
+char closeTimeStr[8] = " ";
 
 
 // Prototypes and System Mode calls
@@ -45,45 +45,23 @@ void particleInitialize() {
   const char* batteryContext[8] = {"Unknown","Not Charging","Charging","Charged","Discharging","Fault","Diconnected"};
 
   Log.info("Initializing Particle functions and variables");     // Note: Don't have to be connected but these functions need to in first 30 seconds
-  Particle.variable("Low Power Mode",(sysStatus.get_lowPowerMode()) ? "Yes" : "No");
   Particle.variable("Release",currentPointRelease);   
   Particle.variable("Signal", signalStr);
   Particle.variable("stateOfChg", current.get_stateOfCharge());
   Particle.variable("BatteryContext",batteryContext[current.get_batteryState()]);
   Particle.variable("Reporting Frequency", reportFrequency);
   Particle.variable("SIM Card", (sysStatus.get_verizonSIM()) ? "Verizon" : "Particle");
+  Particle.variable("Open Time", openTimeStr);
+  Particle.variable("Close Time", closeTimeStr);
 
-
-  Particle.function("Set Low Power", setLowPowerMode);
   Particle.function("Set Frequency", setFrequency);
-  // Particle.function("Set Wake Time", setWakeTime);
-  // Particle.function("Set Sleep Time", setSleepTime);
+  Particle.function("Set Wake Time", setOpenTime);
+  Particle.function("Set Sleep Time", setCloseTime);
   Particle.function("SIM Card", setVerizonSIM);
-
-/*
-  if (!digitalRead(BUTTON_PIN)) {
-    sysStatus.set_lowPowerMode(false);     // If the user button is held down while resetting - diable sleep
-    Particle.connect();
-  }
-  */
-
-
-  // Check to see if time is valid - if not, we will connect to the cellular network and sync time - accurate time is important for the gateway to function
-  /*
-	if (!Time.isValid()) {							// I need to make sure the time is valid here.
-		Particle.connect();
-		if (waitFor(Particle.connected, 600000)) {	// Connect to Particle
-			sysStatus.lastConnection = Time.now();			// Record the last connection time
-			Particle.syncTime();					// Sync time
-			waitUntil(Particle.syncTimeDone);		// Make sure sync is complete
-			disconnectFromParticle();
-		}
-	}
-  */
 
   takeMeasurements();                               // Initialize sensor values
 
-  // makeUpStringMessages();                           // Initialize the string messages needed for the Particle Variables
+  makeUpStringMessages();                           // Initialize the string messages needed for the Particle Variables
 }
 
 /**
@@ -104,10 +82,6 @@ int setFrequency(String command)
   int tempTime = strtol(command,&pEND,10);                       // Looks for the first integer and interprets it
   if ((tempTime < 0) || (tempTime > 120)) return 0;   // Make sure it falls in a valid range or send a "fail" result
   updatedFrequencyMins = tempTime;
-  if (updatedFrequencyMins < 12 && sysStatus.get_lowPowerMode()) {
-    Log.info("Short reporting frequency over-rides low power");
-    sysStatus.set_lowPowerMode(false);
-  }
   frequencyUpdated = true;                            // Flag to change frequency after next connection to the nodes
   snprintf(data, sizeof(data), "Report frequency will be set to %i minutes at next LoRA connect",updatedFrequencyMins);
   Log.info(data);
@@ -127,22 +101,21 @@ int setFrequency(String command)
  *
  * @return 1 if able to successfully take action, 0 if invalid command
  */
-/*
-int setWakeTime(String command)
+
+int setOpenTime(String command)
 {
   char * pEND;
   char data[64];
   int tempTime = strtol(command,&pEND,10);                             // Looks for the first integer and interprets it
   if ((tempTime < 0) || (tempTime > 23)) return 0;                     // Make sure it falls in a valid range or send a "fail" result
-  sysStatus.wakeTime = tempTime;
-  snprintf(data, sizeof(data), "Wake time set to %i",sysStatus.wakeTime);
+  sysStatus.set_openTime(tempTime);
+  snprintf(data, sizeof(data), "Wake time set to %i",sysStatus.get_openTime());
   Log.info(data);
   if (Particle.connected()) {
     Particle.publish("Time",data, PRIVATE);
   }
   return 1;
 }
-*/
 
 /**
  * @brief Sets the closing time of the facility.
@@ -155,57 +128,22 @@ int setWakeTime(String command)
  *
  * @return 1 if able to successfully take action, 0 if invalid command
  */
-/*
-int setSleepTime(String command)
+
+int setCloseTime(String command)
 {
   char * pEND;
   char data[64];
   int tempTime = strtol(command,&pEND,10);                       // Looks for the first integer and interprets it
   if ((tempTime < 0) || (tempTime > 24)) return 0;   // Make sure it falls in a valid range or send a "fail" result
-  sysStatus.sleepTime = tempTime;
-  snprintf(data, sizeof(data), "Sleep time set to %i",sysStatus.sleepTime);
+  sysStatus.set_closeTime(tempTime);
+  snprintf(data, sizeof(data), "Sleep time set to %i",sysStatus.get_closeTime());
   Log.info(data);
   if (Particle.connected()) {
     Particle.publish("Time",data, PRIVATE);
   }
   return 1;
 }
-*/
 
-/**
- * @brief Toggles the device into low power mode based on the input command.
- *
- * @details If the command is "1", sets the device into low power mode. If the command is "0",
- * sets the device into normal mode. Fails if neither of these are the inputs.
- *
- * @param command A string indicating whether to set the device into low power mode or into normal mode.
- * A "1" indicates low power mode, a "0" indicates normal mode. Inputs that are neither of these commands
- * will cause the function to return 0 to indicate an invalid entry.
- *
- * @return 1 if able to successfully take action, 0 if invalid command
- */
-int setLowPowerMode(String command)                                   // This is where we can put the device into low power mode if needed
-{
-  char data[64];
-  if (command != "1" && command != "0") return 0;                     // Before we begin, let's make sure we have a valid input
-  if (command == "1") {                                               // Command calls for enabling sleep
-    sysStatus.set_lowPowerMode(true);
-    if (sysStatus.get_frequencyMinutes() < 12 ) {                          // Need to increase reporting frequency to at least 12 mins for low power
-      Log.info("Increasing reporting frequency to 12 minutes");
-      sysStatus.set_frequencyMinutes(12);
-      frequencyUpdated = true;
-    }
-  }
-  else {                                                             // Command calls for disabling sleep
-    sysStatus.set_lowPowerMode(false);
-  }
-  snprintf(data, sizeof(data), "Is Low Power Mode set? %s", (sysStatus.get_lowPowerMode()) ? "yes" : "no");
-  Log.info(data);
-  if (Particle.connected()) {
-    Particle.publish("Mode",data, PRIVATE);
-  }
-  return 1;
-}
 
 /**
  * @brief Set the Verizon SIM
@@ -239,21 +177,21 @@ int setVerizonSIM(String command)                                   // If we are
   * is a little inefficient but it cleans up a fair bit of code.
   * 
   */
- /*
+
 void makeUpStringMessages() {
 
-  if (sysStatus.wakeTime == 0 && sysStatus.sleepTime == 24) {                         // Special case for 24 hour operations
-    snprintf(wakeTimeStr, sizeof(wakeTimeStr), "NA");
-    snprintf(sleepTimeStr, sizeof(sleepTimeStr), "NA");
+  if (sysStatus.get_openTime() == 0 && sysStatus.get_closeTime() == 24) {                         // Special case for 24 hour operations
+    snprintf(openTimeStr, sizeof(openTimeStr), "NA");
+    snprintf(closeTimeStr, sizeof(closeTimeStr), "NA");
   }
   else {
-    snprintf(wakeTimeStr, sizeof(wakeTimeStr), "%i:00", sysStatus.wakeTime);           // Open and Close Times
-    snprintf(sleepTimeStr, sizeof(sleepTimeStr), "%i:00", sysStatus.sleepTime);
+    snprintf(openTimeStr, sizeof(openTimeStr), "%i:00", sysStatus.get_openTime());           // Open and Close Times
+    snprintf(closeTimeStr, sizeof(closeTimeStr), "%i:00", sysStatus.get_closeTime());
   }
 
   return;
 }
-*/
+
 
 
 /**
@@ -294,35 +232,4 @@ bool disconnectFromParticle()                                          // Ensure
     Log.info("Turned off the cellular modem in %i seconds", (int)(Time.now() - startTime));
     return true;
   }
-}
-
-/**
- * @brief Set the Sensor Type object
- *
- * @details Over time, we may want to develop and deploy other sensot types.  The idea of this code is to allow us to select the sensor
- * we want via the console so all devices can run the same code.
- *
- * @param command a string equal to "0" for pressure sensor and "1" for PIR sensor.  More sensor types possible in the future.
- *
- * @return returns 1 if successful and 0 if not.
- */
-int setSensorType(String command)                                     // Function to force sending data in current hour
-{
-  if (command == "0")
-  {
-    sysStatus.set_sensorType(0);
-    strncpy(sensorTypeConfigStr,"Pressure Sensor", sizeof(sensorTypeConfigStr));
-    if (Particle.connected()) Particle.publish("Mode","Set Sensor Mode to Pressure", PRIVATE);
-
-    return 1;
-  }
-  else if (command == "1")
-  {
-    sysStatus.set_sensorType(1);
-    strncpy(sensorTypeConfigStr,"PIR Sensor", sizeof(sensorTypeConfigStr));
-    if (Particle.connected()) Particle.publish("Mode","Set Sensor Mode to PIR", PRIVATE);
-    return 1;
-  }
-
-  else return 0;
 }

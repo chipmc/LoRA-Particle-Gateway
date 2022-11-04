@@ -67,23 +67,23 @@ public:
 		// Your fields go here. Once you've added a field you cannot add fields
 		// (except at the end), insert fields, remove fields, change size of a field.
 		// Doing so will cause the data to be corrupted!
-		uint8_t nodeNumber;                              // Assigned by the gateway on joining the network
+		uint8_t nodeNumber;                               // Assigned by the gateway on joining the network
 		uint8_t structuresVersion;                        // Version of the data structures (system and data)
-		uint16_t magicNumber;							                // A way to identify nodes and gateways so they can trust each other
+		uint16_t magicNumber;							  // A way to identify nodes and gateways so they can trust each other
 		uint8_t firmwareRelease;                          // Version of the device firmware (integer - aligned to particle prodict firmware)
-		uint8_t tempNodeNumber;                           // Used when an unconfigured node joins the network
-		bool lowPowerMode;                                // Does the device need to run disconnected to save battery
 		uint8_t resetCount;                               // reset count of device (0-256)
+		uint8_t messageCount;							  // This is how many messages the Gateay has composed for the day
 		time_t lastHookResponse;                   		  // Last time we got a valid Webhook response
 		time_t lastConnection;                     		  // Last time we successfully connected to Particle
 		uint16_t lastConnectionDuration;                  // How long - in seconds - did it take to last connect to the Particle cloud
 		uint16_t frequencyMinutes;                        // When we are reporing at minute increments - what are they - for Gateways
 		uint8_t alertCodeGateway;                         // Alert code for Gateway Alerts
 		time_t alertTimestampGateway;              		  // When was the last alert
-		bool sensorType;                                  // PIR sensor, car counter, others?
 		uint8_t openTime;                                 // Open time 24 hours
 		uint8_t closeTime;                                // Close time 24 hours
 		bool verizonSIM;                                  // Are we using a Verizon SIM?
+		uint8_t sensorType;								  // What sensor if any is on this device (0-none, 1-PIR, 2-Pressure, ...)
+		uint16_t RSSI;                                    // Latest LoRA signal strength value from the Node
 	};
 	SysData sysData;
 
@@ -123,11 +123,11 @@ public:
 	uint8_t get_firmwareRelease() const;
 	void set_firmwareRelease(uint8_t value);
 
-	bool get_lowPowerMode() const;
-	void set_lowPowerMode(bool value);
-
 	uint8_t get_resetCount() const;
 	void set_resetCount(uint8_t value);
+
+	uint8_t get_messageCount() const;
+	void set_messageCount(uint8_t value);
 
 	time_t get_lastHookResponse() const;
 	void set_lastHookResponse(time_t value);
@@ -147,9 +147,6 @@ public:
 	time_t get_alertTimestampGateway() const;
 	void set_alertTimestampGateway(time_t value);
 
-	bool get_sensorType() const;
-	void set_sensorType(bool value);
-
 	uint8_t get_openTime() const;
 	void set_openTime(uint8_t value);
 
@@ -158,6 +155,12 @@ public:
 
 	bool get_verizonSIM() const;
 	void set_verizonSIM(bool value);
+
+	uint8_t get_sensorType() const;
+	void set_sensorType(uint8_t value);
+
+	uint16_t get_RSSI() const;
+	void set_RSSI(uint16_t value);
 
 	//Members here are internal only and therefore protected
 protected:
@@ -191,7 +194,7 @@ protected:
     static sysStatusData *_instance;
 
     //Since these variables are only used internally - They can be private. 
-	static const uint32_t SYS_DATA_MAGIC = 0x20a99e74;
+	static const uint32_t SYS_DATA_MAGIC = 0x20a99e75;
 	static const uint16_t SYS_DATA_VERSION = 1;
 
 };
@@ -240,15 +243,16 @@ public:
 		uint8_t internalTempC;                            // Enclosure temperature in degrees C
 		double stateOfCharge;                             // Battery charge level
 		uint8_t batteryState;                             // Stores the current battery state (charging, discharging, etc)
-		time_t lastSampleTime;                            // Timestamp of last data collection
 		uint8_t resetCount;								  // This is the number of resets for the node publishing data
-		uint16_t RSSI;                                    // Latest signal strength value
+		uint16_t RSSI;                                    // Latest LoRA signal strength value from the Node
 		uint8_t messageNumber;                            // What message are we on
 		time_t lastCountTime;                             // When did we last record a count
 		uint16_t hourlyCount;                             // Current Hourly Count
 		uint16_t dailyCount;                              // Current Daily Count
 		uint8_t alertCodeNode;                            // Alert code from node
 		time_t alertTimestampNode;                 	      // Timestamp of alert
+		bool openHours; 								  // Will set to true or false based on time of dat
+		uint8_t sensorType;								  // What is the sensor type of the node sending current data
 		// OK to add more fields here 
 	};
 	CurrentData currentData;
@@ -319,6 +323,12 @@ public:
 
 	time_t get_alertTimestampNode() const;
 	void set_alertTimestampNode(time_t value);
+
+	bool get_openHours() const;
+	void set_openHours(bool value);
+
+	uint8_t get_sensorType() const;
+	void set_sensorType(uint8_t value);
 
     void logData(const char *msg);
 
@@ -397,12 +407,15 @@ public:
 		// Doing so will cause the data to be corrupted!
 		char deviceID_1[25];                                // Unique to the device
 		uint8_t nodeNumber_1;                              // Assigned by the gateway on joining the network
+		uint8_t sensorType_1;									// What type of sensor should we see on this node
 		time_t lastConnection_1;							// When did we last hear from this node
 		char deviceID_2[25];                                // Unique to the device
 		uint8_t nodeNumber_2;                              // Assigned by the gateway on joining the network
+		uint8_t sensorType_2;									// What type of sensor should we see on this node
 		time_t lastConnection_2;							// When did we last hear from this node
 		char deviceID_3[25];                                // Unique to the device
 		uint8_t nodeNumber_3;                              // Assigned by the gateway on joining the network
+		uint8_t sensorType_3;									// What type of sensor should we see on this node
 		time_t lastConnection_3;							// When did we last hear from this node
 	};
 	NodeData nodeData;
@@ -431,29 +444,38 @@ public:
 	 * 
 	 */
 
+	String get_deviceID_1() const;
+	bool set_deviceID_1(const char *str);
+
 	uint8_t get_nodeNumber_1() const;
 	void set_nodeNumber_1(uint8_t value);
 
-	String get_deviceID_1() const;
-	bool set_deviceID_1(const char *str);
+	uint8_t get_sensorType_1() const;
+	void set_sensorType_1(uint8_t value);	
 
 	time_t get_lastConnection_1() const;
 	void set_lastConnection_1(time_t value);
 
+	String get_deviceID_2() const;
+	bool set_deviceID_2(const char *str);
+
 	uint8_t get_nodeNumber_2() const;
 	void set_nodeNumber_2(uint8_t value);
 
-	String get_deviceID_2() const;
-	bool set_deviceID_2(const char *str);
+	uint8_t get_sensorType_2() const;
+	void set_sensorType_2(uint8_t value);	
 
 	time_t get_lastConnection_2() const;
 	void set_lastConnection_2(time_t value);
 
+	String get_deviceID_3() const;
+	bool set_deviceID_3(const char *str);
+
 	uint8_t get_nodeNumber_3() const;
 	void set_nodeNumber_3(uint8_t value);
 
-	String get_deviceID_3() const;
-	bool set_deviceID_3(const char *str);
+	uint8_t get_sensorType_3() const;
+	void set_sensorType_3(uint8_t value);	
 
 	time_t get_lastConnection_3() const;
 	void set_lastConnection_3(time_t value);
