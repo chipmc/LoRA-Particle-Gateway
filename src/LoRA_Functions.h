@@ -17,7 +17,7 @@ buf[5 - 6] = daily                          // Daily Count
 buf[7] sensorType                           // What sensor type is it
 buf[8] temp;                                // Enclosure temp
 buf[9] battChg;                             // State of charge
-buf[10] battState;                           // Battery State
+buf[10] battState;                          // Battery State
 buf[11] resets                              // Reset count
 buf[12] msgCnt++;                           // Sequential message number
 */
@@ -202,7 +202,33 @@ public:
      * 
      */
     String findDeviceID(uint8_t nodeNumber);
-
+    /**
+     * @brief Get Type is a function that returns the sensor Type for a given node number
+     * 
+     * @param nodeNumber
+     * @returns sensor type
+     */
+    byte getType(int nodeNumber);
+    /**
+     * @brief change the sensor type for a given node number
+     * 
+     * @param nodeNumber and new sensor type number
+     * @returns sensor type
+     * 
+     */
+    bool changetype(int nodeNumber, int Newtype);
+    /**
+     * @brief Primarily used for debugging
+     * 
+     */
+    void printNodeData();
+    /**
+     * @brief Returns true if node is configured and false if it is not
+     * 
+     * @param nodeNumber
+     * @returns true or false
+     */
+    bool nodeConfigured(int nodeNumber);
     
 
 protected:

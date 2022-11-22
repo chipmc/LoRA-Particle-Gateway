@@ -18,6 +18,8 @@
 // v0.11 - Big changes to messaging and storage.  Onboards upto to 3 nodes.  Works!
 // v0.12 - Added mandatory sync time on connect and check for empty queue before disconnect and node number mgt.
 // v0.13 - Different webhooks for nodes and gateways. added reporting on cellular connection time and signal.  Added sensor type to join reques - need to figure out how to trigger
+// v0.14 - Changing over to JsonParserGeneratorRK for node data, storage, webhook creation and Particle function / variable
+//
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
@@ -33,7 +35,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.13";
+char currentPointRelease[6] ="0.14";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -56,8 +58,6 @@ AB1805 ab1805(Wire);                                // Rickkas' RTC / Watchdog l
 LocalTimeConvert conv;								// For determining if the park should be opened or closed - need local time
 void outOfMemoryHandler(system_event_t event, int param);
 
-// MB85RC64 fram(Wire, 0);
-
 // Program Variables
 volatile bool userSwitchDectected = false;	
 bool nextEventTime = false;	
@@ -76,6 +76,8 @@ void setup()
   		sysStatus.setup();
 		nodeID.setup();
 	}
+
+	// resetNodeIDs();			// Testing step
 
     particleInitialize();                           // Sets up all the Particle functions and variables defined in particle_fn.h
 

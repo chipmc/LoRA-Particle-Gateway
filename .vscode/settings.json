@@ -82,5 +82,5 @@
     },
     "particle.targetPlatform": "boron",
     "particle.targetDevice": "NCParks190-LoRA-Gateway-BeanShoals",
-    "particle.firmwareVersion": "4.0.0"
+    "particle.firmwareVersion": "4.0.1"
 }

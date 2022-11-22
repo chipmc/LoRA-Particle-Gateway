@@ -4,6 +4,7 @@
 #include "MyPersistentData.h"
 #include "gateway_configuration.h"
 
+
 MB85RC64 fram(Wire, 0);   
 
 // Common Functions
@@ -22,7 +23,7 @@ void resetEverything() {                                              // The dev
 }
 
 /**
- * @brief This function is called in setup if the version of the FRAM stoage map has been changed
+ * @brief This function is called in setup if the version of the FRAM storage map has been changed
  * 
  */
 void loadSystemDefaults() {                         // This code is only executed with a new device or a new storage object structure
@@ -47,6 +48,18 @@ void loadSystemDefaults() {                         // This code is only execute
 
   setGatewayConfiguration();                             // Here we will fix the settings specific to the gateway
 }
+
+
+void resetNodeIDs() {
+    // String blank = "{\"nodes\":[{}]}";
+    // String blank = "{\"nodes\":[{\"node\":1,\"dID\":\"aaaaaaaaaaaaaaaaaaaaa1\",\"last\":1667835489,\"type\":1}]}";
+    String blank = "{\"nodes\":[]}";
+    nodeID.set_nodeIDJson(blank);
+
+    Log.info("Resettig NodeID config to: %s", blank.c_str());
+}
+
+
 
 // *******************  SysStatus Storage Object **********************
 //
@@ -369,7 +382,7 @@ void currentStatusData::logData(const char *msg) {
 }
 
 
-// *******************  SysStatus Storage Object **********************
+// *******************  nodeID Storage Object **********************
 //
 // ******************** Offset of 150         ************************
 
@@ -399,105 +412,12 @@ void nodeIDData::loop() {
     nodeID.flush(false);
 }
 
-String nodeIDData::get_deviceID_1() const {
+String nodeIDData::get_nodeIDJson() const {
 	String result;
-	getValueString(offsetof(NodeData, deviceID_1), sizeof(NodeData::deviceID_1), result);
+	getValueString(offsetof(NodeData, nodeIDJson), sizeof(NodeData::nodeIDJson), result);
 	return result;
 }
 
-bool nodeIDData::set_deviceID_1(const char *str) {
-	return setValueString(offsetof(NodeData, deviceID_1), sizeof(NodeData::deviceID_1), str);
+bool nodeIDData::set_nodeIDJson(const char *str) {
+	return setValueString(offsetof(NodeData, nodeIDJson), sizeof(NodeData::nodeIDJson), str);
 }
-
-uint8_t nodeIDData::get_nodeNumber_1() const {
-    return getValue<uint8_t>(offsetof(NodeData, nodeNumber_1));
-}
-
-void nodeIDData::set_nodeNumber_1(uint8_t value) {
-    setValue<uint8_t>(offsetof(NodeData, nodeNumber_1), value);
-}
-
-uint8_t nodeIDData::get_sensorType_1() const {
-    return getValue<uint8_t>(offsetof(NodeData, sensorType_1));
-}
-
-void nodeIDData::set_sensorType_1(uint8_t value) {
-    setValue<uint8_t>(offsetof(NodeData, sensorType_1), value);
-}
-
-time_t nodeIDData::get_lastConnection_1() const {
-    return getValue<time_t>(offsetof(NodeData, lastConnection_1));
-}
-
-void nodeIDData::set_lastConnection_1(time_t value) {
-    setValue<time_t>(offsetof(NodeData, lastConnection_1), value);
-}
-
-String nodeIDData::get_deviceID_2() const {
-	String result;
-	getValueString(offsetof(NodeData, deviceID_2), sizeof(NodeData::deviceID_2), result);
-	return result;
-}
-
-bool nodeIDData::set_deviceID_2(const char *str) {
-	return setValueString(offsetof(NodeData, deviceID_2), sizeof(NodeData::deviceID_2), str);
-}
-	
-uint8_t nodeIDData::get_nodeNumber_2() const {
-    return getValue<uint8_t>(offsetof(NodeData, nodeNumber_2));
-}
-
-void nodeIDData::set_nodeNumber_2(uint8_t value) {
-    setValue<uint8_t>(offsetof(NodeData, nodeNumber_2), value);
-}
-
-uint8_t nodeIDData::get_sensorType_2() const {
-    return getValue<uint8_t>(offsetof(NodeData, sensorType_2));
-}
-
-void nodeIDData::set_sensorType_2(uint8_t value) {
-    setValue<uint8_t>(offsetof(NodeData, sensorType_2), value);
-}
-
-time_t nodeIDData::get_lastConnection_2() const {
-    return getValue<time_t>(offsetof(NodeData, lastConnection_2));
-}
-
-void nodeIDData::set_lastConnection_2(time_t value) {
-    setValue<time_t>(offsetof(NodeData, lastConnection_2), value);
-}
-
-String nodeIDData::get_deviceID_3() const {
-	String result;
-	getValueString(offsetof(NodeData, deviceID_3), sizeof(NodeData::deviceID_3), result);
-	return result;
-}
-
-bool nodeIDData::set_deviceID_3(const char *str) {
-	return setValueString(offsetof(NodeData, deviceID_3), sizeof(NodeData::deviceID_3), str);
-}
-
-uint8_t nodeIDData::get_nodeNumber_3() const {
-    return getValue<uint8_t>(offsetof(NodeData, nodeNumber_3));
-}
-
-void nodeIDData::set_nodeNumber_3(uint8_t value) {
-    setValue<uint8_t>(offsetof(NodeData, nodeNumber_3), value);
-}
-
-uint8_t nodeIDData::get_sensorType_3() const {
-    return getValue<uint8_t>(offsetof(NodeData, sensorType_3));
-}
-
-void nodeIDData::set_sensorType_3(uint8_t value) {
-    setValue<uint8_t>(offsetof(NodeData, sensorType_3), value);
-}
-
-time_t nodeIDData::get_lastConnection_3() const {
-    return getValue<time_t>(offsetof(NodeData, lastConnection_3));
-}
-
-void nodeIDData::set_lastConnection_3(time_t value) {
-    setValue<time_t>(offsetof(NodeData, lastConnection_3), value);
-}
-

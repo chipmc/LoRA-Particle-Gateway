@@ -8,6 +8,7 @@
 // Common Storage Functions
 void loadSystemDefaults();                          // Initilize the object values for new deployments
 void resetEverything();                             // Resets the current hourly and daily counts
+void resetNodeIDs();
 
 //Include other application specific header files
 // #include (no other header files required from other singleton classes)
@@ -405,18 +406,8 @@ public:
 		// Your fields go here. Once you've added a field you cannot add fields
 		// (except at the end), insert fields, remove fields, change size of a field.
 		// Doing so will cause the data to be corrupted!
-		char deviceID_1[25];                                // Unique to the device
-		uint8_t nodeNumber_1;                              // Assigned by the gateway on joining the network
-		uint8_t sensorType_1;									// What type of sensor should we see on this node
-		time_t lastConnection_1;							// When did we last hear from this node
-		char deviceID_2[25];                                // Unique to the device
-		uint8_t nodeNumber_2;                              // Assigned by the gateway on joining the network
-		uint8_t sensorType_2;									// What type of sensor should we see on this node
-		time_t lastConnection_2;							// When did we last hear from this node
-		char deviceID_3[25];                                // Unique to the device
-		uint8_t nodeNumber_3;                              // Assigned by the gateway on joining the network
-		uint8_t sensorType_3;									// What type of sensor should we see on this node
-		time_t lastConnection_3;							// When did we last hear from this node
+		char nodeIDJson[1024];                             // JSON string that stores the nodeID data
+
 	};
 	NodeData nodeData;
 
@@ -444,41 +435,8 @@ public:
 	 * 
 	 */
 
-	String get_deviceID_1() const;
-	bool set_deviceID_1(const char *str);
-
-	uint8_t get_nodeNumber_1() const;
-	void set_nodeNumber_1(uint8_t value);
-
-	uint8_t get_sensorType_1() const;
-	void set_sensorType_1(uint8_t value);	
-
-	time_t get_lastConnection_1() const;
-	void set_lastConnection_1(time_t value);
-
-	String get_deviceID_2() const;
-	bool set_deviceID_2(const char *str);
-
-	uint8_t get_nodeNumber_2() const;
-	void set_nodeNumber_2(uint8_t value);
-
-	uint8_t get_sensorType_2() const;
-	void set_sensorType_2(uint8_t value);	
-
-	time_t get_lastConnection_2() const;
-	void set_lastConnection_2(time_t value);
-
-	String get_deviceID_3() const;
-	bool set_deviceID_3(const char *str);
-
-	uint8_t get_nodeNumber_3() const;
-	void set_nodeNumber_3(uint8_t value);
-
-	uint8_t get_sensorType_3() const;
-	void set_sensorType_3(uint8_t value);	
-
-	time_t get_lastConnection_3() const;
-	void set_lastConnection_3(time_t value);
+	String get_nodeIDJson() const;
+	bool set_nodeIDJson(const char *str);
 	
 
 	//Members here are internal only and therefore protected
@@ -513,8 +471,8 @@ protected:
     static nodeIDData *_instance;
 
     //Since these variables are only used internally - They can be private. 
-	static const uint32_t NODEID_DATA_MAGIC = 0x20a99e74;
-	static const uint16_t NODEID_DATA_VERSION = 1;
+	static const uint32_t NODEID_DATA_MAGIC = 0x20a99e60;
+	static const uint16_t NODEID_DATA_VERSION = 2;
 
 };
 
