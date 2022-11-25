@@ -4,7 +4,7 @@
 #include "device_pinout.h"
 #include "MyPersistentData.h"
 #include "JsonParserGeneratorRK.h"
-#include "particle_fn.h"
+#include "Particle_Functions.h"
 
 // Singleton instantiation - from template
 LoRA_Functions *LoRA_Functions::_instance;
@@ -149,10 +149,11 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 		else if (lora_state == JOIN_REQ) { if(!LoRA_Functions::instance().decipherJoinRequestGateway()) return false;}
 		else if (lora_state == ALERT_RPT) { if(!LoRA_Functions::instance().decipherAlertReportGateway()) return false;}
 
-		if (frequencyUpdated) {              							// If we are to change the update frequency, we need to tell the nodes (or at least one node) about it.
-			frequencyUpdated = false;
-			sysStatus.set_frequencyMinutes(updatedFrequencyMins);		// This was the temporary value from the particle function
+		if (sysStatus.get_updatedFrequencyMinutes() > 0) {              							// If we are to change the update frequency, we need to tell the nodes (or at least one node) about it.
+			sysStatus.set_frequencyMinutes(sysStatus.get_updatedFrequencyMinutes());		// This was the temporary value from the particle function
+			sysStatus.set_updatedFrequencyMinutes(0);
 			Log.info("We are updating the publish frequency to %i minutes", sysStatus.get_frequencyMinutes());
+
 		}
 		else Log.info("Reporting frequency unchanged");
 

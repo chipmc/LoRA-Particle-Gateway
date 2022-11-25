@@ -1,3 +1,6 @@
+#define bool deprecated true
+#ifdef deprecated
+
 //Particle Functions
 #include "Particle.h"
 #include "particle_fn.h"
@@ -233,3 +236,5 @@ bool disconnectFromParticle()                                          // Ensure
     return true;
   }
 }
+
+#endif

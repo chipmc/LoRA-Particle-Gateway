@@ -9,4 +9,5 @@
 void setGatewayConfiguration() {
   Log.info("Setting values for the Gateway");
   sysStatus.set_frequencyMinutes(10);
+  sysStatus.set_magicNumber(27617);
 }

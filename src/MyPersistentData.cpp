@@ -172,6 +172,14 @@ void sysStatusData::set_frequencyMinutes(uint16_t value) {
     setValue<uint16_t>(offsetof(SysData, frequencyMinutes), value);
 }
 
+uint16_t sysStatusData::get_updatedFrequencyMinutes() const {
+    return getValue<uint16_t>(offsetof(SysData,updatedFrequencyMinutes));
+}
+
+void sysStatusData::set_updatedFrequencyMinutes(uint16_t value) {
+    setValue<uint16_t>(offsetof(SysData, updatedFrequencyMinutes), value);
+}
+
 uint8_t sysStatusData::get_alertCodeGateway() const {
     return getValue<uint8_t>(offsetof(SysData, alertCodeGateway));
 }

@@ -19,7 +19,7 @@
 // v0.12 - Added mandatory sync time on connect and check for empty queue before disconnect and node number mgt.
 // v0.13 - Different webhooks for nodes and gateways. added reporting on cellular connection time and signal.  Added sensor type to join reques - need to figure out how to trigger
 // v0.14 - Changing over to JsonParserGeneratorRK for node data, storage, webhook creation and Particle function / variable
-//
+// v0.15 - Completing move to class for Particle Functions, zero node alert code after send
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
@@ -29,13 +29,13 @@
 // Application Files
 #include "LoRA_Functions.h"							// Where we store all the information on our LoRA implementation - application specific not a general library
 #include "device_pinout.h"							// Define pinouts and initialize them
-#include "particle_fn.h"							// Particle specific functions
+#include "Particle_Functions.h"							// Particle specific functions
 #include "take_measurements.h"						// Manages interactions with the sensors (default is temp for charging)
 #include "MyPersistentData.h"						// Where my persistent storage files are kept
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.14";
+char currentPointRelease[6] ="0.15";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -79,7 +79,7 @@ void setup()
 
 	// resetNodeIDs();			// Testing step
 
-    particleInitialize();                           // Sets up all the Particle functions and variables defined in particle_fn.h
+    Particle_Functions::instance().setup();         // Sets up all the Particle functions and variables defined in particle_fn.h
 
     {                                               // Initialize AB1805 Watchdog and RTC                                 
         ab1805.withFOUT(D8).setup();                // The carrier board has D8 connected to FOUT for wake interrupts
@@ -161,7 +161,12 @@ void loop() {
 				Log.info("Gateway is listening for LoRA messages and the park is %s (%d / %d / %d)", (current.get_openHours()) ? "open":"closed", conv.getLocalTimeHMS().hour, sysStatus.get_openTime(), sysStatus.get_closeTime());
 			} 
 
-			if (LoRA_Functions::instance().listenForLoRAMessageGateway() && current.get_alertCodeNode() != 1) state = REPORTING_STATE; 			// Received and acknowledged data from a node - report unless there is Alert Code 1 (Unconfigured Node)
+			if (LoRA_Functions::instance().listenForLoRAMessageGateway()) {
+				Log.info("Back in main app - alert code is %d", current.get_alertCodeNode());
+				if (current.get_alertCodeNode() != 1) {
+					state = REPORTING_STATE; 			// Received and acknowledged data from a node - report unless there is Alert Code 1 (Unconfigured Node)
+				}
+			}
 
 			if (!testModeFlag && ((millis() - startLoRAWindow) > 150000L)) { 								// Keeps us in listening mode for the specified windpw - then back to idle unless in test mode - keeps listening
 				LoRA_Functions::instance().sleepLoRaRadio();												// Done with the LoRA phase - put the radio to sleep
@@ -177,6 +182,7 @@ void loop() {
 			uint8_t nodeNumber = current.get_nodeNumber();						// Put this here to reduce line length
 
 			publishWebhook(nodeNumber);
+			current.set_alertCodeNode(0);										// Zero alert code after send
 
 			sysStatus.set_messageCount(sysStatus.get_messageCount() + 1);		// Increment the message counter 
 
@@ -221,7 +227,7 @@ void loop() {
 			}
 
 			if ((millis() - stayConnectedWindow > 90000) && PublishQueuePosix::instance().getCanSleep()) {	// Stay on-line for 90 seconds and until we are done clearing the queue
-				disconnectFromParticle();
+				Particle_Functions::instance().disconnectFromParticle();
 				state = IDLE_STATE;
 			}
 		} break;
@@ -308,6 +314,8 @@ int secondsUntilNextEvent() {											// Time till next scheduled event
 
 void publishWebhook(uint8_t nodeNumber) {
 	char data[256];                             						// Store the date in this character array - not global
+	// Battery conect information - https://docs.particle.io/reference/device-os/firmware/boron/#batterystate-
+    const char* batteryContext[8] = {"Unknown","Not Charging","Charging","Charged","Discharging","Fault","Diconnected"};
 
 	if (nodeNumber > 0) {												// Webhook for a node
 		snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"hourly\":%u, \"daily\":%u, \"sensortype\":%d, \"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"rssi\":%d, \"msg\":%d,\"timestamp\":%lu000}",\

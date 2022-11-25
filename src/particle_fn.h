@@ -1,3 +1,6 @@
+#define bool deprecated true
+#ifdef deprecated
+
 /**
  * @file particle_fn.h
  * @author Chip McClelland (chip@seeinisghts.com)
@@ -29,5 +32,7 @@ int setCloseTime(String command);
 void makeUpStringMessages();
 bool disconnectFromParticle();
 int setVerizonSIM(String command);
+
+#endif
 
 #endif
