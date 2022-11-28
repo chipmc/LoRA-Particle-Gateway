@@ -64,6 +64,8 @@ bool initializePinModes() {
     pinMode(LED_POWER_PIN,OUTPUT);
     digitalWrite(LED_POWER_PIN,LOW);                // Turns on the LEd on the PIR sensor
     digitalWrite(MODULE_POWER_PIN,LOW);             // Enable (LOW) or disable (HIGH) the sensor
+    pinMode(RFM95_RST,OUTPUT);
+    digitalWrite(RFM95_RST,HIGH);
     return true;
 }
 

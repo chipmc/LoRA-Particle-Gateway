@@ -5,14 +5,6 @@
 #include "MB85RC256V-FRAM-RK.h"
 #include "StorageHelperRK.h"
 
-// Common Storage Functions
-void loadSystemDefaults();                          // Initilize the object values for new deployments
-void resetEverything();                             // Resets the current hourly and daily counts
-void resetNodeIDs();
-
-//Include other application specific header files
-// #include (no other header files required from other singleton classes)
-
 //Define external class instances. These are typically declared public in the main .CPP. I wonder if we can only declare it here?
 extern MB85RC64 fram;
 
@@ -59,6 +51,18 @@ public:
      * You typically use MyPersistentData::instance().loop();
      */
     void loop();
+
+	/**
+	 * @brief Load the appropriate system defaults - good ot initialize a system to "factory settings"
+	 * 
+	 */
+	void loadSystemDefaults(); 
+
+	/**
+	 * @brief Checks to make sure the system values are in-order
+	 * 
+	 */
+	void checkSystemValues();							
 
 
 	class SysData {
@@ -235,6 +239,18 @@ public:
      */
     void loop();
 
+	/**
+	 * @brief Load the appropriate system defaults - good ot initialize a system to "factory settings"
+	 * 
+	 */
+	void loadCurrentDefaults();                          // Initilize the object values for new deployments
+
+	/**
+	 * @brief Resets the current and hourly counts
+	 * 
+	 */
+	void resetEverything();               
+
 	class CurrentData {
 	public:
 		// This structure must always begin with the header (16 bytes)
@@ -401,6 +417,12 @@ public:
      * You typically use MyPersistentData::instance().loop();
      */
     void loop();
+
+	/**
+	 * @brief Will reset the node database - if database is corrupted of new nodes arrive
+	 * 
+	 */
+	void resetNodeIDs();
 
 
 	class NodeData {

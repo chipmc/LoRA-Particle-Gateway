@@ -35,12 +35,23 @@ Particle_Functions::Particle_Functions() {
 Particle_Functions::~Particle_Functions() {
 }
 
+/**
+ * @brief Particle cacluated variable
+ * 
+ * @return String with the number of minutes for reporting frequency
+ */
+String reportFrequency() {							// Calculated variavble for the report frequency which is an unint16_t and does nto display properly.
+    char reportStr[16];
+    snprintf(reportStr, sizeof(reportStr), "%u minures", sysStatus.get_frequencyMinutes());
+    return reportStr;
+}
+
 void Particle_Functions::setup() {
     // Battery conect information - https://docs.particle.io/reference/device-os/firmware/boron/#batterystate-
     // const char* batteryContext[8] = {"Unknown","Not Charging","Charging","Charged","Discharging","Fault","Diconnected"};
 
     Log.info("Initializing Particle functions and variables");     // Note: Don't have to be connected but these functions need to in first 30 seconds
-    Particle.variable("Reporting Frequency", sysStatus.get_frequencyMinutes());
+    Particle.variable("Reporting Frequency", reportFrequency);
 
     Particle.function("Set Frequency", &Particle_Functions::setFrequency, this);
 

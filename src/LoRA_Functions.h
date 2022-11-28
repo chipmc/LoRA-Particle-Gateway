@@ -117,6 +117,13 @@ public:
     */
     void sleepLoRaRadio();
 
+    /**
+     * @brief Initialize the LoRA radio
+     * 
+     */
+   bool initializeRadio();
+
+
     // Generic Gateway Functions
     /**
      * @brief This function is used to listen for all message types
@@ -229,6 +236,16 @@ public:
      * @returns true or false
      */
     bool nodeConfigured(int nodeNumber);
+    /**
+     * @brief Checks to see if the nodes have checked in recently
+     * 
+     * @returns true if healthy and false if not
+     * 
+     * @details Note: this function will reset the LoRA radio if no nodes have checked in over last two periods
+     * 
+     */
+    bool nodeConnectionsHealthy();
+
     
 
 protected:

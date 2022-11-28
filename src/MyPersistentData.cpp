@@ -5,61 +5,7 @@
 #include "gateway_configuration.h"
 
 
-MB85RC64 fram(Wire, 0);   
-
-// Common Functions
-/**
- * @brief Resets all counts to start a new day.
- *
- * @details Once run, it will reset all daily-specific counts and trigger an update in FRAM.
- */
-void resetEverything() {                                              // The device is waking up in a new day or is a new install
-  Log.info("A new day - resetting everything");
-  current.set_dailyCount(0);                                            // Reset the counts in FRAM as well
-  current.set_hourlyCount(0);
-  current.set_lastCountTime(Time.now());
-  sysStatus.set_resetCount(0);                                          // Reset the reset count as well
-  sysStatus.set_messageCount(0);
-}
-
-/**
- * @brief This function is called in setup if the version of the FRAM storage map has been changed
- * 
- */
-void loadSystemDefaults() {                         // This code is only executed with a new device or a new storage object structure
-  if (Particle.connected()) {
-    Particle.publish("Mode","Loading System Defaults", PRIVATE);
-  }
-  Log.info("Loading system defaults");              // Letting us know that defaults are being loaded
-
-  sysStatus.set_nodeNumber(0);                     // Default for a Gateway
-  sysStatus.set_structuresVersion(1);
-  sysStatus.set_magicNumber(27617);
-  sysStatus.set_firmwareRelease(1);
-  sysStatus.set_resetCount(0);
-  sysStatus.set_messageCount(0);
-  sysStatus.set_lastHookResponse(0);
-  sysStatus.set_frequencyMinutes(60);
-  sysStatus.set_alertCodeGateway(0);
-  sysStatus.set_alertTimestampGateway(0);
-  sysStatus.set_openTime(6);
-  sysStatus.set_closeTime(22);
-  sysStatus.set_verizonSIM(false);
-
-  setGatewayConfiguration();                             // Here we will fix the settings specific to the gateway
-}
-
-
-void resetNodeIDs() {
-    // String blank = "{\"nodes\":[{}]}";
-    // String blank = "{\"nodes\":[{\"node\":1,\"dID\":\"aaaaaaaaaaaaaaaaaaaaa1\",\"last\":1667835489,\"type\":1}]}";
-    String blank = "{\"nodes\":[]}";
-    nodeID.set_nodeIDJson(blank);
-
-    Log.info("Resettig NodeID config to: %s", blank.c_str());
-}
-
-
+MB85RC64 fram(Wire, 0);
 
 // *******************  SysStatus Storage Object **********************
 //
@@ -85,11 +31,40 @@ sysStatusData::~sysStatusData() {
 void sysStatusData::setup() {
     fram.begin();
     sysStatus.load();
+    sysStatus.loadSystemDefaults();
     setGatewayConfiguration();                             // Here we will fix the settings specific to the node
 }
 
 void sysStatusData::loop() {
     sysStatus.flush(false);
+}
+
+void sysStatusData::loadSystemDefaults() {                         // This code is only executed with a new device or a new storage object structure
+  Log.info("Loading system defaults");              // Letting us know that defaults are being loaded
+
+  sysStatus.set_nodeNumber(0);                     // Default for a Gateway
+  sysStatus.set_structuresVersion(1);
+  sysStatus.set_magicNumber(27617);
+  sysStatus.set_firmwareRelease(1);
+  sysStatus.set_resetCount(0);
+  sysStatus.set_messageCount(0);
+  sysStatus.set_lastHookResponse(0);
+  sysStatus.set_frequencyMinutes(60);
+  sysStatus.set_alertCodeGateway(0);
+  sysStatus.set_alertTimestampGateway(0);
+  sysStatus.set_openTime(6);
+  sysStatus.set_closeTime(22);
+  sysStatus.set_verizonSIM(false);
+
+  setGatewayConfiguration();                             // Here we will fix the settings specific to the gateway
+}
+
+void sysStatusData::checkSystemValues() {               // Values out of bounds indicates an initialization error - will reload defaults
+    bool reset = false;
+    if (sysStatus.get_openTime() > 12 || sysStatus.get_closeTime() <12) reset = true;
+
+    if (reset) sysStatusData::loadSystemDefaults();
+
 }
 
 uint8_t sysStatusData::get_nodeNumber() const {
@@ -265,6 +240,20 @@ void currentStatusData::loop() {
     sysStatus.flush(false);
 }
 
+void currentStatusData::loadCurrentDefaults() {                         // This code is only executed with a new device or a new storage object structure
+  Log.info("Loading current defaults");              // Letting us know that defaults are being loaded
+}
+
+void currentStatusData::resetEverything() {                             // The device is waking up in a new day or is a new install
+  Log.info("A new day - resetting everything");
+  current.set_dailyCount(0);                                            // Reset the counts in FRAM as well
+  current.set_hourlyCount(0);
+  current.set_lastCountTime(Time.now());
+  sysStatus.set_resetCount(0);                                          // Reset the reset count as well
+  sysStatus.set_messageCount(0);
+}
+
+
 uint8_t currentStatusData::get_nodeNumber() const {
     return getValue<uint8_t>(offsetof(CurrentData, nodeNumber));
 }
@@ -418,6 +407,14 @@ void nodeIDData::setup() {
 
 void nodeIDData::loop() {
     nodeID.flush(false);
+}
+
+
+void resetNodeIDs() {
+    String blank = "{\"nodes\":[]}";
+    nodeID.set_nodeIDJson(blank);
+
+    Log.info("Resettig NodeID config to: %s", blank.c_str());
 }
 
 String nodeIDData::get_nodeIDJson() const {

@@ -62,16 +62,10 @@ RHMesh manager(driver, GATEWAY_ADDRESS);
 // #define RH_MESH_MAX_MESSAGE_LEN 50
 uint8_t buf[RH_MESH_MAX_MESSAGE_LEN];               // Related to max message size - RadioHead example note: dont put this on the stack:
 
-
 bool LoRA_Functions::setup(bool gatewayID) {
     // Set up the Radio Module
-	if (!manager.init()) {
-		Log.info("init failed");					// Defaults after init are 434.0MHz, 0.05MHz AFC pull-in, modulation FSK_Rb2_4Fd36
-		return false;
-	}
-	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
-	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
-	
+	LoRA_Functions::initializeRadio();
+
 	if (gatewayID == true) {
 		sysStatus.set_nodeNumber(GATEWAY_ADDRESS);							// Gateway - Manager is initialized by default with GATEWAY_ADDRESS - make sure it is stored in FRAM
 		Log.info("LoRA Radio initialized as a gateway with a deviceID of %s", System.deviceID().c_str());
@@ -86,19 +80,18 @@ bool LoRA_Functions::setup(bool gatewayID) {
 		Log.info("LoRA Radio initialized as an unconfigured node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
 	}
 
+
 	// Here is where we load the JSON object from memory and parse
 	jp.addString(nodeID.get_nodeIDJson());				// Read in the JSON string from memory
 
 	if (jp.parse()) Log.info("Parsed Successfully");
 	else Log.info("Parsing error");
 
-	printNodeData();
-
 	return true;
 }
 
 void LoRA_Functions::loop() {
-    // Put your code to run during the application thread loop here
+												
 }
 
 
@@ -116,6 +109,18 @@ void LoRA_Functions::clearBuffer() {
 
 void LoRA_Functions::sleepLoRaRadio() {
 	driver.sleep();                             // Here is where we will power down the LoRA radio module
+}
+
+bool  LoRA_Functions::initializeRadio() {  // Set up the Radio Module
+	if (!manager.init()) {
+		Log.info("init failed");					// Defaults after init are 434.0MHz, 0.05MHz AFC pull-in, modulation FSK_Rb2_4Fd36
+		// delay(10000);
+		return false;
+	}
+	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
+	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
+
+return true;
 }
 
 
@@ -341,6 +346,11 @@ bool LoRA_Functions::acknowledgeAlertReportGateway() {
 	return false;
 }
 
+// ************************************************************************
+// *****             Node Management  Functions                       *****
+// ************************************************************************
+
+
 // These functions access data in the nodeID JSON
 uint8_t LoRA_Functions::findNodeNumber(const char* deviceID) {
 
@@ -404,6 +414,7 @@ String LoRA_Functions::findDeviceID(uint8_t nodeNumber)  {
 bool LoRA_Functions::nodeConfigured(int nodeNumber)  {
 
 	int nodeNumberConfigured;
+	int lastConnection;
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
@@ -412,9 +423,20 @@ bool LoRA_Functions::nodeConfigured(int nodeNumber)  {
 	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
 	if(nodeObjectContainer == NULL) return false;							// Ran out of entries - no match found
 	jp.getValueByKey(nodeObjectContainer, "node", nodeNumberConfigured);	// Get the deviceID and compare
-	if (nodeNumberConfigured == nodeNumber) return true;
+	if (nodeNumberConfigured == nodeNumber) {
 
-	return true;
+		jp.getValueByKey(nodeObjectContainer, "last", lastConnection);
+		Log.info("Last connected updated for node %d from %i to %li",nodeNumber,lastConnection,Time.now());
+		const JsonParserGeneratorRK::jsmntok_t *value;
+		jp.getValueTokenByKey(nodeObjectContainer, "last", value);
+
+		JsonModifier mod(jp);
+		mod.startModify(value);
+		mod.insertValue((int)Time.now());
+		mod.finish();
+		return true;
+	} 
+	else return false;
 }
 
 byte LoRA_Functions::getType(int nodeNumber) {
@@ -496,8 +518,42 @@ void LoRA_Functions::printNodeData() {
 		if (Particle.connected()) Particle.publish("nodeData", data, PRIVATE);
 	}
 
-	//#endif
+}
 
+bool LoRA_Functions::nodeConnectionsHealthy() {								// Connections are healthy if at least one node connected in last two periods
+// Resets the LoRA Radio if not healthy
+	
+	int lastConnect;
+	time_t secondsPerPeriod = sysStatus.get_frequencyMinutes() * 60;
+	bool health = false;
+
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	for (int i=0; i<10; i++) {												// Iterate through the array looking for a match
+		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
+		if(nodeObjectContainer == NULL) break;								// Ran out of entries 
+
+		jp.getValueByKey(nodeObjectContainer, "last", lastConnect);
+
+		if ((Time.now() - lastConnect) < 2 * secondsPerPeriod) {			// If at least one node connects, the gateway is good.
+			health = true;
+			break;															// Don't need to keep checking
+		}
+	}
+
+	Log.info("Node connection is %s ", (health) ? "healthy":"unhealthy");
+
+	if(!health) {
+		Log.info("Node connection unhealthy, reseting LoRA radio");
+		digitalWrite(RFM95_RST,LOW);
+		delay(10);
+		digitalWrite(RFM95_RST,HIGH);
+		LoRA_Functions::initializeRadio();
+	}
+
+	return health;
 }
 
 

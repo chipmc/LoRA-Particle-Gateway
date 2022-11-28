@@ -20,6 +20,9 @@
 // v0.13 - Different webhooks for nodes and gateways. added reporting on cellular connection time and signal.  Added sensor type to join reques - need to figure out how to trigger
 // v0.14 - Changing over to JsonParserGeneratorRK for node data, storage, webhook creation and Particle function / variable
 // v0.15 - Completing move to class for Particle Functions, zero node alert code after send
+// v0.16 - Fix for reporting frequency - using calculated variables
+// v0.17 - Periodic health checks for connections to nodes and to Particle
+
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
@@ -35,7 +38,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.15";
+char currentPointRelease[6] ="0.17";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -71,13 +74,13 @@ void setup()
 
     initializePowerCfg();                           // Sets the power configuration for solar
 
-	{
+	{	// Load the persistent storage objects
 		current.setup();
   		sysStatus.setup();
 		nodeID.setup();
 	}
 
-	// resetNodeIDs();			// Testing step
+	sysStatus.checkSystemValues();						// Make sure system values are in bounds for normal operation
 
     Particle_Functions::instance().setup();         // Sets up all the Particle functions and variables defined in particle_fn.h
 
@@ -169,6 +172,7 @@ void loop() {
 			}
 
 			if (!testModeFlag && ((millis() - startLoRAWindow) > 150000L)) { 								// Keeps us in listening mode for the specified windpw - then back to idle unless in test mode - keeps listening
+				LoRA_Functions::instance().nodeConnectionsHealthy();										// Will see if any nodes checked in - if not - will reset
 				LoRA_Functions::instance().sleepLoRaRadio();												// Done with the LoRA phase - put the radio to sleep
 				if (Time.hour() != Time.hour(sysStatus.get_lastConnection())) state = CONNECTING_STATE;  	// Only Connect once an hour after the LoRA window is over
 				else state = IDLE_STATE;
@@ -195,7 +199,7 @@ void loop() {
 			if (state != oldState) {
 				publishStateTransition();  
 				if (Time.day(sysStatus.get_lastConnection()) != conv.getLocalTimeYMD().getDay()) {
-					resetEverything();
+					current.resetEverything();
 					Log.info("New Day - Resetting everything");
 				}
 				publishWebhook(sysStatus.get_nodeNumber());								// Before we connect - let's send the gateway's webhook
@@ -212,7 +216,6 @@ void loop() {
 					CellularSignal sig = Cellular.RSSI();
 					sysStatus.set_RSSI(sig.getStrength());
 				}
-
 				state = DISCONNECTING_STATE;											// Typically, we will disconnect and sleep to save power - publishes occur during the 90 seconds before disconnect
 			}
 
@@ -252,6 +255,8 @@ void loop() {
 	current.loop();
 	sysStatus.loop();
 	nodeID.loop();
+
+	LoRA_Functions::instance().loop();				// Check to see if Node connections are healthy
 
 	if (outOfMemory >= 0) {                         // In this function we are going to reset the system if there is an out of memory error
 		System.reset();
