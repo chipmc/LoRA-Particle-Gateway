@@ -43,18 +43,18 @@ public:
      * You typically use Particle_Functions::instance().loop();
      */
     void loop();
+
     /**
-     * @brief Sets the how often the device will report data in minutes.
+     * @brief This is a single function that will support all gateway and node configuration and monitoring
      *
-     * @details Extracts the integer from the string passed in, and sets the closing time of the facility
-     * based on this input. Fails if the input is invalid.
+     * @details Parses the command string to extract functions, variables and target nodes
      *
-     * @param command A string indicating the number of minutes between reporting events.  Note, this function
-     * sets an interim value for reporting frequency which takes effect once sent to a new node.
+     * @param command JSON structure with 1 to n commands - max length 1024 characters
      *
      * @return 1 if able to successfully take action, 0 if invalid command
      */
-    int setFrequency(String command);
+    int jsonFunctionParser(String command);
+
     /**
      * @brief Disconnects from the Particle network completely
      * 

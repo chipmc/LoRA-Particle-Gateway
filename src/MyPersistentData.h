@@ -75,7 +75,7 @@ public:
 		uint8_t nodeNumber;                               // Assigned by the gateway on joining the network
 		uint8_t structuresVersion;                        // Version of the data structures (system and data)
 		uint16_t magicNumber;							  // A way to identify nodes and gateways so they can trust each other
-		uint8_t firmwareRelease;                          // Version of the device firmware (integer - aligned to particle prodict firmware)
+		uint8_t stayConnected;                          // Version of the device firmware (integer - aligned to particle prodict firmware)
 		uint8_t resetCount;                               // reset count of device (0-256)
 		uint8_t messageCount;							  // This is how many messages the Gateay has composed for the day
 		time_t lastHookResponse;                   		  // Last time we got a valid Webhook response
@@ -89,7 +89,6 @@ public:
 		uint8_t closeTime;                                // Close time 24 hours
 		bool verizonSIM;                                  // Are we using a Verizon SIM?
 		uint8_t sensorType;								  // What sensor if any is on this device (0-none, 1-PIR, 2-Pressure, ...)
-		uint16_t RSSI;                                    // Latest LoRA signal strength value from the Node
 	};
 	SysData sysData;
 
@@ -126,8 +125,8 @@ public:
 	uint16_t get_magicNumber() const ;
 	void set_magicNumber(uint16_t value);
 
-	uint8_t get_firmwareRelease() const;
-	void set_firmwareRelease(uint8_t value);
+	uint8_t get_stayConnected() const;
+	void set_stayConnected(uint8_t value);
 
 	uint8_t get_resetCount() const;
 	void set_resetCount(uint8_t value);
@@ -266,7 +265,8 @@ public:
 		uint8_t batteryState;                             // Stores the current battery state (charging, discharging, etc)
 		uint8_t resetCount;								  // This is the number of resets for the node publishing data
 		uint16_t RSSI;                                    // Latest LoRA signal strength value from the Node
-		uint8_t messageNumber;                            // What message are we on
+		uint8_t messageCount;                            // What message are we on
+		uint8_t successCount;							  // How many attempts have been successful - from the node
 		time_t lastCountTime;                             // When did we last record a count
 		uint16_t hourlyCount;                             // Current Hourly Count
 		uint16_t dailyCount;                              // Current Daily Count
@@ -327,8 +327,11 @@ public:
 	uint16_t get_RSSI() const;
 	void set_RSSI(uint16_t value);
 
-	uint8_t get_messageNumber() const;
-	void set_messageNumber(uint8_t value);
+	uint8_t get_messageCount() const;
+	void set_messageCount(uint8_t value);
+
+	uint8_t get_successCount() const;
+	void set_successCount(uint8_t value);
 
 	time_t get_lastCountTime() const;
 	void set_lastCountTime(time_t value);
@@ -351,7 +354,6 @@ public:
 	uint8_t get_sensorType() const;
 	void set_sensorType(uint8_t value);
 
-    void logData(const char *msg);
 
 		//Members here are internal only and therefore protected
 protected:
@@ -433,7 +435,6 @@ public:
 		// (except at the end), insert fields, remove fields, change size of a field.
 		// Doing so will cause the data to be corrupted!
 		char nodeIDJson[1024];                             // JSON string that stores the nodeID data
-
 	};
 	NodeData nodeData;
 

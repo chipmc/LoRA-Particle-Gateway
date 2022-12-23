@@ -21,7 +21,10 @@
 // v0.14 - Changing over to JsonParserGeneratorRK for node data, storage, webhook creation and Particle function / variable
 // v0.15 - Completing move to class for Particle Functions, zero node alert code after send
 // v0.16 - Fix for reporting frequency - using calculated variables
-// v0.17 - Periodic health checks for connections to nodes and to Particle
+// v0.17 - Periodic health checks for connections to nodes
+// v0.18 - Particle connection health check and continued move to classes
+// v0.19 - Simpler reporting - adding connection success % to nodeData
+// v1	- Release candidate - sending to Pilot Mountain
 
 
 // Particle Libraries
@@ -38,7 +41,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.17";
+char currentPointRelease[6] ="0.19";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -64,7 +67,6 @@ void outOfMemoryHandler(system_event_t event, int param);
 // Program Variables
 volatile bool userSwitchDectected = false;	
 bool nextEventTime = false;	
-bool testModeFlag = false;
 
 void setup() 
 {
@@ -74,22 +76,17 @@ void setup()
 
     initializePowerCfg();                           // Sets the power configuration for solar
 
-	{	// Load the persistent storage objects
-		current.setup();
-  		sysStatus.setup();
-		nodeID.setup();
-	}
-
-	sysStatus.checkSystemValues();						// Make sure system values are in bounds for normal operation
+	// Load the persistent storage objects
+	current.setup();
+  	sysStatus.setup();
+	nodeID.setup();
 
     Particle_Functions::instance().setup();         // Sets up all the Particle functions and variables defined in particle_fn.h
+                         
+    ab1805.withFOUT(D8).setup();                	// Initialize AB1805 RTC   
+    ab1805.setWDT(AB1805::WATCHDOG_MAX_SECONDS);	// Enable watchdog
 
-    {                                               // Initialize AB1805 Watchdog and RTC                                 
-        ab1805.withFOUT(D8).setup();                // The carrier board has D8 connected to FOUT for wake interrupts
-        ab1805.setWDT(AB1805::WATCHDOG_MAX_SECONDS);// Enable watchdog
-    }
-
-	System.on(out_of_memory, outOfMemoryHandler);     // Enabling an out of memory handler is a good safety tip. If we run out of memory a System.reset() is done.
+	System.on(out_of_memory, outOfMemoryHandler);   // Enabling an out of memory handler is a good safety tip. If we run out of memory a System.reset() is done.
 
 	PublishQueuePosix::instance().setup();          // Initialize PublishQueuePosixRK
 
@@ -108,14 +105,17 @@ void setup()
 	}
 
 	if (!digitalRead(BUTTON_PIN)) {
-		Log.info("User button pressed, test mode");
-		testModeFlag = true;
+		Log.info("User button pressed, connected mode");
+		sysStatus.set_stayConnected(1);
 		digitalWrite(BLUE_LED,HIGH);
 		delay(2000);
 		digitalWrite(BLUE_LED,LOW);
-		state = LoRA_STATE;
+		state = CONNECTING_STATE;
 	}
-	else Log.info("No user button push detechted");
+	else {
+		Log.info("No user button push detechted");
+		sysStatus.set_stayConnected(0);
+	}
 	
 	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); // We may need to monitor the user switch to change behaviours / modes
 
@@ -127,19 +127,19 @@ void loop() {
 	switch (state) {
 		case IDLE_STATE: {
 			if (state != oldState) publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
-			if (nextEventTime) {
+			if (nextEventTime || sysStatus.get_stayConnected() == 1) {
 				nextEventTime = false;
 				state = LoRA_STATE;		   										// See Time section in setup for schedule
 			}
-			else state = SLEEPING_STATE;
+			else state = SLEEPING_STATE;	// Go to sleep unless we are in the connected state										
 		} break;
 
 		case SLEEPING_STATE: {
 			if (state != oldState) publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 			ab1805.stopWDT();  												   // No watchdogs interrupting our slumber
 			int wakeInSeconds = secondsUntilNextEvent();  		   		   	   // Time till next event
-			Log.info("Sleep for %i seconds till next event at %s with %li free memory", wakeInSeconds, Time.timeStr(Time.now()+wakeInSeconds).c_str(),System.freeMemory());
-			delay(2000);									// Make sure message gets out
+			time_t time = Time.now() + wakeInSeconds;
+			Log.info("Sleep for %i seconds till next event at %s with %li free memory", wakeInSeconds, Time.format(time, "%T").c_str(),System.freeMemory());
 			config.mode(SystemSleepMode::ULTRA_LOW_POWER)
 				.gpio(BUTTON_PIN,CHANGE)
 				.duration(wakeInSeconds * 1000L);
@@ -148,7 +148,7 @@ void loop() {
 			waitFor(Serial.isConnected, 10000);				// Wait for serial connection
 			state = IDLE_STATE;
 			nextEventTime = true;
-			Log.info("Awoke at %s with %li free memory", Time.timeStr(Time.now()+wakeInSeconds).c_str(), System.freeMemory());
+			Log.info("Awoke at %s with %li free memory", Time.format(Time.now(), "%T").c_str(), System.freeMemory());
 		} break;
 
 		case LoRA_STATE: {														// Enter this state every reporting period and stay here for 5 minutes
@@ -159,31 +159,33 @@ void loop() {
 				publishStateTransition();                   					// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 				LoRA_Functions::instance().clearBuffer();						// Clear the buffer before we start the LoRA state
 				conv.withCurrentTime().convert();								// Get the time and convert to Local
-				if (conv.getLocalTimeHMS().hour >= sysStatus.get_openTime() && conv.getLocalTimeHMS().hour < sysStatus.get_closeTime()) current.set_openHours(true);
+				if (conv.getLocalTimeHMS().hour >= sysStatus.get_openTime() && conv.getLocalTimeHMS().hour <= sysStatus.get_closeTime()) current.set_openHours(true);
 				else current.set_openHours(false);
 				Log.info("Gateway is listening for LoRA messages and the park is %s (%d / %d / %d)", (current.get_openHours()) ? "open":"closed", conv.getLocalTimeHMS().hour, sysStatus.get_openTime(), sysStatus.get_closeTime());
 			} 
 
 			if (LoRA_Functions::instance().listenForLoRAMessageGateway()) {
-				Log.info("Back in main app - alert code is %d", current.get_alertCodeNode());
-				if (current.get_alertCodeNode() != 1) {
-					state = REPORTING_STATE; 			// Received and acknowledged data from a node - report unless there is Alert Code 1 (Unconfigured Node)
+				Log.info("In main loop - alert %d and open hours %d",current.get_alertCodeNode(), current.get_openHours());
+				if (current.get_alertCodeNode() != 1 && current.get_openHours()) {	// We don't report Join alerts or after hours
+					state = REPORTING_STATE; 									// Received and acknowledged data from a node - need to report the alert
 				}
 			}
 
-			if (!testModeFlag && ((millis() - startLoRAWindow) > 150000L)) { 								// Keeps us in listening mode for the specified windpw - then back to idle unless in test mode - keeps listening
+			if ((millis() - startLoRAWindow) > 150000L) { 													// Keeps us in listening mode for the specified windpw - then back to idle unless in test mode - keeps listening
 				LoRA_Functions::instance().nodeConnectionsHealthy();										// Will see if any nodes checked in - if not - will reset
 				LoRA_Functions::instance().sleepLoRaRadio();												// Done with the LoRA phase - put the radio to sleep
-				if (Time.hour() != Time.hour(sysStatus.get_lastConnection())) state = CONNECTING_STATE;  	// Only Connect once an hour after the LoRA window is over
+				LoRA_Functions::instance().printNodeData(false);
+				if (Time.hour() != Time.hour(sysStatus.get_lastConnection()) && current.get_openHours()) state = CONNECTING_STATE;  	// Only Connect once an hour after the LoRA window is over and if the park is open
 				else state = IDLE_STATE;
 			}
-
 		} break;
 
 		case REPORTING_STATE: {
 			if (state != oldState) publishStateTransition();
 
 			uint8_t nodeNumber = current.get_nodeNumber();						// Put this here to reduce line length
+
+			Log.info("Publish for node %d", nodeNumber);
 
 			publishWebhook(nodeNumber);
 			current.set_alertCodeNode(0);										// Zero alert code after send
@@ -214,14 +216,13 @@ void loop() {
 					Particle.syncTime();													// To prevent large connections, we will sync every hour when we connect to the cellular network.
 					waitUntil(Particle.syncTimeDone);										// Make sure sync is complete
 					CellularSignal sig = Cellular.RSSI();
-					sysStatus.set_RSSI(sig.getStrength());
 				}
-				state = DISCONNECTING_STATE;											// Typically, we will disconnect and sleep to save power - publishes occur during the 90 seconds before disconnect
+				if (sysStatus.get_stayConnected() == 1) state = LoRA_STATE;				// Go to the LoRA State
+				else state = DISCONNECTING_STATE;	 									// Typically, we will disconnect and sleep to save power - publishes occur during the 90 seconds before disconnect
 			}
-
 		} break;
 
-		case DISCONNECTING_STATE: {
+		case DISCONNECTING_STATE: {														// Waits 90 seconds then disconnects
 			static system_tick_t stayConnectedWindow = 0;
 
 			if (state != oldState) {
@@ -229,8 +230,8 @@ void loop() {
 				stayConnectedWindow = millis(); 
 			}
 
-			if ((millis() - stayConnectedWindow > 90000) && PublishQueuePosix::instance().getCanSleep()) {	// Stay on-line for 90 seconds and until we are done clearing the queue
-				Particle_Functions::instance().disconnectFromParticle();
+			if ((millis() - stayConnectedWindow > 90000UL) && PublishQueuePosix::instance().getCanSleep()) {	// Stay on-line for 90 seconds and until we are done clearing the queue
+				if (sysStatus.get_stayConnected() == 0) Particle_Functions::instance().disconnectFromParticle();
 				state = IDLE_STATE;
 			}
 		} break;
@@ -259,6 +260,8 @@ void loop() {
 	LoRA_Functions::instance().loop();				// Check to see if Node connections are healthy
 
 	if (outOfMemory >= 0) {                         // In this function we are going to reset the system if there is an out of memory error
+		Log.info("Resetting due to low memory");
+		delay(2000);
 		System.reset();
   	}
 }
@@ -271,10 +274,7 @@ void loop() {
 void publishStateTransition(void)
 {
 	char stateTransitionString[256];
-	if (state == IDLE_STATE) {
-		if (!Time.isValid()) snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s with invalid time", stateNames[oldState],stateNames[state]);
-		else snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s for %u seconds", stateNames[oldState],stateNames[state],(secondsUntilNextEvent()));	
-	}
+	if (state == IDLE_STATE && !Time.isValid()) snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s with invalid time", stateNames[oldState],stateNames[state]);
 	else snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s", stateNames[oldState],stateNames[state]);
 
 	oldState = state;
@@ -302,9 +302,9 @@ int secondsUntilNextEvent() {											// Time till next scheduled event
 	unsigned long secondsToReturn = 10;									// Minimum is 10 seconds to avoid transmit loop
 
 	unsigned long wakeBoundary = sysStatus.get_frequencyMinutes() * 60UL;
-   	if (Time.isValid() && !testModeFlag) {
+   	if (Time.isValid()) {
 		secondsToReturn = constrain( wakeBoundary - Time.now() % wakeBoundary, 10UL, wakeBoundary);  // In test mode, we will set a minimum of 10 seconds
-        Log.info("Report frequency %d mins, next event in %lu seconds", sysStatus.get_frequencyMinutes(), secondsToReturn);
+        // Log.info("Report frequency %d mins, next event in %lu seconds", sysStatus.get_frequencyMinutes(), secondsToReturn);
     }
 	return secondsToReturn;
 }
@@ -323,15 +323,19 @@ void publishWebhook(uint8_t nodeNumber) {
     const char* batteryContext[8] = {"Unknown","Not Charging","Charging","Charged","Discharging","Fault","Diconnected"};
 
 	if (nodeNumber > 0) {												// Webhook for a node
-		snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"hourly\":%u, \"daily\":%u, \"sensortype\":%d, \"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"rssi\":%d, \"msg\":%d,\"timestamp\":%lu000}",\
+		float percentSuccess = ((current.get_successCount() * 1.0)/ current.get_messageCount())*100.0;
+
+		snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"hourly\":%u, \"daily\":%u, \"sensortype\":%d, \"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d, \"msg\":%d, \"success\":%4.2f, \"timestamp\":%lu000}",\
 		LoRA_Functions::instance().findDeviceID(nodeNumber).c_str(), current.get_hourlyCount(), current.get_dailyCount(), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
-		current.get_internalTempC(), current.get_resetCount(), current.get_RSSI(), current.get_messageNumber(), Time.now());
+		current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_messageCount(), percentSuccess, Time.now());
 		PublishQueuePosix::instance().publish("Ubidots-LoRA-Node-v1", data, PRIVATE | WITH_ACK);
 	}
 	else {																// Webhook for the gateway
-		snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"hourly\":%u, \"daily\":%u, \"sensortype\":%d, \"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"rssi\":%d, \"msg\":%d,\"timestamp\":%lu000}",\
+		takeMeasurements();												// Loads the current values for the Gateway
+
+		snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"hourly\":%u, \"daily\":%u, \"sensortype\":%d, \"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d, \"msg\":%d, \"timestamp\":%lu000}",\
 		Particle.deviceID().c_str(), 0, 0, sysStatus.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
-		current.get_internalTempC(), sysStatus.get_resetCount(), sysStatus.get_RSSI(), sysStatus.get_messageCount(), Time.now());
+		current.get_internalTempC(), sysStatus.get_resetCount(), sysStatus.get_messageCount(), Time.now());
 		PublishQueuePosix::instance().publish("Ubidots-LoRA-Gateway-v1", data, PRIVATE | WITH_ACK);
 	}
 

@@ -1,4 +1,3 @@
-
 // Battery conect information - https://docs.particle.io/reference/device-os/firmware/boron/#batterystate-
 const char* batteryContext[7] = {"Unknown","Not Charging","Charging","Charged","Discharging","Fault","Diconnected"};
 
@@ -10,43 +9,22 @@ const char* batteryContext[7] = {"Unknown","Not Charging","Charging","Charged","
 
 FuelGauge fuelGauge;                                // Needed to address issue with updates in low battery state 
 
-char internalTempStr[16] = " ";                       // External as this can be called as a Particle variable
-char soilTempStr[16] = " ";                           // External as this can be called as a Particle variable
-char soilMoistureStr[16] = " ";                       // External as this can be called as a Particle variable
-char signalStr[64] = " ";
-
-/**
- * @brief This code collects basic data from the default sensors - TMP-36 (inside temp), battery charge level and signal strength
- * 
- * @details Uses an analog input and the appropriate scaling
- * 
- * @returns Returns true if succesful and puts the data into the current object
- * 
- */
 bool takeMeasurements() { 
 
     // Temperature inside the enclosure
     current.set_internalTempC((int)tmp36TemperatureC(analogRead(TMP36_SENSE_PIN)));
-    snprintf(internalTempStr,sizeof(internalTempStr), "%i C", current.get_internalTempC());
 
     batteryState();
 
     isItSafeToCharge();
 
-    getSignalStrength();
+    if (sysStatus.get_nodeNumber() == 0 ) getSignalStrength();
 
     return 1;
 
 }
 
-/**
- * @brief tmp36TemperatureC
- * 
- * @details generic code that convers the analog value of the TMP-36 sensors to degrees c - Assume 3.3V Power
- * 
- * @returns Returns the temperature in C as a float value
- * 
- */
+
 float tmp36TemperatureC (int adcValue) { 
     // Analog inputs have values from 0-4095, or
     // 12-bit precision. 0 = 0V, 4095 = 3.3V, 0.0008 volts (0.8 mV) per unit
@@ -68,21 +46,11 @@ float tmp36TemperatureC (int adcValue) {
 }
 
 
-
-/**
- * @brief In this function, we will measure the battery state of charge and the current functional state
- * 
- * @details One factor that is an issue today is the accurace of the state of charge if the device is waking
- * from sleep.  In order to help with this, there is a test for enable sleep and an additional delay.
- * 
- * @return true  - If the battery has a charge over 60%
- * @return false - Less than 60% indicates a low battery condition
- */
 bool batteryState() {
-  current.set_batteryState(System.batteryState());                      // Call before isItSafeToCharge() as it may overwrite the context
+    current.set_batteryState(System.batteryState());                      // Call before isItSafeToCharge() as it may overwrite the context
 
-  fuelGauge.quickStart();                                               // May help us re-establish a baseline for SoC
-  delay(500);
+    fuelGauge.quickStart();                                            // May help us re-establish a baseline for SoC
+    delay(500);
 
   current.set_stateOfCharge(System.batteryCharge());                   // Assign to system value
 
@@ -90,14 +58,7 @@ bool batteryState() {
   else return false;
 }
 
-/**
- * @brief Checks to see if the temperature is in the range to support charging
- * 
- * @details Will enable or disable charging based on the current temperature
- * 
- * @link https://batteryuniversity.com/learn/article/charging_at_high_and_low_temperatures @endlink
- * 
- */
+
 bool isItSafeToCharge()                             // Returns a true or false if the battery is in a safe charging range.
 {
   PMIC pmic(true);
@@ -112,13 +73,9 @@ bool isItSafeToCharge()                             // Returns a true or false i
   }
 }
 
-/**
- * @brief Get the Signal Strength values and make up a string for use in the console
- * 
- * @details Provides data on the signal strength and quality
- * 
- */
+
 void getSignalStrength() {
+  char signalStr[16];
   const char* radioTech[10] = {"Unknown","None","WiFi","GSM","UMTS","CDMA","LTE","IEEE802154","LTE_CAT_M1","LTE_CAT_NB1"};
   // New Signal Strength capability - https://community.particle.io/t/boron-lte-and-cellular-rssi-funny-values/45299/8
   CellularSignal sig = Cellular.RSSI();
@@ -132,19 +89,13 @@ void getSignalStrength() {
   float qualityPercentage = sig.getQuality();
 
   snprintf(signalStr,sizeof(signalStr), "%s S:%2.0f%%, Q:%2.0f%% ", radioTech[rat], strengthPercentage, qualityPercentage);
+  Log.info(signalStr);
 }
 
-/**
- * @brief This function is called once a hardware interrupt is triggered by the device's sensor
- * 
- * @details The sensor may change based on the settings in sysSettings but the overall concept of operations
- * is the same regardless.  The sensor will trigger an interrupt, which will set a flag. In the main loop
- * that flag will call this function which will determine if this event should "count" as a visitor.
- * 
- */
-void recordCount() // This is where we check to see if an interrupt is set when not asleep or act on a tap that woke the device
+
+bool recordCount() // This is where we check to see if an interrupt is set when not asleep or act on a tap that woke the device
 {
-  pinSetFast(BLUE_LED);                                               // Turn on the blue LED
+  pinSetFast(BLUE_LED);                                                                               // Turn on the blue LED
 
   current.set_lastCountTime(Time.now());
   current.set_hourlyCount(current.get_hourlyCount() +1);                                              // Increment the PersonCount
@@ -152,4 +103,6 @@ void recordCount() // This is where we check to see if an interrupt is set when 
   Log.info("Count, hourly: %i. daily: %i",current.get_hourlyCount(),current.get_dailyCount());
   delay(200);
   pinResetFast(BLUE_LED);
+
+  return true;
 }
