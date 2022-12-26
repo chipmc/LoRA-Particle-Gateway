@@ -203,7 +203,6 @@ bool LoRA_Functions::decipherDataReportGateway() {			// Receives the data report
 }
 
 bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to a data message it has a length of 11 and a specific payload and message flag
-    LEDStatus blinkBlue(RGB_COLOR_BLUE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 	char messageString[128];
 
 	float successPercent;
@@ -255,10 +254,6 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 		snprintf(messageString,sizeof(messageString),"Node %d data report %d acknowledged with alert %d, and signal strength %d", current.get_nodeNumber(), buf[10], buf[8], driver.lastRssi());
 		Log.info(messageString);
 		if (Particle.connected()) Particle.publish("status", messageString,PRIVATE);
-
-		blinkBlue.setActive(true);									// Provide a visual clue that ack went through
-    	delay(200);
-    	blinkBlue.setActive(false);
 		return true;
 	}
 	else {
@@ -298,7 +293,6 @@ bool LoRA_Functions::decipherJoinRequestGateway() {
 }
 
 bool LoRA_Functions::acknowledgeJoinRequestGateway() {
-	LEDStatus blinkOrange(RGB_COLOR_ORANGE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 	char messageString[128];
 	// This is a response to a data message it has a length of 9 and a specific payload and message flag
 	// Send a reply back to the originator client
@@ -324,11 +318,6 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 		snprintf(messageString,sizeof(messageString),"Node %d joined with sensorType %s counter with alert %d and signal strength %d", current.get_tempNodeNumber(), (buf[10] ==0)? "car":"person",current.get_alertCodeNode(), driver.lastRssi());
 		Log.info(messageString);
 		if (Particle.connected()) Particle.publish("status", messageString,PRIVATE);
-
-		blinkOrange.setActive(true);
-    	delay(200);
-    	blinkOrange.setActive(false);
-
 		return true;
 	}
 	else {
@@ -494,7 +483,7 @@ bool LoRA_Functions::nodeConfigured(int nodeNumber, float successPercent)  {
 		mod.insertValue((float)successPercent);
 		mod.finish();
 
-		Log.info(nodeID.get_nodeIDJson());  // See the raw JSON string
+		// Log.info(nodeID.get_nodeIDJson());  // See the raw JSON string
 		nodeID.set_nodeIDJson(jp.getBuffer());									// This should backup the nodeID database - now updated to persistent storage
 
 		return true;
@@ -506,7 +495,7 @@ bool LoRA_Functions::nodeConfigured(int nodeNumber, float successPercent)  {
 }
 
 byte LoRA_Functions::getType(int nodeNumber) {
-	if (nodeNumber > 10) return 255;
+	if (nodeNumber > 10) current.get_sensorType();
 
 	int type;
 
@@ -517,7 +506,7 @@ byte LoRA_Functions::getType(int nodeNumber) {
 	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
 	if(nodeObjectContainer == NULL) {
 		Log.info("From getType function Node number not found");
-		return 255;															// Ran out of entries 
+		return current.get_sensorType();									// Ran out of entries 
 	} 
 
 	jp.getValueByKey(nodeObjectContainer, "type", type);

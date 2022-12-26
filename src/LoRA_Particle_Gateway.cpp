@@ -25,6 +25,7 @@
 // v0.18 - Particle connection health check and continued move to classes
 // v0.19 - Simpler reporting - adding connection success % to nodeData
 // v1	- Release candidate - sending to Pilot Mountain
+// v1.01- Working to improve consistency of loading persistent date
 
 
 // Particle Libraries
@@ -41,7 +42,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.19";
+char currentPointRelease[6] ="1.01";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -77,8 +78,8 @@ void setup()
     initializePowerCfg();                           // Sets the power configuration for solar
 
 	// Load the persistent storage objects
+	sysStatus.setup();
 	current.setup();
-  	sysStatus.setup();
 	nodeID.setup();
 
     Particle_Functions::instance().setup();         // Sets up all the Particle functions and variables defined in particle_fn.h
@@ -175,6 +176,7 @@ void loop() {
 				LoRA_Functions::instance().nodeConnectionsHealthy();										// Will see if any nodes checked in - if not - will reset
 				LoRA_Functions::instance().sleepLoRaRadio();												// Done with the LoRA phase - put the radio to sleep
 				LoRA_Functions::instance().printNodeData(false);
+				nodeID.flush(true);
 				if (Time.hour() != Time.hour(sysStatus.get_lastConnection()) && current.get_openHours()) state = CONNECTING_STATE;  	// Only Connect once an hour after the LoRA window is over and if the park is open
 				else state = IDLE_STATE;
 			}
@@ -184,8 +186,6 @@ void loop() {
 			if (state != oldState) publishStateTransition();
 
 			uint8_t nodeNumber = current.get_nodeNumber();						// Put this here to reduce line length
-
-			Log.info("Publish for node %d", nodeNumber);
 
 			publishWebhook(nodeNumber);
 			current.set_alertCodeNode(0);										// Zero alert code after send
@@ -253,8 +253,8 @@ void loop() {
 
 	PublishQueuePosix::instance().loop();           // Check to see if we need to tend to the message queue
 
-	current.loop();
 	sysStatus.loop();
+	current.loop();
 	nodeID.loop();
 
 	LoRA_Functions::instance().loop();				// Check to see if Node connections are healthy
@@ -338,11 +338,6 @@ void publishWebhook(uint8_t nodeNumber) {
 		current.get_internalTempC(), sysStatus.get_resetCount(), sysStatus.get_messageCount(), Time.now());
 		PublishQueuePosix::instance().publish("Ubidots-LoRA-Gateway-v1", data, PRIVATE | WITH_ACK);
 	}
-
-	Log.info(data);
-
-
-
 	return;
 }
 

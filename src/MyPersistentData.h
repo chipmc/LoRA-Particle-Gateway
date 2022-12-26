@@ -5,9 +5,6 @@
 #include "MB85RC256V-FRAM-RK.h"
 #include "StorageHelperRK.h"
 
-//Define external class instances. These are typically declared public in the main .CPP. I wonder if we can only declare it here?
-extern MB85RC64 fram;
-
 //Macros(#define) to swap out during pre-processing (use sparingly). This is typically used outside of this .H and .CPP file within the main .CPP file or other .CPP files that reference this header file. 
 // This way you can do "data.setup()" instead of "MyPersistentData::instance().setup()" as an example
 #define current currentStatusData::instance()

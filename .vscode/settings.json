@@ -81,6 +81,6 @@
         "cinttypes": "cpp"
     },
     "particle.targetPlatform": "boron",
-    "particle.targetDevice": "NCParks190-LoRA-Gateway-BeanShoals",
-    "particle.firmwareVersion": "4.0.1"
+    "particle.targetDevice": "LoRA-Gateway-Dev",
+    "particle.firmwareVersion": "4.0.2"
 }

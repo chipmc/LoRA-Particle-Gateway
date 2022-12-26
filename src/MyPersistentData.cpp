@@ -2,7 +2,6 @@
 #include "MB85RC256V-FRAM-RK.h"
 #include "StorageHelperRK.h"
 #include "MyPersistentData.h"
-#include "gateway_configuration.h"
 
 
 MB85RC64 fram(Wire, 0);
@@ -60,7 +59,7 @@ void sysStatusData::loadSystemDefaults() {                         // This code 
 void sysStatusData::checkSystemValues() {               // Values out of bounds indicates an initialization error - will reload defaults
     bool reset = false;
     if (sysStatus.get_openTime() > 12 || sysStatus.get_closeTime() <12) {
-        Log.info("Open / Close issue - resetting");
+        Log.info("Open / Close issue with %d - resetting", sysStatus.get_openTime());
         reset = true;
     }
     if (sysStatus.get_frequencyMinutes() <=0 || sysStatus.get_frequencyMinutes() > 60) reset = true;
