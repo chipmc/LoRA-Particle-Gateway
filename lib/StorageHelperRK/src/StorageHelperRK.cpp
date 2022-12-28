@@ -67,8 +67,7 @@ bool StorageHelperRK::PersistentDataBase::setValueString(size_t offset, size_t s
             if (strcmp(value, p) != 0) {
                 memset(p, 0, size);
                 strcpy(p, value);
-                savedDataHeader->hash = getHash();
-                saveOrDefer();
+                updateHash();
             }
             result = true;
         }
@@ -83,10 +82,23 @@ uint32_t StorageHelperRK::PersistentDataBase::getHash() const {
         // hash value is calculated over the whole data header and data, but with the hash field set to 0
         uint32_t savedHash = savedDataHeader->hash;
         savedDataHeader->hash = 0;
+
+        // Log.trace("getHash size=%u savedHash=%08lx", (int)savedDataHeader->size, savedHash);
+        // Log.dump((const uint8_t *)savedDataHeader, savedDataHeader->size);
+        // Log.print("\n");
+
         hash = StorageHelperRK::murmur3_32((const uint8_t *)savedDataHeader, savedDataHeader->size, HASH_SEED);
         savedDataHeader->hash = savedHash;
     }
+
+    // Log.trace("hash=%08lx", hash);
+    
     return hash;
+}
+
+void StorageHelperRK::PersistentDataBase::updateHash() {
+    savedDataHeader->hash = getHash();
+    saveOrDefer();
 }
 
 
@@ -94,6 +106,12 @@ bool StorageHelperRK::PersistentDataBase::validate(size_t dataSize) {
     bool isValid = false;
 
     uint32_t hash = getHash();
+
+    if (logData) {
+        Log.info("validating data size=%d", (int)dataSize);
+        Log.dump((const uint8_t *)savedDataHeader, dataSize);
+        Log.print("\n");
+    }
 
     if (dataSize >= 12 && 
         savedDataHeader->magic == savedDataMagic && 
@@ -126,6 +144,14 @@ void StorageHelperRK::PersistentDataBase::initialize() {
     savedDataHeader->version = savedDataVersion;
     savedDataHeader->size = (uint16_t) savedDataSize;
     savedDataHeader->hash = getHash();
+}
+
+void StorageHelperRK::PersistentDataBase::save() {
+    if (logData) {
+        Log.info("saving data size=%d", (int)savedDataHeader->size);
+        Log.dump((const uint8_t *)savedDataHeader, savedDataHeader->size);
+        Log.print("\n");
+    }
 }
 
 
@@ -167,6 +193,7 @@ void StorageHelperRK::PersistentDataEEPROM::save() {
         Log.print("\n");
         */
     }
+    PersistentDataBase::save();
 }
 #endif // UNITTEST
 
@@ -212,6 +239,7 @@ void StorageHelperRK::PersistentDataFileSystem::save() {
             fs->close();
         }
     }
+    PersistentDataBase::save();
 }
 
 

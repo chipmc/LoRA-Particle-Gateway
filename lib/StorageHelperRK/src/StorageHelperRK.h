@@ -605,6 +605,21 @@ public:
             }
             return *this;
         }
+
+        /**
+         * @brief Log the data in validate() (called when data is first read) and in save()
+         * 
+         * @param value 
+         * @return PersistentDataBase& 
+         */
+        PersistentDataBase &withLogData(bool value = true) {
+            logData = value;
+            return *this;
+        }
+
+
+        
+
         /**
          * @brief Initialize this object for use in StorageHelperRK
          * 
@@ -626,7 +641,7 @@ public:
          * 
          * Save does nothing in this base class, but for PersistentDataFile it saves to a file
          */
-        virtual void save() {};
+        virtual void save();
 
         /**
          * @brief Write the settings to disk if changed and the wait to save time has expired
@@ -684,8 +699,7 @@ public:
                     T oldValue = *(T *)p;
                     if (oldValue != value) {
                         *(T *)p = value;
-                        savedDataHeader->hash = getHash();
-                        saveOrDefer();
+                        updateHash();
                     }
                 }
             }
@@ -722,6 +736,12 @@ public:
          * @brief Get the hash valid for data integrity checking
          */
         uint32_t getHash() const;
+
+        /**
+         * @brief Update the hash
+         * 
+         */
+        void updateHash();
 
         static const uint32_t HASH_SEED = 0x851c2a3f; //!< Murmur32 hash seed value (randomly generated)
 
@@ -768,6 +788,8 @@ public:
 
         uint32_t lastUpdate = 0; //!< Last time the file was updated. 0 = file has not changed since writing to disk.
         uint32_t saveDelayMs = 1000; //!< How long to wait to save before writing file to disk. Set to 0 to write immediately.
+
+        bool logData = false; //!< Log data when read and saved
     };
 
     /**
@@ -880,6 +902,7 @@ public:
             WITH_LOCK(*this) {
                 fram.writeData(framOffset, (const uint8_t*)savedDataHeader, savedDataSize);
             }
+            PersistentDataBase::save();
         } 
 
     protected:

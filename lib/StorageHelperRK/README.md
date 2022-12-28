@@ -309,6 +309,12 @@ You can also subclass PersistentDataBase in the same way as PersistentDataEEPROM
 
 ## Version history
 
+### 0.0.3 (2022-12-27)
+
+- Added a new example for data validation and initialization (07-validate).
+- Added a new withLogData(true) option to log the data after reading and saving.
+- Added a new method to update the hash. This is normally done automatically, but the method is useful in special cases.
+
 ### 0.0.2 (2022-08-29)
 
 - Fixed a bug that prevented EEPROM data from being saved. 

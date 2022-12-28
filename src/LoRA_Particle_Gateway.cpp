@@ -26,6 +26,7 @@
 // v0.19 - Simpler reporting - adding connection success % to nodeData
 // v1	- Release candidate - sending to Pilot Mountain
 // v1.01- Working to improve consistency of loading persistent date
+// v1.02 - udated the way I am implementing the StorageHelperRK function 
 
 
 // Particle Libraries
@@ -42,7 +43,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="1.01";
+char currentPointRelease[6] ="1.02";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging

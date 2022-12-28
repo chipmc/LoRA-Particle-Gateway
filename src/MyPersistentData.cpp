@@ -29,44 +29,69 @@ sysStatusData::~sysStatusData() {
 
 void sysStatusData::setup() {
     fram.begin();
-    sysStatus.load();
-    sysStatus.checkSystemValues();					// Make sure system values are in bounds for normal operation
+
+    sysStatus
+    //    .withLogData(true)
+        .withSaveDelayMs(500)
+        .load();
+
+    if (!sysStatus.validate(64)) {                  // 64 is the size of the sysStatus storage object
+        Log.info("sysStatus object not valid - reinitializing");
+        sysStatus.initialize();
+    }
 }
 
 void sysStatusData::loop() {
-    sysStatus.flush(true);
+    sysStatus.flush(false);
 }
 
-void sysStatusData::loadSystemDefaults() {                         // This code is only executed with a new device or a new storage object structure
-  Log.info("Loading system defaults");              // Letting us know that defaults are being loaded
-
-  sysStatus.set_nodeNumber(0);                     // Default for a Gateway
-  sysStatus.set_structuresVersion(1);
-  sysStatus.set_magicNumber(27617);
-  sysStatus.set_stayConnected(0);
-  sysStatus.set_resetCount(0);
-  sysStatus.set_messageCount(0);
-  sysStatus.set_lastHookResponse(0);
-  sysStatus.set_frequencyMinutes(10);
-  sysStatus.set_updatedFrequencyMinutes(0);
-  sysStatus.set_alertCodeGateway(0);
-  sysStatus.set_alertTimestampGateway(0);
-  sysStatus.set_openTime(6);
-  sysStatus.set_closeTime(22);
-  sysStatus.set_verizonSIM(false);
-}
-
-void sysStatusData::checkSystemValues() {               // Values out of bounds indicates an initialization error - will reload defaults
-    bool reset = false;
-    if (sysStatus.get_openTime() > 12 || sysStatus.get_closeTime() <12) {
-        Log.info("Open / Close issue with %d - resetting", sysStatus.get_openTime());
-        reset = true;
+bool sysStatusData::validate(size_t dataSize) {
+    bool valid = PersistentDataFRAM::validate(dataSize);
+    if (valid) {
+        // If test1 < 0 or test1 > 100, then the data is invalid
+        if (sysStatus.get_openTime() > 12 || sysStatus.get_closeTime() <12) {
+            Log.info("data not valid openTime=%d and closeTime=%d", sysStatus.get_openTime(), sysStatus.get_closeTime());
+            valid = false;
+        }
+        else if (sysStatus.get_frequencyMinutes() <=0 || sysStatus.get_frequencyMinutes() > 60) {
+            Log.info("data not valid frequency minutes =%d", sysStatus.get_frequencyMinutes());
+            valid = false;
+        }
+        else if (sysStatus.get_nodeNumber() != 0) {
+            Log.info("data not valid node number =%d", sysStatus.get_nodeNumber());
+            valid = false;
+        }
     }
-    if (sysStatus.get_frequencyMinutes() <=0 || sysStatus.get_frequencyMinutes() > 60) reset = true;
-    if (sysStatus.get_nodeNumber() != 0) reset = true;
+    Log.info("sysStatus data is %s",(valid) ? "valid": "not valid");
+    return valid;
+}
 
-    if (reset) sysStatusData::loadSystemDefaults();
+void sysStatusData::initialize() {
+    PersistentDataFRAM::initialize();
 
+    Log.info("data initialized");
+
+    // Initialize the default value to 10 if the structure is reinitialized.
+    // Be careful doing this, because when MyData is extended to add new fields,
+    // the initialize method is not called! This is only called when first
+    // initialized.
+    sysStatus.set_nodeNumber(0);                     // Default for a Gateway
+    sysStatus.set_structuresVersion(1);
+    sysStatus.set_magicNumber(27617);
+    sysStatus.set_stayConnected(0);
+    sysStatus.set_resetCount(0);
+    sysStatus.set_messageCount(0);
+    sysStatus.set_lastHookResponse(0);
+    sysStatus.set_frequencyMinutes(10);
+    sysStatus.set_updatedFrequencyMinutes(0);
+    sysStatus.set_alertCodeGateway(0);
+    sysStatus.set_alertTimestampGateway(0);
+    sysStatus.set_openTime(6);
+    sysStatus.set_closeTime(22);
+    sysStatus.set_verizonSIM(false);
+
+    // If you manually update fields here, be sure to update the hash
+    updateHash();
 }
 
 uint8_t sysStatusData::get_nodeNumber() const {
@@ -206,7 +231,7 @@ void sysStatusData::set_sensorType(uint8_t value) {
 }
 
 // *****************  Current Status Storage Object *******************
-// Offset of 50 bytes - make room for SysStatus
+// Offset of 100 bytes - make room for SysStatus
 // ********************************************************************
 
 currentStatusData *currentStatusData::_instance;
@@ -219,7 +244,7 @@ currentStatusData &currentStatusData::instance() {
     return *_instance;
 }
 
-currentStatusData::currentStatusData() : StorageHelperRK::PersistentDataFRAM(::fram, 50, &currentData.currentHeader, sizeof(CurrentData), CURRENT_DATA_MAGIC, CURRENT_DATA_VERSION) {
+currentStatusData::currentStatusData() : StorageHelperRK::PersistentDataFRAM(::fram, 100, &currentData.currentHeader, sizeof(CurrentData), CURRENT_DATA_MAGIC, CURRENT_DATA_VERSION) {
 };
 
 currentStatusData::~currentStatusData() {
@@ -227,16 +252,45 @@ currentStatusData::~currentStatusData() {
 
 void currentStatusData::setup() {
     fram.begin();
-    current.load();
+
+    current
+    //    .withLogData(true)
+        .withSaveDelayMs(500)
+        .load();
+
+    if (!current.validate(72)) {                  // 64 is the size of the sysStatus storage object
+        Log.info("current object not valid - reinitializing");
+        current.initialize();
+    }
 }
 
 void currentStatusData::loop() {
-    current.flush(false);
+
 }
 
-void currentStatusData::loadCurrentDefaults() {                         // This code is only executed with a new device or a new storage object structure
-  Log.info("Loading current defaults");              // Letting us know that defaults are being loaded
+bool currentStatusData::validate(size_t dataSize) {
+    bool valid = PersistentDataFRAM::validate(dataSize);
+    if (valid) {
+        if (current.get_hourlyCount() < 0 || current.get_hourlyCount() > 1024) {
+            Log.info("current data not valid hourlyCount=%d" , current.get_hourlyCount());
+            valid = false;
+        }
+    }
+    Log.info("current data is %s",(valid) ? "valid": "not valid");
+    return valid;
 }
+
+void currentStatusData::initialize() {
+    PersistentDataFRAM::initialize();
+
+    Log.info("Current Data Initialized");
+
+    currentStatusData::resetEverything();
+
+    // If you manually update fields here, be sure to update the hash
+    updateHash();
+}
+
 
 void currentStatusData::resetEverything() {                             // The device is waking up in a new day or is a new install
   Log.info("A new day - resetting everything");
@@ -252,7 +306,6 @@ void currentStatusData::resetEverything() {                             // The d
   sysStatus.set_resetCount(0);                                          // Reset the reset count as well
   sysStatus.set_messageCount(0);
 }
-
 
 uint8_t currentStatusData::get_nodeNumber() const {
     return getValue<uint8_t>(offsetof(CurrentData, nodeNumber));
@@ -397,7 +450,7 @@ nodeIDData &nodeIDData::instance() {
     return *_instance;
 }
 
-nodeIDData::nodeIDData() : StorageHelperRK::PersistentDataFRAM(::fram, 150, &nodeData.nodeHeader, sizeof(NodeData), NODEID_DATA_MAGIC, NODEID_DATA_VERSION) {
+nodeIDData::nodeIDData() : StorageHelperRK::PersistentDataFRAM(::fram, 200, &nodeData.nodeHeader, sizeof(NodeData), NODEID_DATA_MAGIC, NODEID_DATA_VERSION) {
 
 };
 
@@ -406,13 +459,22 @@ nodeIDData::~nodeIDData() {
 
 void nodeIDData::setup() {
     fram.begin();
-    nodeID.load();
+
+    nodeID
+    //    .withLogData(true)
+        .withSaveDelayMs(500)
+        .load();
+
+    if (!nodeID.validate(1040)) {                  // 64 is the size of the sysStatus storage object
+        Log.info("nodeID object not valid - reinitializing");
+        nodeID.initialize();
+    }
+    
 }
 
 void nodeIDData::loop() {
-    nodeID.flush(false);
-}
 
+}
 
 void nodeIDData::resetNodeIDs() {
     String blank = "{\"nodes\":[]}";
@@ -420,6 +482,24 @@ void nodeIDData::resetNodeIDs() {
 
     Log.info("Resettig NodeID config to: %s", blank.c_str());
 }
+
+bool nodeIDData::validate(size_t dataSize) {
+    bool valid = PersistentDataFRAM::validate(dataSize);
+    Log.info("nodeID data is %s",(valid) ? "valid": "not valid");
+    return valid;
+}
+
+void nodeIDData::initialize() {
+    PersistentDataFRAM::initialize();
+
+    Log.info("NodeID Data Initialized");
+
+    nodeID.resetNodeIDs();
+
+    // If you manually update fields here, be sure to update the hash
+    updateHash();
+}
+
 
 String nodeIDData::get_nodeIDJson() const {
 	String result;

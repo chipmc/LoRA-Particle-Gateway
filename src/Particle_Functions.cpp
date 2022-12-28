@@ -93,7 +93,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
         }
         else if (variable == "all") {
             snprintf(messaging,sizeof(messaging),"Resetting the gateway's system and current data");
-            sysStatus.loadSystemDefaults();                     // All will reset system values as well
+            sysStatus.initialize();                     // All will reset system values as well
         }
         else snprintf(messaging,sizeof(messaging),"Resetting the gateway's current data");
         current.resetEverything();

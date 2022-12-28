@@ -24,7 +24,7 @@ LoRA_Functions::~LoRA_Functions() {
 }
 
 // ************************************************************************
-// ********            JSON Object - Global                     ***********
+// ******** JSON Object - Scoped to LoRA_Functions Class        ***********
 // ************************************************************************
 // JSON for node data
 JsonParserStatic<1024, 50> jp;						// Make this global - reduce possibility of fragmentation
@@ -246,6 +246,8 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 	buf[10] = current.get_openHours();
 	buf[11] = current.get_messageCount();							// Repeat back message number
 
+	nodeID.flush(true);												// Save updates to the nodID database
+	current.flush(true);											// Save values reported by the nodes
 	digitalWrite(BLUE_LED,HIGH);			        				// Sending data
 
 	if (manager.sendtoWait(buf, 12, current.get_nodeNumber(), DATA_ACK) == RH_ROUTER_ERROR_NONE) {
@@ -309,6 +311,8 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	buf[9] = current.get_nodeNumber();
 	buf[10] = getType(current.get_nodeNumber());
 
+	nodeID.flush(true);												// Save updates to the nodID database
+	current.flush(true);											// Save values reported by the nodes
 	digitalWrite(BLUE_LED,HIGH);			        // Sending data
 
 	if (manager.sendtoWait(buf, 11, current.get_tempNodeNumber(), JOIN_ACK) == RH_ROUTER_ERROR_NONE) {
@@ -359,7 +363,9 @@ bool LoRA_Functions::acknowledgeAlertReportGateway() {
 		LoRA_Functions::changeAlert(current.get_nodeNumber(),0);	// Resets as alert is no longer pending
 	}
 	
-	digitalWrite(BLUE_LED,HIGH);			        // Sending data
+	nodeID.flush(true);												// Save updates to the nodID database
+	current.flush(true);											// Save values reported by the nodes
+	digitalWrite(BLUE_LED,HIGH);			        				// Sending data
 
 	if (manager.sendtoWait(buf, 9, current.get_nodeNumber(), ALERT_ACK) == RH_ROUTER_ERROR_NONE) {
 		Log.info("Node %d alert acknowledged", current.get_nodeNumber());
@@ -569,36 +575,31 @@ byte LoRA_Functions::getAlert(int nodeNumber) {
 }
 
 bool LoRA_Functions::changeAlert(int nodeNumber, int newAlert) {
-	if (nodeNumber > 10) return false;
-
 	int currentAlert;
+
+	if (nodeNumber > 10) return false;										// Function only for configured nodes
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
-	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array
 
-	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
-	if(nodeObjectContainer == NULL) return false;							// Ran out of entries 
+	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);	// find the entry for the node of interest
+	if(nodeObjectContainer == NULL) return false;							// Ran out of entries - node number entry not found triggers alert
 
-	jp.getValueByKey(nodeObjectContainer, "pend", currentAlert);
-
+	jp.getValueByKey(nodeObjectContainer, "pend", currentAlert);			// Now we have the oject for the specific node
 	Log.info("Changing pending alert from %d to %d", currentAlert, newAlert);
 
-	const JsonParserGeneratorRK::jsmntok_t *value;
-
+	const JsonParserGeneratorRK::jsmntok_t *value;							// Node we have the key value pair for the "pend"ing alerts	
 	jp.getValueTokenByKey(nodeObjectContainer, "pend", value);
 
-	JsonModifier mod(jp);
-
-	mod.startModify(value);
-
+	JsonModifier mod(jp);													// Create a modifier object
+	mod.startModify(value);													// Update the pending alert value for the selected node
 	mod.insertValue((int)newAlert);
 	mod.finish();
 
-	nodeID.set_nodeIDJson(jp.getBuffer());									// This should backup the nodeID database - now updated to persistent storage
+	nodeID.set_nodeIDJson(jp.getBuffer());									// This updates the JSON object but doe not commit to to persistent storage
 
 	return true;
-
 }
 
 void LoRA_Functions::printNodeData(bool publish) {

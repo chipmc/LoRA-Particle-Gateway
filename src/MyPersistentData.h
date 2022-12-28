@@ -50,16 +50,20 @@ public:
     void loop();
 
 	/**
-	 * @brief Load the appropriate system defaults - good ot initialize a system to "factory settings"
+	 * @brief Validates values and, if valid, checks that data is in the correct range.
 	 * 
 	 */
-	void loadSystemDefaults(); 
+	bool validate(size_t dataSize);
 
 	/**
-	 * @brief Checks to make sure the system values are in-order
+	 * @brief Will reinitialize data if it is found not to be valid
+	 * 
+	 * Be careful doing this, because when MyData is extended to add new fields,
+	 * the initialize method is not called! This is only called when first
+	 * initialized.
 	 * 
 	 */
-	void checkSystemValues();							
+	void initialize();
 
 
 	class SysData {
@@ -69,6 +73,7 @@ public:
 		// Your fields go here. Once you've added a field you cannot add fields
 		// (except at the end), insert fields, remove fields, change size of a field.
 		// Doing so will cause the data to be corrupted!
+		// Size of ssyStatus = 30 bytes + 16 for the header for 46 bytes total
 		uint8_t nodeNumber;                               // Assigned by the gateway on joining the network
 		uint8_t structuresVersion;                        // Version of the data structures (system and data)
 		uint16_t magicNumber;							  // A way to identify nodes and gateways so they can trust each other
@@ -245,7 +250,23 @@ public:
 	 * @brief Resets the current and hourly counts
 	 * 
 	 */
-	void resetEverything();               
+	void resetEverything();    
+
+	/**
+	 * @brief Validates values and, if valid, checks that data is in the correct range.
+	 * 
+	 */
+	bool validate(size_t dataSize);
+
+	/**
+	 * @brief Will reinitialize data if it is found not to be valid
+	 * 
+	 * Be careful doing this, because when MyData is extended to add new fields,
+	 * the initialize method is not called! This is only called when first
+	 * initialized.
+	 * 
+	 */
+	void initialize();           
 
 	class CurrentData {
 	public:
@@ -255,6 +276,7 @@ public:
 		// (except at the end), insert fields, remove fields, change size of a field.
 		// Doing so will cause the data to be corrupted!
 		// You may want to keep a version number in your data.
+		// Size is 28 plus a header of 16
 		uint8_t nodeNumber;                              // The nodeNumber of the device providing the current data 
 		uint8_t tempNodeNumber;                           // Used when an unconfigured node joins the network
 		uint8_t internalTempC;                            // Enclosure temperature in degrees C
@@ -422,6 +444,22 @@ public:
 	 * 
 	 */
 	void resetNodeIDs();
+
+	/**
+	 * @brief Validates values and, if valid, checks that data is in the correct range.
+	 * 
+	 */
+	bool validate(size_t dataSize);
+
+	/**
+	 * @brief Will reinitialize data if it is found not to be valid
+	 * 
+	 * Be careful doing this, because when MyData is extended to add new fields,
+	 * the initialize method is not called! This is only called when first
+	 * initialized.
+	 * 
+	 */
+	void initialize();
 
 
 	class NodeData {
