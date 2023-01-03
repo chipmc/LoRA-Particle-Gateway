@@ -30,6 +30,8 @@ sysStatusData::~sysStatusData() {
 void sysStatusData::setup() {
     fram.begin();
 
+    // fram.erase();
+
     sysStatus
     //    .withLogData(true)
         .withSaveDelayMs(500)
@@ -82,7 +84,7 @@ void sysStatusData::initialize() {
     sysStatus.set_resetCount(0);
     sysStatus.set_messageCount(0);
     sysStatus.set_lastHookResponse(0);
-    sysStatus.set_frequencyMinutes(10);
+    sysStatus.set_frequencyMinutes(60);
     sysStatus.set_updatedFrequencyMinutes(0);
     sysStatus.set_alertCodeGateway(0);
     sysStatus.set_alertTimestampGateway(0);

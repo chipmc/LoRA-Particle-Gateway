@@ -232,7 +232,7 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 		current.set_alertTimestampNode(Time.now());
 		buf[8] = 1;													// Set the alert code 1 - misconfigured node will force a join request
 	}
-	else if (LoRA_Functions::getAlert(current.get_nodeNumber()) > 0) {
+	else if (LoRA_Functions::getAlert(current.get_nodeNumber()) > 0) {  // We have a pending alert
 		current.set_alertCodeNode(LoRA_Functions::getAlert(current.get_nodeNumber()));
 		Log.info("Node %d has a pending alert %d", current.get_nodeNumber(), current.get_alertCodeNode());
 		current.set_alertTimestampNode(Time.now());
@@ -296,7 +296,8 @@ bool LoRA_Functions::decipherJoinRequestGateway() {
 
 bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	char messageString[128];
-	// This is a response to a data message it has a length of 9 and a specific payload and message flag
+	Log.info("Acknowledge Join Request");
+	// This is a response to a data message and a specific payload and message flag
 	// Send a reply back to the originator client
      
 	buf[0] = highByte(sysStatus.get_magicNumber());					// Magic number - so you can trust me
@@ -311,14 +312,15 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	buf[9] = current.get_nodeNumber();
 	buf[10] = getType(current.get_nodeNumber());
 
+
 	nodeID.flush(true);												// Save updates to the nodID database
-	current.flush(true);											// Save values reported by the nodes
+	current.flush(true);
 	digitalWrite(BLUE_LED,HIGH);			        // Sending data
+	Log.info("Sending response to %d with free memory = %li",current.get_tempNodeNumber(), System.freeMemory());
 
 	if (manager.sendtoWait(buf, 11, current.get_tempNodeNumber(), JOIN_ACK) == RH_ROUTER_ERROR_NONE) {
 		current.set_tempNodeNumber(current.get_nodeNumber());		// Temp no longer needed
 		digitalWrite(BLUE_LED,LOW);
-
 		snprintf(messageString,sizeof(messageString),"Node %d joined with sensorType %s counter with alert %d and signal strength %d", current.get_tempNodeNumber(), (buf[10] ==0)? "car":"person",current.get_alertCodeNode(), driver.lastRssi());
 		Log.info(messageString);
 		if (Particle.connected()) Particle.publish("status", messageString,PRIVATE);
@@ -501,6 +503,7 @@ bool LoRA_Functions::nodeConfigured(int nodeNumber, float successPercent)  {
 }
 
 byte LoRA_Functions::getType(int nodeNumber) {
+	Log.info("In getType function with nodeNumber %d",nodeNumber);
 	if (nodeNumber > 10) current.get_sensorType();
 
 	int type;
@@ -511,14 +514,13 @@ byte LoRA_Functions::getType(int nodeNumber) {
 
 	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
 	if(nodeObjectContainer == NULL) {
-		Log.info("From getType function Node number not found");
-		return current.get_sensorType();									// Ran out of entries 
+		Log.info("From getType function Node number not found so returning %d",current.get_sensorType());
+		return current.get_sensorType();									// Ran out of entries, go with what was reported by the node
 	} 
 
 	jp.getValueByKey(nodeObjectContainer, "type", type);
-
+	Log.info("Returning sensor type %d",type);
 	return type;
-
 }
 
 bool LoRA_Functions::changeType(int nodeNumber, int newType) {
