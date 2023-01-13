@@ -9,7 +9,7 @@
 // This way you can do "data.setup()" instead of "MyPersistentData::instance().setup()" as an example
 #define current currentStatusData::instance()
 #define sysStatus sysStatusData::instance()
-#define nodeID nodeIDData::instance()
+#define nodeDatabase nodeIDData::instance()
 
 /**
  * This class is a singleton; you do not create one as a global, on the stack, or with new.
@@ -277,14 +277,15 @@ public:
 		// Doing so will cause the data to be corrupted!
 		// You may want to keep a version number in your data.
 		// Size is 28 plus a header of 16
-		uint8_t nodeNumber;                              // The nodeNumber of the device providing the current data 
+		uint8_t nodeNumber;                               // The nodeNumber of the device providing the current data 
 		uint8_t tempNodeNumber;                           // Used when an unconfigured node joins the network
+		uint16_t nodeID;									  // One byte that can help us determine if a nodeNumber is misconfigured
 		uint8_t internalTempC;                            // Enclosure temperature in degrees C
 		double stateOfCharge;                             // Battery charge level
 		uint8_t batteryState;                             // Stores the current battery state (charging, discharging, etc)
 		uint8_t resetCount;								  // This is the number of resets for the node publishing data
 		uint16_t RSSI;                                    // Latest LoRA signal strength value from the Node
-		uint8_t messageCount;                            // What message are we on
+		uint8_t messageCount;                             // What message are we on
 		uint8_t successCount;							  // How many attempts have been successful - from the node
 		time_t lastCountTime;                             // When did we last record a count
 		uint16_t hourlyCount;                             // Current Hourly Count
@@ -327,6 +328,9 @@ public:
 
 	uint8_t get_tempNodeNumber() const;
 	void set_tempNodeNumber(uint8_t value);
+
+	uint16_t get_nodeID() const;
+	void set_nodeID(uint16_t value);
 
 	uint8_t get_internalTempC() const ;
 	void set_internalTempC(uint8_t value);
@@ -406,7 +410,7 @@ protected:
     static currentStatusData *_instance;
 
     //Since these variables are only used internally - They can be private. 
-	static const uint32_t CURRENT_DATA_MAGIC = 0x20a99e74;
+	static const uint32_t CURRENT_DATA_MAGIC = 0x20a99e76;
 	static const uint16_t CURRENT_DATA_VERSION = 1;
 };
 

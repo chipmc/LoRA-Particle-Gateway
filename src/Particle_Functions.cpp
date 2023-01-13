@@ -89,11 +89,13 @@ int Particle_Functions::jsonFunctionParser(String command) {
       if (nodeNumber == 0) {
         if (variable == "nodeData") {
           snprintf(messaging,sizeof(messaging),"Resetting the gateway's node Data");
-          nodeID.resetNodeIDs();
+          nodeDatabase.resetNodeIDs();
         }
         else if (variable == "all") {
             snprintf(messaging,sizeof(messaging),"Resetting the gateway's system and current data");
             sysStatus.initialize();                     // All will reset system values as well
+            current.resetEverything();
+            nodeDatabase.initialize();
         }
         else snprintf(messaging,sizeof(messaging),"Resetting the gateway's current data");
         current.resetEverything();

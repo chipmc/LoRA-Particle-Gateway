@@ -11,16 +11,16 @@
 // Format of a data report
 /*
 buf[0 - 1] magicNumber                      // Magic number for devices
-buf[2] firmVersion                          // Set for code release
-buf[3 - 4] hourly                           // Hourly count
-buf[5 - 6] = daily                          // Daily Count
-buf[7] sensorType                           // What sensor type is it
-buf[8] temp;                                // Enclosure temp
-buf[9] battChg;                             // State of charge
-buf[10] battState;                          // Battery State
-buf[11] resets                              // Reset count
-buf[12] messageCount;                       // Sequential message number
-buf[13] successCount;
+buf[2 - 3] nodeID                            // nodeID for verification
+buf[4 - 5] hourly                           // Hourly count
+buf[6 - 7] = daily                          // Daily Count
+buf[8] sensorType                           // What sensor type is it
+buf[9] temp;                                // Enclosure temp
+buf[10] battChg;                             // State of charge
+buf[11] battState;                          // Battery State
+buf[12] resets                              // Reset count
+buf[13] messageCount;                       // Sequential message number
+buf[14] successCount;
 */
 
 // Format of a data acknowledgement
@@ -37,8 +37,9 @@ buf[13] successCount;
 // Format of a join request
 /*
 buf[0-1] magicNumber;                       // Magic Number
-buf[2- 26] Particle deviceID;               // deviceID is unique to the device
-buf[27] sensorType				            // Identifies sensor type to Gateway
+buf[2 - 3] nodeID                            // nodeID for verification
+buf[4- 28] Particle deviceID;               // deviceID is unique to the device
+buf[29] sensorType				            // Identifies sensor type to Gateway
 */
 
 // Format for a join acknowledgement
@@ -50,20 +51,6 @@ buf[27] sensorType				            // Identifies sensor type to Gateway
     buf[9]  newNodeNumber                   // New Node Number for device
     buf[10]  sensorType				        // Gateway confirms sensor type
 
-*/
-
-// Format for an alert Report
-/*
-buf[0 - 1 ] magicNumber                     // Magic Number
-buf[2] = alertCodeNode;                     // Node's Alert Code
-*/
-
-// Format for an Alert Report Acknowledgement
-/*
-    buf[0 - 1 ]  magicNumber                // Magic Number
-    buf[2 - 5 ] Time.now()                  // Set the time 
-    buf[6 - 7] frequencyMinutes             // For the Gateway minutes on the hour  
-    buf[8] alertCodeNode                    // Gateway can set an alert code here
 */
 
 #ifndef __LORA_FUNCTIONS_H
@@ -204,7 +191,7 @@ public:
      * @returns the node number for this deviceID
      * 
      */
-    uint8_t findNodeNumber(const char* deviceID);
+    uint8_t findNodeNumber(const char* deviceID, int radioID);
     /**
      * @brief Returns the deviceID for a provided node number.  this is used in composing Particle publish payloads
      *
@@ -212,7 +199,7 @@ public:
      * @returns device ID
      * 
      */
-    String findDeviceID(uint8_t nodeNumber);
+    String findDeviceID(int nodeNumber, int radioID);
     /**
      * @brief Get Type is a function that returns the sensor Type for a given node number
      * 
@@ -258,7 +245,16 @@ public:
      * @param nodeNumber and a float for the % of successful messages delivered
      * @returns true or false
      */
-    bool nodeConfigured(int nodeNumber, float successPercent);
+    bool nodeConfigured(int nodeNumber, int radioID);
+    /**
+     * @brief Update the success percent and last connect time for a node
+     * 
+     * @param nodeNumber 
+     * @param successPercent 
+     * @return true 
+     * @return false 
+     */
+    bool nodeUpdate(int nodeNumber, float successPercent);
     /**
      * @brief Checks to see if the nodes have checked in recently
      * 
@@ -269,7 +265,13 @@ public:
      */
     bool nodeConnectionsHealthy();
 
-    
+    /**
+     * @brief computes a two digit checksum based on the Particle deviceID
+     * 
+     * @param str - a 24 character hex number string
+     * @return int - a value from 0 to 360 based on the character string
+     */
+    int stringCheckSum(String str);
 
 protected:
     /**

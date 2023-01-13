@@ -28,6 +28,7 @@
 // v1.01- Working to improve consistency of loading persistent date
 // v1.02 - udated the way I am implementing the StorageHelperRK function 
 // v1.03 - reliability updates
+// v1.04 - Added logic to check deviceID to validate node number
 
 
 // Particle Libraries
@@ -44,7 +45,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="1.03";
+char currentPointRelease[6] ="1.04";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -82,7 +83,7 @@ void setup()
 	// Load the persistent storage objects
 	sysStatus.setup();
 	current.setup();
-	nodeID.setup();
+	nodeDatabase.setup();
 
     Particle_Functions::instance().setup();         // Sets up all the Particle functions and variables defined in particle_fn.h
                          
@@ -178,7 +179,7 @@ void loop() {
 				LoRA_Functions::instance().nodeConnectionsHealthy();										// Will see if any nodes checked in - if not - will reset
 				LoRA_Functions::instance().sleepLoRaRadio();												// Done with the LoRA phase - put the radio to sleep
 				LoRA_Functions::instance().printNodeData(false);
-				nodeID.flush(true);
+				nodeDatabase.flush(true);
 				if (Time.hour() != Time.hour(sysStatus.get_lastConnection()) && current.get_openHours()) state = CONNECTING_STATE;  	// Only Connect once an hour after the LoRA window is over and if the park is open
 				else state = IDLE_STATE;
 			}
@@ -257,7 +258,7 @@ void loop() {
 
 	sysStatus.loop();
 	current.loop();
-	nodeID.loop();
+	nodeDatabase.loop();
 
 	LoRA_Functions::instance().loop();				// Check to see if Node connections are healthy
 
@@ -325,10 +326,13 @@ void publishWebhook(uint8_t nodeNumber) {
     const char* batteryContext[8] = {"Unknown","Not Charging","Charging","Charged","Discharging","Fault","Diconnected"};
 
 	if (nodeNumber > 0) {												// Webhook for a node
+		String deviceID = LoRA_Functions::instance().findDeviceID(nodeNumber, current.get_nodeID());
+		if (deviceID == "null") return;
+
 		float percentSuccess = ((current.get_successCount() * 1.0)/ current.get_messageCount())*100.0;
 
 		snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"hourly\":%u, \"daily\":%u, \"sensortype\":%d, \"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d, \"msg\":%d, \"success\":%4.2f, \"timestamp\":%lu000}",\
-		LoRA_Functions::instance().findDeviceID(nodeNumber).c_str(), current.get_hourlyCount(), current.get_dailyCount(), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
+		deviceID.c_str(), current.get_hourlyCount(), current.get_dailyCount(), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
 		current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_messageCount(), percentSuccess, Time.now());
 		PublishQueuePosix::instance().publish("Ubidots-LoRA-Node-v1", data, PRIVATE | WITH_ACK);
 	}
