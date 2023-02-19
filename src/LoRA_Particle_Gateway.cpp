@@ -29,7 +29,14 @@
 // v1.02 - udated the way I am implementing the StorageHelperRK function 
 // v1.03 - reliability updates
 // v1.04 - Added logic to check deviceID to validate node number
+// v1.05 - Improved the erase node functions
+// v2.00 - First Release for actual deployment
+// V6.00 - Reliability Updates - Stays connected longer if a node fails to check in - deployed to Pilot Mountain on 2/16/23
+// v7.00 - Added Signal to Noise Ratio to hourly reporting / webhook
 
+#define DEFAULT_LORA_WINDOW 3
+#define LONG_LORA_WINDOW 10
+#define STAY_CONNECTED 60
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
@@ -44,8 +51,8 @@
 #include "MyPersistentData.h"						// Where my persistent storage files are kept
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
-PRODUCT_VERSION(0);
-char currentPointRelease[6] ="1.04";
+PRODUCT_VERSION(7);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
+char currentPointRelease[6] ="7.00";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -110,15 +117,8 @@ void setup()
 
 	if (!digitalRead(BUTTON_PIN)) {
 		Log.info("User button pressed, connected mode");
-		sysStatus.set_stayConnected(1);
-		digitalWrite(BLUE_LED,HIGH);
-		delay(2000);
-		digitalWrite(BLUE_LED,LOW);
+		sysStatus.set_connectivityMode(3);					  // connectivityMode Code 3 keeps both LoRA and Cellular connections on
 		state = CONNECTING_STATE;
-	}
-	else {
-		Log.info("No user button push detechted");
-		sysStatus.set_stayConnected(0);
 	}
 	
 	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); // We may need to monitor the user switch to change behaviours / modes
@@ -131,7 +131,7 @@ void loop() {
 	switch (state) {
 		case IDLE_STATE: {
 			if (state != oldState) publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
-			if (nextEventTime || sysStatus.get_stayConnected() == 1) {
+			if (nextEventTime || sysStatus.get_connectivityMode() >= 2) {
 				nextEventTime = false;
 				state = LoRA_STATE;		   										// See Time section in setup for schedule
 			}
@@ -149,7 +149,6 @@ void loop() {
 				.duration(wakeInSeconds * 1000L);
 			SystemSleepResult result = System.sleep(config);                   // Put the device to sleep device continues operations from here
 			ab1805.resumeWDT();                                                // Wakey Wakey - WDT can resume
-			waitFor(Serial.isConnected, 10000);				// Wait for serial connection
 			state = IDLE_STATE;
 			nextEventTime = true;
 			Log.info("Awoke at %s with %li free memory", Time.format(Time.now(), "%T").c_str(), System.freeMemory());
@@ -157,25 +156,32 @@ void loop() {
 
 		case LoRA_STATE: {														// Enter this state every reporting period and stay here for 5 minutes
 			static system_tick_t startLoRAWindow = 0;
+			static byte connectionWindow = 0;
 
 			if (state != oldState) {
 				if (oldState != REPORTING_STATE) startLoRAWindow = millis();    // Mark when we enter this state - for timeouts - but multiple messages won't keep us here forever
 				publishStateTransition();                   					// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
+
 				LoRA_Functions::instance().clearBuffer();						// Clear the buffer before we start the LoRA state
+
 				conv.withCurrentTime().convert();								// Get the time and convert to Local
 				if (conv.getLocalTimeHMS().hour >= sysStatus.get_openTime() && conv.getLocalTimeHMS().hour <= sysStatus.get_closeTime()) current.set_openHours(true);
 				else current.set_openHours(false);
-				Log.info("Gateway is listening for LoRA messages and the park is %s (%d / %d / %d)", (current.get_openHours()) ? "open":"closed", conv.getLocalTimeHMS().hour, sysStatus.get_openTime(), sysStatus.get_closeTime());
+
+				if (sysStatus.get_connectivityMode() == 0) connectionWindow = DEFAULT_LORA_WINDOW;
+				else if (sysStatus.get_connectivityMode() == 1) connectionWindow = LONG_LORA_WINDOW;
+				else connectionWindow = STAY_CONNECTED;
+
+				Log.info("Gateway is listening for %u (%u) minutes for LoRA messages and the park is %s (%d / %d / %d)", connectionWindow, sysStatus.get_connectivityMode(), (current.get_openHours()) ? "open":"closed", conv.getLocalTimeHMS().hour, sysStatus.get_openTime(), sysStatus.get_closeTime());
 			} 
 
 			if (LoRA_Functions::instance().listenForLoRAMessageGateway()) {
-				Log.info("In main loop - alert %d and open hours %d",current.get_alertCodeNode(), current.get_openHours());
 				if (current.get_alertCodeNode() != 1 && current.get_openHours()) {	// We don't report Join alerts or after hours
 					state = REPORTING_STATE; 									// Received and acknowledged data from a node - need to report the alert
 				}
 			}
 
-			if ((millis() - startLoRAWindow) > 150000L) { 													// Keeps us in listening mode for the specified windpw - then back to idle unless in test mode - keeps listening
+			if ((millis() - startLoRAWindow) > (connectionWindow *60000UL)) { 								// Keeps us in listening mode for the specified windpw - then back to idle unless in test mode - keeps listening
 				LoRA_Functions::instance().nodeConnectionsHealthy();										// Will see if any nodes checked in - if not - will reset
 				LoRA_Functions::instance().sleepLoRaRadio();												// Done with the LoRA phase - put the radio to sleep
 				LoRA_Functions::instance().printNodeData(false);
@@ -220,7 +226,7 @@ void loop() {
 					waitUntil(Particle.syncTimeDone);										// Make sure sync is complete
 					CellularSignal sig = Cellular.RSSI();
 				}
-				if (sysStatus.get_stayConnected() == 1) state = LoRA_STATE;				// Go to the LoRA State
+				if (sysStatus.get_connectivityMode() >= 2) state = LoRA_STATE;				// Go to the LoRA State
 				else state = DISCONNECTING_STATE;	 									// Typically, we will disconnect and sleep to save power - publishes occur during the 90 seconds before disconnect
 			}
 		} break;
@@ -234,7 +240,7 @@ void loop() {
 			}
 
 			if ((millis() - stayConnectedWindow > 90000UL) && PublishQueuePosix::instance().getCanSleep()) {	// Stay on-line for 90 seconds and until we are done clearing the queue
-				if (sysStatus.get_stayConnected() == 0) Particle_Functions::instance().disconnectFromParticle();
+				if (sysStatus.get_connectivityMode() <= 1) Particle_Functions::instance().disconnectFromParticle();
 				state = IDLE_STATE;
 			}
 		} break;
@@ -331,9 +337,9 @@ void publishWebhook(uint8_t nodeNumber) {
 
 		float percentSuccess = ((current.get_successCount() * 1.0)/ current.get_messageCount())*100.0;
 
-		snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"hourly\":%u, \"daily\":%u, \"sensortype\":%d, \"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d, \"msg\":%d, \"success\":%4.2f, \"timestamp\":%lu000}",\
+		snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"hourly\":%u, \"daily\":%u, \"sensortype\":%d, \"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d,  \"snr\":%d, \"msg\":%d, \"success\":%4.2f, \"timestamp\":%lu000}",\
 		deviceID.c_str(), current.get_hourlyCount(), current.get_dailyCount(), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
-		current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_messageCount(), percentSuccess, Time.now());
+		current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_messageCount(), percentSuccess, Time.now());
 		PublishQueuePosix::instance().publish("Ubidots-LoRA-Node-v1", data, PRIVATE | WITH_ACK);
 	}
 	else {																// Webhook for the gateway

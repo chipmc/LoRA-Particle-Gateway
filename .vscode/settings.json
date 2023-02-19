@@ -81,6 +81,6 @@
         "cinttypes": "cpp"
     },
     "particle.targetPlatform": "boron",
-    "particle.targetDevice": "NCParks186",
+    "particle.targetDevice": "NCParks186-Gateway",
     "particle.firmwareVersion": "4.0.2"
 }

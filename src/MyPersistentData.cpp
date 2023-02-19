@@ -29,20 +29,12 @@ sysStatusData::~sysStatusData() {
 
 void sysStatusData::setup() {
     fram.begin();
-
-    // fram.erase();
-
     sysStatus
     //    .withLogData(true)
         .withSaveDelayMs(500)
         .load();
 
-    Log.info("sizeof(SysData): %u", sizeof(SysData));
-
-    if (!sysStatus.validate(sizeof(SysData))) {                  // 64 is the size of the sysStatus storage object
-        Log.info("sysStatus object not valid - reinitializing");
-        sysStatus.initialize();
-    }
+    // Log.info("sizeof(SysData): %u", sizeof(SysData));
 }
 
 void sysStatusData::loop() {
@@ -65,9 +57,8 @@ bool sysStatusData::validate(size_t dataSize) {
             Log.info("data not valid node number =%d", sysStatus.get_nodeNumber());
             valid = false;
         }
-        else Log.info("SysData values verified");
     }
-    Log.info("sysStatus data is %s",(valid) ? "valid": "not valid");
+    if (!valid) Log.info("sysStatus data is %s",(valid) ? "valid": "not valid");
     return valid;
 }
 
@@ -83,7 +74,7 @@ void sysStatusData::initialize() {
     sysStatus.set_nodeNumber(0);                     // Default for a Gateway
     sysStatus.set_structuresVersion(1);
     sysStatus.set_magicNumber(27617);
-    sysStatus.set_stayConnected(0);
+    sysStatus.set_connectivityMode(0);
     sysStatus.set_resetCount(0);
     sysStatus.set_messageCount(0);
     sysStatus.set_lastHookResponse(0);
@@ -123,12 +114,12 @@ void sysStatusData::set_magicNumber(uint16_t value) {
     setValue<uint16_t>(offsetof(SysData, magicNumber), value);
 }
 
-uint8_t sysStatusData::get_stayConnected() const {
-    return getValue<uint8_t>(offsetof(SysData, stayConnected));
+uint8_t sysStatusData::get_connectivityMode() const {
+    return getValue<uint8_t>(offsetof(SysData, connectivityMode));
 }
 
-void sysStatusData::set_stayConnected(uint8_t value) {
-    setValue<uint8_t>(offsetof(SysData, stayConnected), value);
+void sysStatusData::set_connectivityMode(uint8_t value) {
+    setValue<uint8_t>(offsetof(SysData, connectivityMode), value);
 }
 
 uint8_t sysStatusData::get_resetCount() const {
@@ -262,32 +253,8 @@ void currentStatusData::setup() {
     //    .withLogData(true)
         .withSaveDelayMs(500)
         .load();
-/*
-    Log.info("%2u nodeNumber", offsetof(CurrentData, nodeNumber));
-    Log.info("%2u tempNodeNumber", offsetof(CurrentData, tempNodeNumber));
-    Log.info("%2u nodeID", offsetof(CurrentData, nodeID));
-    Log.info("%2u internalTempC", offsetof(CurrentData, internalTempC));
-    Log.info("%2u stateOfCharge", offsetof(CurrentData, stateOfCharge));
-    Log.info("%2u batteryState", offsetof(CurrentData, batteryState));
-    Log.info("%2u resetCount", offsetof(CurrentData, resetCount));
-    Log.info("%2u RSSI", offsetof(CurrentData, RSSI));
-    Log.info("%2u messageCount", offsetof(CurrentData, messageCount));
-    Log.info("%2u successCount", offsetof(CurrentData, successCount));
-    Log.info("%2u lastCountTime", offsetof(CurrentData, lastCountTime));
-    Log.info("%2u hourlyCount", offsetof(CurrentData, hourlyCount));
-    Log.info("%2u dailyCount", offsetof(CurrentData, dailyCount));
-    Log.info("%2u alertCodeNode", offsetof(CurrentData, alertCodeNode));
-    Log.info("%2u alertTimestampNode", offsetof(CurrentData, alertTimestampNode));
-    Log.info("%2u openHours", offsetof(CurrentData, openHours));
-    Log.info("%2u sensorType", offsetof(CurrentData, sensorType));
-*/
 
-    Log.info("sizeof(CurrentData): %u", sizeof(CurrentData));
-
-    if (!current.validate(sizeof(CurrentData))) {                  // Validate the size of the storage object
-        Log.info("current object not valid - reinitializing");
-        current.initialize();
-    }
+    // Log.info("sizeof(CurrentData): %u", sizeof(CurrentData));
 }
 
 void currentStatusData::loop() {
@@ -301,9 +268,8 @@ bool currentStatusData::validate(size_t dataSize) {
             Log.info("current data not valid hourlyCount=%d" , current.get_hourlyCount());
             valid = false;
         }
-        else Log.info("current data hourlyCount valid at %d", current.get_hourlyCount());
     }
-    Log.info("current data is %s",(valid) ? "valid": "not valid");
+    if (!valid) Log.info("current data is %s",(valid) ? "valid": "not valid");
     return valid;
 }
 
@@ -391,12 +357,12 @@ void currentStatusData::set_resetCount(uint8_t value) {
     setValue<uint8_t>(offsetof(CurrentData, resetCount), value);
 }
 
-uint16_t currentStatusData::get_RSSI() const {
-    return getValue<uint16_t>(offsetof(CurrentData, RSSI));
+int16_t currentStatusData::get_RSSI() const {
+    return getValue<int16_t>(offsetof(CurrentData, RSSI));
 }
 
-void currentStatusData::set_RSSI(uint16_t value) {
-    setValue<uint16_t>(offsetof(CurrentData, RSSI), value);
+void currentStatusData::set_RSSI(int16_t value) {
+    setValue<int16_t>(offsetof(CurrentData, RSSI), value);
 }
 
 uint8_t currentStatusData::get_messageCount() const {
@@ -471,6 +437,14 @@ void currentStatusData::set_sensorType(uint8_t value) {
     setValue<uint8_t>(offsetof(CurrentData, sensorType), value);
 }
 
+int16_t currentStatusData::get_SNR() const {
+    return getValue<int16_t>(offsetof(CurrentData, SNR));
+}
+
+void currentStatusData::set_SNR(int16_t value) {
+    setValue<int16_t>(offsetof(CurrentData, SNR), value);
+}
+
 
 // *******************  nodeID Storage Object **********************
 //
@@ -496,20 +470,12 @@ nodeIDData::~nodeIDData() {
 void nodeIDData::setup() {
     fram.begin();
 
-    nodeIDData::initialize();
-
     nodeDatabase
     //    .withLogData(true)
         .withSaveDelayMs(500)
         .load();
 
-    Log.info("sizeof(NodeData): %u", sizeof(NodeData));
-
-    if (!nodeDatabase.validate(sizeof(NodeData))) {                  // 64 is the size of the sysStatus storage object
-        Log.info("nodeID object not valid - reinitializing");
-        nodeDatabase.initialize();
-    }
-    
+    // Log.info("sizeof(NodeData): %u", sizeof(NodeData)); 
 }
 
 void nodeIDData::loop() {
@@ -520,11 +486,13 @@ void nodeIDData::resetNodeIDs() {
     String blank = "{\"nodes\":[]}";
     Log.info("Resettig NodeID config to: %s", blank.c_str());
     nodeDatabase.set_nodeIDJson(blank);
+    nodeDatabase.flush(true);
+    Log.info("NodeID data is now %s", nodeDatabase.get_nodeIDJson().c_str());
 }
 
 bool nodeIDData::validate(size_t dataSize) {
     bool valid = PersistentDataFRAM::validate(dataSize);
-    Log.info("nodeID data is %s",(valid) ? "valid": "not valid");
+    if (!valid) Log.info("nodeID data is %s",(valid) ? "valid": "not valid");
     return valid;
 }
 
@@ -538,7 +506,7 @@ void nodeIDData::initialize() {
     Log.info("Initializing data");
     PersistentDataFRAM::initialize();
     nodeIDData::resetNodeIDs();
-    updateHash();           // If you manually update fields here, be sure to update the hash
+    updateHash();                                       // If you manually update fields here, be sure to update the hash
 }
 
 

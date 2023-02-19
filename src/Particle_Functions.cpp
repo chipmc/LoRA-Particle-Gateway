@@ -90,6 +90,10 @@ int Particle_Functions::jsonFunctionParser(String command) {
         if (variable == "nodeData") {
           snprintf(messaging,sizeof(messaging),"Resetting the gateway's node Data");
           nodeDatabase.resetNodeIDs();
+          Log.info("Resetting the Gateway node so new database is in effect");
+          Particle.publish("Alert","Resetting Gateway",PRIVATE);
+          delay(2000);
+          System.reset();
         }
         else if (variable == "all") {
             snprintf(messaging,sizeof(messaging),"Resetting the gateway's system and current data");
@@ -131,11 +135,11 @@ int Particle_Functions::jsonFunctionParser(String command) {
       // Test - {"cmd":[{"node":0,"var":"true" or "false","fn":"stay"}]}
       if (variable == "true") {
         snprintf(messaging,sizeof(messaging),"Going to keep Gateway on Particle and LoRA networks");
-        sysStatus.set_stayConnected(1);
+        sysStatus.set_connectivityMode(3);
       }
       else {
         snprintf(messaging,sizeof(messaging),"Going back to normal connectivity");
-        sysStatus.set_stayConnected(0);
+        sysStatus.set_connectivityMode(0);
       }
     }
     // Node ID Report

@@ -82,13 +82,13 @@ bool LoRA_Functions::setup(bool gatewayID) {
 
 	// Here is where we load the JSON object from memory and parse
 	jp.addString(nodeDatabase.get_nodeIDJson());				// Read in the JSON string from memory
+	Log.info("The node string is: %s",nodeDatabase.get_nodeIDJson().c_str());
 
 	if (jp.parse()) Log.info("Parsed Successfully");
 	else {
 		nodeDatabase.resetNodeIDs();
 		Log.info("Parsing error resetting nodeID database");
 	}
-
 	return true;
 }
 
@@ -153,9 +153,11 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 		}
 		current.set_nodeNumber(from);												// Captures the nodeNumber 
 		current.set_tempNodeNumber(0);												// Clear for new response
+		current.set_RSSI(driver.lastRssi());										// Signal strength
+		current.set_SNR(driver.lastSNR());											// Signal to noise ratio
 		current.set_nodeID(buf[2] << 8 | buf[3]);									// Captures the nodeID for Data or Alert reports
 		lora_state = (LoRA_State)(0x0F & messageFlag);								// Strip out the overhead byte to get the message flag
-		Log.info("Node %d with ID %d a %s message with rssi=%d", current.get_nodeNumber(), current.get_nodeID(), loraStateNames[lora_state], driver.lastRssi());
+		Log.info("Node %d with ID %d a %s message with RSSI/SNR of %d / %d", current.get_nodeNumber(), current.get_nodeID(), loraStateNames[lora_state], current.get_RSSI(), current.get_SNR());
 
 		// Next we need to test the nodeNumber / deviceID to make sure this node is properly configured
 		if (current.get_nodeNumber() < 11 && !LoRA_Functions::instance().nodeConfigured(current.get_nodeNumber(),current.get_nodeID())) {
@@ -194,7 +196,6 @@ bool LoRA_Functions::decipherDataReportGateway() {			// Receives the data report
 	current.set_resetCount(buf[12]);
 	current.set_messageCount(buf[13]);
 	current.set_successCount(buf[14]);
-	current.set_RSSI(driver.lastRssi());
 
 	lora_state = DATA_ACK;		// Prepare to respond
 	return true;
@@ -221,6 +222,7 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 	else {											// This is a data report from a configured node - will use the node database
 		current.set_alertCodeNode(LoRA_Functions::getAlert(current.get_nodeNumber()));
 		if (current.get_alertCodeNode() > 0) Log.info("Node %d has a pending alert %d", current.get_nodeNumber(), current.get_alertCodeNode());
+	
 		if (current.get_alertCodeNode() == 7) {							// if it is a change in type alert - we can do that here
 			int newSensorType = LoRA_Functions::getType(current.get_nodeNumber());
 			Log.info("In data acknowledge, changing type to from %d to %d", current.get_sensorType(), newSensorType );
@@ -228,7 +230,8 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 			buf[9] = newSensorType;
 		}
 		else buf[9] = current.get_sensorType();
-		LoRA_Functions::changeAlert(current.get_nodeNumber(),0); 	// The alert was serviced - no longer pending
+
+		if (current.get_alertCodeNode() != 0) LoRA_Functions::changeAlert(current.get_nodeNumber(),0); 	// The alert was serviced or applied - no longer pending
 		buf[8] = current.get_alertCodeNode();
 
 		// At this point we can update the last connection time in the node database
@@ -250,7 +253,7 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 	if (manager.sendtoWait(buf, 12, nodeAddress, DATA_ACK) == RH_ROUTER_ERROR_NONE) {
 		digitalWrite(BLUE_LED,LOW);
 
-		snprintf(messageString,sizeof(messageString),"Node %d data report %d acknowledged with alert %d, and signal strength %d", current.get_nodeNumber(), buf[10], buf[8], driver.lastRssi());
+		snprintf(messageString,sizeof(messageString),"Node %d data report %d acknowledged with alert %d, and RSSI / SNR of %d / %d", current.get_nodeNumber(), buf[10], buf[8], current.get_RSSI(), current.get_SNR());
 		Log.info(messageString);
 		if (Particle.connected()) Particle.publish("status", messageString,PRIVATE);
 		return true;
@@ -312,20 +315,15 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	buf[10] = current.get_sensorType();								// In a join request the node type overwrites the node database value
 
 
-	//nodeDatabase.flush(true);										// Save updates to the nodID database
-	//current.flush(true);
-
 	digitalWrite(BLUE_LED,HIGH);			        				// Sending data
 
 	byte nodeAddress = (current.get_tempNodeNumber() == 0) ? current.get_nodeNumber() : current.get_tempNodeNumber();  // get the return address right
 	Log.info("Sending response to %d with free memory = %li", nodeAddress, System.freeMemory());
 
-
-
 	if (manager.sendtoWait(buf, 11, nodeAddress, JOIN_ACK) == RH_ROUTER_ERROR_NONE) {
 		current.set_tempNodeNumber(current.get_nodeNumber());		// Temp no longer needed
 		digitalWrite(BLUE_LED,LOW);
-		snprintf(messageString,sizeof(messageString),"Node %d joined with sensorType %s counter with alert %d and signal strength %d", nodeAddress, (buf[10] ==0)? "car":"person",current.get_alertCodeNode(), driver.lastRssi());
+		snprintf(messageString,sizeof(messageString),"Node %d joined with sensorType %s, alert %d and RSSI / SNR of %d / %d", nodeAddress, (buf[10] ==0)? "car":"person",current.get_alertCodeNode(), current.get_RSSI(), current.get_SNR());
 		Log.info(messageString);
 		if (Particle.connected()) Particle.publish("status", messageString,PRIVATE);
 		return true;
@@ -440,10 +438,7 @@ bool LoRA_Functions::nodeConfigured(int nodeNumber, int radioID)  {
 	
 	jp.getValueByKey(nodeObjectContainer, "rID", radioID);					// Get the radioID for the node number in question
 
-	if (radioID == current.get_nodeID()) {
-		Log.info("Node number verified");
-		return true;
-	} 
+	if (radioID == current.get_nodeID()) return true;
 	else {
 		Log.info("Node not configured");  // See the raw JSON string
 		return false;
@@ -581,7 +576,7 @@ void LoRA_Functions::printNodeData(bool publish) {
 	int sensorType;
 	float successPercent;
 	int pendingAlert;
-	char data[136];
+	char data[256];
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
@@ -600,7 +595,7 @@ void LoRA_Functions::printNodeData(bool publish) {
 		jp.getValueByKey(nodeObjectContainer, "succ", successPercent);
 		jp.getValueByKey(nodeObjectContainer, "pend", pendingAlert);
 
-		snprintf(data, sizeof(data), "Node %d, deviceID: %s, lastConnected: %s, type %d, success %4.2f with pending alert %d", nodeNumber, nodeDeviceID.c_str(),Time.timeStr(lastConnect).c_str(), sensorType, successPercent, pendingAlert);
+		snprintf(data, sizeof(data), "Node %d, deviceID: %s, checksum %d, lastConnected: %s, type %d, success %4.2f with pending alert %d", nodeNumber, nodeDeviceID.c_str(), radioID, Time.timeStr(lastConnect).c_str(), sensorType, successPercent, pendingAlert);
 		Log.info(data);
 		if (Particle.connected() && publish) {
 			Particle.publish("nodeData", data, PRIVATE);
@@ -617,7 +612,7 @@ bool LoRA_Functions::nodeConnectionsHealthy() {								// Connections are health
 	
 	int lastConnect;
 	time_t secondsPerPeriod = sysStatus.get_frequencyMinutes() * 60;
-	bool health = false;
+	bool health = true;
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
@@ -629,8 +624,8 @@ bool LoRA_Functions::nodeConnectionsHealthy() {								// Connections are health
 
 		jp.getValueByKey(nodeObjectContainer, "last", lastConnect);
 
-		if ((Time.now() - lastConnect) < 2 * secondsPerPeriod) {			// If at least one node connects, the gateway is good.
-			health = true;
+		if ((Time.now() - lastConnect) > secondsPerPeriod) {				// If any of the nodes fail to connect - will extend loRA dwell time
+			health = false;
 			break;															// Don't need to keep checking
 		}
 	}
@@ -639,8 +634,10 @@ bool LoRA_Functions::nodeConnectionsHealthy() {								// Connections are health
 
 	if(!health) {
 		Log.info("Node connections unhealthy, reseting LoRA radio");
+		sysStatus.set_connectivityMode(1);									// This will set a longer LoRA connection window
 		LoRA_Functions::initializeRadio();
 	}
+	else sysStatus.set_connectivityMode(0);									// This will set a normal LoRA connection window
 
 	return health;
 }

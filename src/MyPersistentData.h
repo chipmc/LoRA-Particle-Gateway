@@ -77,7 +77,7 @@ public:
 		uint8_t nodeNumber;                               // Assigned by the gateway on joining the network
 		uint8_t structuresVersion;                        // Version of the data structures (system and data)
 		uint16_t magicNumber;							  // A way to identify nodes and gateways so they can trust each other
-		uint8_t stayConnected;                          // Version of the device firmware (integer - aligned to particle prodict firmware)
+		uint8_t connectivityMode;                         // 0 - standard LoRA and Cellular, 1 - Long LoRA  2 - Always on LoRA, 3 - Always on LoRA and Cellular
 		uint8_t resetCount;                               // reset count of device (0-256)
 		uint8_t messageCount;							  // This is how many messages the Gateay has composed for the day
 		time_t lastHookResponse;                   		  // Last time we got a valid Webhook response
@@ -127,8 +127,8 @@ public:
 	uint16_t get_magicNumber() const ;
 	void set_magicNumber(uint16_t value);
 
-	uint8_t get_stayConnected() const;
-	void set_stayConnected(uint8_t value);
+	uint8_t get_connectivityMode() const;
+	void set_connectivityMode(uint8_t value);
 
 	uint8_t get_resetCount() const;
 	void set_resetCount(uint8_t value);
@@ -284,7 +284,7 @@ public:
 		double stateOfCharge;                             // Battery charge level
 		uint8_t batteryState;                             // Stores the current battery state (charging, discharging, etc)
 		uint8_t resetCount;								  // This is the number of resets for the node publishing data
-		uint16_t RSSI;                                    // Latest LoRA signal strength value from the Node
+		int16_t RSSI;                                     // Latest LoRA signal strength value from the Node
 		uint8_t messageCount;                             // What message are we on
 		uint8_t successCount;							  // How many attempts have been successful - from the node
 		time_t lastCountTime;                             // When did we last record a count
@@ -294,6 +294,7 @@ public:
 		time_t alertTimestampNode;                 	      // Timestamp of alert
 		bool openHours; 								  // Will set to true or false based on time of dat
 		uint8_t sensorType;								  // What is the sensor type of the node sending current data
+		int16_t SNR;									  // What was the signal to noise ratio of the last report
 		// OK to add more fields here 
 	};
 	CurrentData currentData;
@@ -347,8 +348,8 @@ public:
 	time_t get_lastSampleTime() const;
 	void set_lastSampleTime(time_t value);
 
-	uint16_t get_RSSI() const;
-	void set_RSSI(uint16_t value);
+	int16_t get_RSSI() const;
+	void set_RSSI(int16_t value);
 
 	uint8_t get_messageCount() const;
 	void set_messageCount(uint8_t value);
@@ -376,6 +377,9 @@ public:
 
 	uint8_t get_sensorType() const;
 	void set_sensorType(uint8_t value);
+
+	int16_t get_SNR() const;
+	void set_SNR(int16_t value);
 
 
 		//Members here are internal only and therefore protected
