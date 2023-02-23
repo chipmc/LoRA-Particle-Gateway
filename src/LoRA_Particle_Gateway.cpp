@@ -222,11 +222,11 @@ void loop() {
 				sysStatus.set_lastConnection(Time.now());
 				sysStatus.set_lastConnectionDuration((millis() - connectingTimeout) / 1000);	// Record connection time in seconds
 				if (Particle.connected()) {
-					Particle.syncTime();													// To prevent large connections, we will sync every hour when we connect to the cellular network.
-					waitUntil(Particle.syncTimeDone);										// Make sure sync is complete
+					Particle.syncTime();												// To prevent large connections, we will sync every hour when we connect to the cellular network.
+					waitUntil(Particle.syncTimeDone);									// Make sure sync is complete
 					CellularSignal sig = Cellular.RSSI();
 				}
-				if (sysStatus.get_connectivityMode() >= 2) state = LoRA_STATE;				// Go to the LoRA State
+				if (sysStatus.get_connectivityMode() >= 2) state = LoRA_STATE;			// Go back to the LoRA State if we are in connected mode
 				else state = DISCONNECTING_STATE;	 									// Typically, we will disconnect and sleep to save power - publishes occur during the 90 seconds before disconnect
 			}
 		} break;
