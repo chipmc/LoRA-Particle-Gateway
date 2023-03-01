@@ -32,7 +32,7 @@
 // v1.05 - Improved the erase node functions
 // v2.00 - First Release for actual deployment
 // V6.00 - Reliability Updates - Stays connected longer if a node fails to check in - deployed to Pilot Mountain on 2/16/23
-// v7.00 - Added Signal to Noise Ratio to hourly reporting / webhook, battery level monitoring improvements, added power cycle function
+// v7.00 - Added Signal to Noise Ratio to hourly reporting / webhook, battery level monitoring improvements, added power cycle function - Optimized for stick antenna - new center freq
 
 #define DEFAULT_LORA_WINDOW 3
 #define LONG_LORA_WINDOW 10
