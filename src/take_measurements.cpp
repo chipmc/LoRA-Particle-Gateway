@@ -47,11 +47,11 @@ float tmp36TemperatureC (int adcValue) {
 
 
 bool batteryState() {
-    current.set_batteryState(System.batteryState());                      // Call before isItSafeToCharge() as it may overwrite the context
 
-    fuelGauge.quickStart();                                            // May help us re-establish a baseline for SoC
-    delay(500);
+  fuelGauge.quickStart();                                               // May help us re-establish a baseline for SoC
+  softDelay(1000);
 
+  current.set_batteryState(System.batteryState());                      // Call before isItSafeToCharge() as it may overwrite the context
   current.set_stateOfCharge(System.batteryCharge());                   // Assign to system value
 
   if (current.get_stateOfCharge() > 60) return true;
@@ -105,4 +105,14 @@ bool recordCount() // This is where we check to see if an interrupt is set when 
   pinResetFast(BLUE_LED);
 
   return true;
+}
+
+/**
+ * @brief soft delay let's us process Particle functions and service the sensor interrupts while pausing
+ * 
+ * @details takes a single unsigned long input in millis
+ * 
+ */
+inline void softDelay(uint32_t t) {
+  for (uint32_t ms = millis(); millis() - ms < t; Particle.process());  //  safer than a delay()
 }

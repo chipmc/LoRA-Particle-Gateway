@@ -37,8 +37,9 @@ JsonParserStatic<1024, 50> jp;						// Make this global - reduce possibility of 
 // In an unconfigured node, there will be a node number of greater than 10 triggering a join request
 // Configured nodes will be stored in a JSON object by the gateway with three fields: node number, Particle deviceID and Time stamp of last contact
 //
-const double RF95_FREQ = 915.0;				 // Frequency - ISM
 const uint8_t GATEWAY_ADDRESS = 0;
+// const double RF95_FREQ = 915.0;				 	// Frequency - ISM
+const double RF95_FREQ = 926.84;				// Center frequency for the omni-directional antenna I am using
 
 // Define the message flags
 typedef enum { NULL_STATE, JOIN_REQ, JOIN_ACK, DATA_RPT, DATA_ACK, ALERT_RPT, ALERT_ACK} LoRA_State;
@@ -125,6 +126,8 @@ bool  LoRA_Functions::initializeRadio() {  			// Set up the Radio Module
 	}
 	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
 	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
+	// driver.setModemConfig(RH_RF95::Bw500Cr45Sf128);	// This optimized the radio for long range - https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html
+	//manager.setTimeout(2000);						// 200mSec is the default - may need to extend once we play with other settings on the modem - https://www.airspayce.com/mikem/arduino/RadioHead/classRHReliableDatagram.html
 
 return true;
 }

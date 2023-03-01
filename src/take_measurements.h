@@ -79,4 +79,12 @@ void getSignalStrength();
  */
 bool recordCount();
 
+/**
+ * @brief soft delay let's us process Particle functions and service the sensor interrupts while pausing
+ * 
+ * @details takes a single unsigned long input in millis
+ * 
+ */
+void softDelay(uint32_t t);                 		// Soft delay is safer than delay
+
 #endif

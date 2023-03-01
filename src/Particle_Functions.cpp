@@ -205,6 +205,21 @@ int Particle_Functions::jsonFunctionParser(String command) {
         success = false;                                                       // Make sure it falls in a valid range or send a "fail" result
       }
     }
+    // Power Cycle the Device
+    else if (function == "pwr") {
+      // Format - function - pwr, node - 0, variables - 1
+      // Test - {"cmd":[{"node":0, "var":"1","fn":"pwr"}]}
+      int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+      if ((tempValue >= 0 ) && (tempValue <= 1)) {
+        snprintf(messaging,sizeof(messaging),"Setting Alert Code to Trigger Reset");
+        sysStatus.set_alertCodeGateway(1);
+        sysStatus.set_alertTimestampGateway(Time.now());
+      }
+      else {
+        snprintf(messaging,sizeof(messaging),"Power Cycle value not = 1)");
+        success = false;                                                       // Make sure it falls in a valid range or send a "fail" result
+      }
+    }
     // What if none of these functions are recognized
     else {
       snprintf(messaging,sizeof(messaging),"Not a valid command");

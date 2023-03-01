@@ -32,7 +32,7 @@
 // v1.05 - Improved the erase node functions
 // v2.00 - First Release for actual deployment
 // V6.00 - Reliability Updates - Stays connected longer if a node fails to check in - deployed to Pilot Mountain on 2/16/23
-// v7.00 - Added Signal to Noise Ratio to hourly reporting / webhook
+// v7.00 - Added Signal to Noise Ratio to hourly reporting / webhook, battery level monitoring improvements, added power cycle function
 
 #define DEFAULT_LORA_WINDOW 3
 #define LONG_LORA_WINDOW 10
@@ -59,6 +59,7 @@ void publishStateTransition(void);                  // Keeps track of state mach
 void userSwitchISR();                               // interrupt service routime for the user switch
 int secondsUntilNextEvent(); 						// Time till next scheduled event
 void publishWebhook(uint8_t nodeNumber);			// Publish data based on node number
+void softDelay(uint32_t t);                 		// Soft delay is safer than delay
 
 // System Health Variables
 int outOfMemory = -1;                               // From reference code provided in AN0023 (see above)
@@ -115,7 +116,8 @@ void setup()
 		state = CONNECTING_STATE;
 	}
 
-	if (!digitalRead(BUTTON_PIN)) {
+	//if (!digitalRead(BUTTON_PIN)) {
+	{
 		Log.info("User button pressed, connected mode");
 		sysStatus.set_connectivityMode(3);					  // connectivityMode Code 3 keeps both LoRA and Cellular connections on
 		state = CONNECTING_STATE;
@@ -135,13 +137,14 @@ void loop() {
 				nextEventTime = false;
 				state = LoRA_STATE;		   										// See Time section in setup for schedule
 			}
+			else if (sysStatus.get_alertCodeGateway() != 0) state = ERROR_STATE;
 			else state = SLEEPING_STATE;	// Go to sleep unless we are in the connected state										
 		} break;
 
 		case SLEEPING_STATE: {
 			if (state != oldState) publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 			ab1805.stopWDT();  												   // No watchdogs interrupting our slumber
-			int wakeInSeconds = secondsUntilNextEvent();  		   		   	   // Time till next event
+			int wakeInSeconds = secondsUntilNextEvent();  		   		   	   // Time till next event minus one second for fuelgauge delay
 			time_t time = Time.now() + wakeInSeconds;
 			Log.info("Sleep for %i seconds till next event at %s with %li free memory", wakeInSeconds, Time.format(time, "%T").c_str(),System.freeMemory());
 			config.mode(SystemSleepMode::ULTRA_LOW_POWER)
@@ -149,9 +152,17 @@ void loop() {
 				.duration(wakeInSeconds * 1000L);
 			SystemSleepResult result = System.sleep(config);                   // Put the device to sleep device continues operations from here
 			ab1805.resumeWDT();                                                // Wakey Wakey - WDT can resume
+			if (result.wakeupPin() == BUTTON_PIN) {
+				waitFor(Serial.isConnected, 10000);							   // Wait for serial connection
+				softDelay(1000);
+				Log.info("Woke with user button");
+			}
+			else {															   // Awoke for time
+				Log.info("Awoke at %s with %li free memory", Time.format(Time.now(), "%T").c_str(), System.freeMemory());
+			}
 			state = IDLE_STATE;
 			nextEventTime = true;
-			Log.info("Awoke at %s with %li free memory", Time.format(Time.now(), "%T").c_str(), System.freeMemory());
+
 		} break;
 
 		case LoRA_STATE: {														// Enter this state every reporting period and stay here for 5 minutes
@@ -248,11 +259,15 @@ void loop() {
 		case ERROR_STATE: {
 			static system_tick_t resetTimeout = millis();
 
-			if (state != oldState) publishStateTransition();
+			if (state != oldState) {
+				publishStateTransition();
+				if (Particle.connected()) Particle.publish("Alert","Deep power down in 30 seconds", PRIVATE);
+				sysStatus.set_alertCodeGateway(0);			// Reset this
+			}
 
 			if (millis() - resetTimeout > 30000L) {
 				Log.info("Deep power down device");
-				delay(2000);
+				softDelay(2000);
 				ab1805.deepPowerDown(); 
 			}
 		} break;
@@ -260,7 +275,9 @@ void loop() {
 
 	ab1805.loop();                                  // Keeps the RTC synchronized with the Boron's clock
 
-	PublishQueuePosix::instance().loop();           // Check to see if we need to tend to the message queue
+	PublishQueuePosix::instance().loop();           // Check to see if we need to tend to the message 
+	
+	if (sysStatus.get_alertCodeGateway() != 0) state = ERROR_STATE;
 
 	sysStatus.loop();
 	current.loop();
@@ -270,7 +287,7 @@ void loop() {
 
 	if (outOfMemory >= 0) {                         // In this function we are going to reset the system if there is an out of memory error
 		Log.info("Resetting due to low memory");
-		delay(2000);
+		softDelay(2000);
 		System.reset();
   	}
 }
@@ -353,3 +370,12 @@ void publishWebhook(uint8_t nodeNumber) {
 	return;
 }
 
+/**
+ * @brief soft delay let's us process Particle functions and service the sensor interrupts while pausing
+ * 
+ * @details takes a single unsigned long input in millis
+ * 
+ */
+inline void softDelay(uint32_t t) {
+  for (uint32_t ms = millis(); millis() - ms < t; Particle.process());  //  safer than a delay()
+}
