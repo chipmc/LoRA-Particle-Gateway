@@ -285,6 +285,7 @@ public:
 		uint8_t batteryState;                             // Stores the current battery state (charging, discharging, etc)
 		uint8_t resetCount;								  // This is the number of resets for the node publishing data
 		int16_t RSSI;                                     // Latest LoRA signal strength value from the Node
+		int16_t SNR;									  // Latest LoRA Signal to Noise Ration from the Node
 		uint8_t messageCount;                             // What message are we on
 		uint8_t successCount;							  // How many attempts have been successful - from the node
 		time_t lastCountTime;                             // When did we last record a count
@@ -294,7 +295,8 @@ public:
 		time_t alertTimestampNode;                 	      // Timestamp of alert
 		bool openHours; 								  // Will set to true or false based on time of dat
 		uint8_t sensorType;								  // What is the sensor type of the node sending current data
-		int16_t SNR;									  // What was the signal to noise ratio of the last report
+		uint8_t	hops;									  // How many hops did the message take to get to the gateway
+		uint16_t productVersion;						  // What release is the node running?
 		// OK to add more fields here 
 	};
 	CurrentData currentData;
@@ -351,6 +353,9 @@ public:
 	int16_t get_RSSI() const;
 	void set_RSSI(int16_t value);
 
+	int16_t get_SNR() const;
+	void set_SNR(int16_t value);
+
 	uint8_t get_messageCount() const;
 	void set_messageCount(uint8_t value);
 
@@ -378,8 +383,11 @@ public:
 	uint8_t get_sensorType() const;
 	void set_sensorType(uint8_t value);
 
-	int16_t get_SNR() const;
-	void set_SNR(int16_t value);
+	uint8_t get_hops() const;
+	void set_hops(uint8_t value);
+
+	uint16_t get_productVersion() const;
+	void set_productVersion(uint16_t value);
 
 
 		//Members here are internal only and therefore protected
@@ -414,8 +422,8 @@ protected:
     static currentStatusData *_instance;
 
     //Since these variables are only used internally - They can be private. 
-	static const uint32_t CURRENT_DATA_MAGIC = 0x20a99e76;
-	static const uint16_t CURRENT_DATA_VERSION = 1;
+	static const uint32_t CURRENT_DATA_MAGIC = 0x20a99e80;
+	static const uint16_t CURRENT_DATA_VERSION = 3;
 };
 
 

@@ -69,7 +69,7 @@ bool LoRA_Functions::setup(bool gatewayID) {
 
 	if (gatewayID == true) {
 		sysStatus.set_nodeNumber(GATEWAY_ADDRESS);							// Gateway - Manager is initialized by default with GATEWAY_ADDRESS - make sure it is stored in FRAM
-		Log.info("LoRA Radio initialized as a gateway with a deviceID of %s", System.deviceID().c_str());
+		Log.info("LoRA Radio initialized as a gateway (address %d) with a deviceID of %s", GATEWAY_ADDRESS, System.deviceID().c_str());
 	}
 	else if (sysStatus.get_nodeNumber() > 0 && sysStatus.get_nodeNumber() <= 10) {
 		manager.setThisAddress(sysStatus.get_nodeNumber());// Node - use the Node address in valid range from memory
@@ -126,9 +126,10 @@ bool  LoRA_Functions::initializeRadio() {  			// Set up the Radio Module
 	}
 	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
 	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
-	driver.setModemConfig(RH_RF95::Bw125Cr48Sf4096);	// This optimized the radio for long range - https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html
+	driver.setModemConfig(RH_RF95::Bw125Cr45Sf2048);
+	//driver.setModemConfig(RH_RF95::Bw125Cr48Sf4096);	// This optimized the radio for long range - https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html
+	driver.setLowDatarate();						// https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html#a8e2df6a6d2cb192b13bd572a7005da67
 	manager.setTimeout(2000);						// 200mSec is the default - may need to extend once we play with other settings on the modem - https://www.airspayce.com/mikem/arduino/RadioHead/classRHReliableDatagram.html
-
 return true;
 }
 
@@ -156,17 +157,20 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 		}
 		current.set_nodeNumber(from);												// Captures the nodeNumber 
 		current.set_tempNodeNumber(0);												// Clear for new response
-		current.set_RSSI(driver.lastRssi());										// Signal strength
-		current.set_SNR(driver.lastSNR());											// Signal to noise ratio
+		current.set_hops(hops);														// How many hops to get here
 		current.set_nodeID(buf[2] << 8 | buf[3]);									// Captures the nodeID for Data or Alert reports
 		lora_state = (LoRA_State)(0x0F & messageFlag);								// Strip out the overhead byte to get the message flag
-		Log.info("Node %d with ID %d a %s message with RSSI/SNR of %d / %d", current.get_nodeNumber(), current.get_nodeID(), loraStateNames[lora_state], current.get_RSSI(), current.get_SNR());
+		Log.info("Node %d with ID %d a %s message with RSSI/SNR of %d / %d in %d hops", current.get_nodeNumber(), current.get_nodeID(), loraStateNames[lora_state], driver.lastRssi(), driver.lastSNR(), current.get_hops());
 
 		// Next we need to test the nodeNumber / deviceID to make sure this node is properly configured
 		if (current.get_nodeNumber() < 11 && !LoRA_Functions::instance().nodeConfigured(current.get_nodeNumber(),current.get_nodeID())) {
 			Log.info("Node not properly configured, resetting node number");
-			current.set_tempNodeNumber(current.get_nodeNumber());				// Store node number in temp for the repsonse
-			current.set_nodeNumber(11);											// Set node number to 11
+			current.set_tempNodeNumber(current.get_nodeNumber());					// Store node number in temp for the repsonse
+			current.set_nodeNumber(11);												// Set node number to 11
+		}
+		else if (current.get_nodeNumber() >= 11) {
+			current.set_tempNodeNumber(from);										// We need this address for the reply					
+			current.set_nodeNumber(11);												// This way an unconfigured nor invalid node ends up wtih a node number of 11
 		}
 
 		if (lora_state == DATA_RPT) {if(!LoRA_Functions::instance().decipherDataReportGateway()) return false;}
@@ -184,7 +188,9 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 		else if (lora_state == JOIN_ACK) { if(LoRA_Functions::instance().acknowledgeJoinRequestGateway()) return true;}
 		else {Log.info("Invalid message flag"); return false;}
 	}
+	else LoRA_Functions::clearBuffer();
 	return false;
+
 }
 
 // These are the receive and respond messages for data reports
@@ -199,6 +205,8 @@ bool LoRA_Functions::decipherDataReportGateway() {			// Receives the data report
 	current.set_resetCount(buf[12]);
 	current.set_messageCount(buf[13]);
 	current.set_successCount(buf[14]);
+	current.set_RSSI(buf[15] << 8 | buf[16]);				// These values are from the node based on the last successful data report
+	current.set_SNR(buf[17] << 8 | buf[18]);
 
 	lora_state = DATA_ACK;		// Prepare to respond
 	return true;
@@ -226,7 +234,7 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 		current.set_alertCodeNode(LoRA_Functions::getAlert(current.get_nodeNumber()));
 		if (current.get_alertCodeNode() > 0) Log.info("Node %d has a pending alert %d", current.get_nodeNumber(), current.get_alertCodeNode());
 	
-		if (current.get_alertCodeNode() == 7) {							// if it is a change in type alert - we can do that here
+		if (current.get_alertCodeNode() == 7) {		// if it is a change in type alert - we can do that here
 			int newSensorType = LoRA_Functions::getType(current.get_nodeNumber());
 			Log.info("In data acknowledge, changing type to from %d to %d", current.get_sensorType(), newSensorType );
 			current.set_sensorType(newSensorType);	// Update current value for data report
@@ -247,7 +255,7 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 	buf[10] = current.get_openHours();
 	buf[11] = current.get_messageCount();			// Repeat back message number
 
-	// nodeDatabase.flush(true);						// Save updates to the nodID database
+	// nodeDatabase.flush(true);					// Save updates to the nodID database
 	// current.flush(true);							// Save values reported by the nodes
 	digitalWrite(BLUE_LED,HIGH);			       	// Sending data
 
@@ -262,7 +270,7 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 		return true;
 	}
 	else {
-		Log.info("Node %d data report response not acknowledged", current.get_nodeNumber());
+		Log.info("Node %d data report response not acknowledged", nodeAddress);
 		digitalWrite(BLUE_LED,LOW);
 		return false;
 	}
@@ -279,19 +287,12 @@ bool LoRA_Functions::decipherJoinRequestGateway() {			// Ths only question here 
 		nodeDeviceID[i] = buf[i+4];
 	}
 	current.set_sensorType(buf[29]);								// Store device type in the current data buffer 
-
-	if (current.get_nodeNumber() < 11 && !LoRA_Functions::instance().nodeConfigured(current.get_nodeNumber(),current.get_nodeID())) {
-		Log.info("Node %d join request from %s setting clock",current.get_nodeNumber(), nodeDeviceID);
-	}
-	else {
-		current.set_tempNodeNumber(current.get_nodeNumber());			// Store the old node number for the ack - also differentiates between unconfigured node and time set
-		current.set_nodeNumber(findNodeNumber(nodeDeviceID,current.get_nodeID()));		// Look up the new node number
-		Log.info("Node %d join request from %s will change node number to %d", current.get_tempNodeNumber(), nodeDeviceID ,current.get_nodeNumber());
-	}
+	current.set_nodeNumber(findNodeNumber(nodeDeviceID,current.get_nodeID()));		// Look up the new node number
+	
+	Log.info("Node %d join request from %s will change node number to %d", current.get_tempNodeNumber(), nodeDeviceID ,current.get_nodeNumber());
 
 	current.set_alertCodeNode(1);									// This is a join request so alert code is 1
 	current.set_alertTimestampNode(Time.now());
-	if (current.get_nodeNumber() == 11) return false;
 
 	LoRA_Functions::changeType(current.get_nodeNumber(),current.get_sensorType());  // Record the sensor type in the nodeID structure
 
@@ -321,10 +322,11 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	digitalWrite(BLUE_LED,HIGH);			        				// Sending data
 
 	byte nodeAddress = (current.get_tempNodeNumber() == 0) ? current.get_nodeNumber() : current.get_tempNodeNumber();  // get the return address right
+
 	Log.info("Sending response to %d with free memory = %li", nodeAddress, System.freeMemory());
 
 	if (manager.sendtoWait(buf, 11, nodeAddress, JOIN_ACK) == RH_ROUTER_ERROR_NONE) {
-		current.set_tempNodeNumber(current.get_nodeNumber());		// Temp no longer needed
+		current.set_tempNodeNumber(0);								// Temp no longer needed
 		digitalWrite(BLUE_LED,LOW);
 		snprintf(messageString,sizeof(messageString),"Node %d joined with sensorType %s, alert %d and RSSI / SNR of %d / %d", nodeAddress, (buf[10] ==0)? "car":"person",current.get_alertCodeNode(), current.get_RSSI(), current.get_SNR());
 		Log.info(messageString);
@@ -346,7 +348,7 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 {nodes:[
 	{
 		{node:(int)nodeNumber},
-		{dID: (String){deviceID},
+		{dID: (String)deviceID},
 		{rID: (int)radioID},
 		{last: (time_t)lastConnectTime},
 		{type: (int)sensorType},
@@ -634,14 +636,7 @@ bool LoRA_Functions::nodeConnectionsHealthy() {								// Connections are health
 	}
 
 	Log.info("Node connections are %s ", (health) ? "healthy":"unhealthy");
-
-	if(!health) {
-		Log.info("Node connections unhealthy, reseting LoRA radio");
-		sysStatus.set_connectivityMode(1);									// This will set a longer LoRA connection window
-		LoRA_Functions::initializeRadio();
-	}
-	else sysStatus.set_connectivityMode(0);									// This will set a normal LoRA connection window
-
+	if(!health) LoRA_Functions::initializeRadio();
 	return health;
 }
 

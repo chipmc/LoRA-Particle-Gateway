@@ -135,11 +135,14 @@ int Particle_Functions::jsonFunctionParser(String command) {
       // Test - {"cmd":[{"node":0,"var":"true" or "false","fn":"stay"}]}
       if (variable == "true") {
         snprintf(messaging,sizeof(messaging),"Going to keep Gateway on Particle and LoRA networks");
-        sysStatus.set_connectivityMode(3);
+        sysStatus.set_connectivityMode(1);
       }
       else {
         snprintf(messaging,sizeof(messaging),"Going back to normal connectivity");
-        sysStatus.set_connectivityMode(0);
+        sysStatus.set_connectivityMode(0);                            // Make sure we are set to not connect on resetart.
+        sysStatus.flush(true);    
+        Particle_Functions::disconnectFromParticle();                 // Can't reset if modem is powered up
+        System.reset();                                               // Needed to disconnect from LoRA
       }
     }
     // Node ID Report
@@ -210,7 +213,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
       // Format - function - pwr, node - 0, variables - 1
       // Test - {"cmd":[{"node":0, "var":"1","fn":"pwr"}]}
       int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
-      if ((tempValue >= 0 ) && (tempValue <= 1)) {
+      if (tempValue == 1) {
         snprintf(messaging,sizeof(messaging),"Setting Alert Code to Trigger Reset");
         sysStatus.set_alertCodeGateway(1);
         sysStatus.set_alertTimestampGateway(Time.now());

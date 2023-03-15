@@ -365,6 +365,14 @@ void currentStatusData::set_RSSI(int16_t value) {
     setValue<int16_t>(offsetof(CurrentData, RSSI), value);
 }
 
+int16_t currentStatusData::get_SNR() const {
+    return getValue<int16_t>(offsetof(CurrentData, SNR));
+}
+
+void currentStatusData::set_SNR(int16_t value) {
+    setValue<int16_t>(offsetof(CurrentData, SNR), value);
+}
+
 uint8_t currentStatusData::get_messageCount() const {
     return getValue<uint8_t>(offsetof(CurrentData, messageCount));
 }
@@ -437,14 +445,21 @@ void currentStatusData::set_sensorType(uint8_t value) {
     setValue<uint8_t>(offsetof(CurrentData, sensorType), value);
 }
 
-int16_t currentStatusData::get_SNR() const {
-    return getValue<int16_t>(offsetof(CurrentData, SNR));
+uint8_t currentStatusData::get_hops() const {
+    return getValue<uint8_t>(offsetof(CurrentData, hops));
 }
 
-void currentStatusData::set_SNR(int16_t value) {
-    setValue<int16_t>(offsetof(CurrentData, SNR), value);
+void currentStatusData::set_hops(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, hops), value);
 }
 
+uint16_t currentStatusData::get_productVersion() const {
+    return getValue<uint16_t>(offsetof(CurrentData, productVersion));
+}
+
+void currentStatusData::set_productVersion(uint16_t value) {
+    setValue<uint16_t>(offsetof(CurrentData, productVersion), value);
+}
 
 // *******************  nodeID Storage Object **********************
 //
