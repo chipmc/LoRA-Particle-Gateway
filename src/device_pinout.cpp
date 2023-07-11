@@ -33,7 +33,7 @@
  * D5 -                     
  * D4 -                     User Switch
  * D3 - 
- * D2 -                     RFM9x
+ * D2 -                     DIO0 RFM9x
  * D1 - SCL - I2C Clock -   FRAM / RTC and I2C Bus
  * D0 - SDA - I2C Data -    FRAM / RTX and I2C Bus
 ***********************************************************************************************************************/
