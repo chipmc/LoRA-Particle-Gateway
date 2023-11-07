@@ -89,8 +89,7 @@ public:
 		time_t alertTimestampGateway;              		  // When was the last alert
 		uint8_t openTime;                                 // Open time 24 hours
 		uint8_t closeTime;                                // Close time 24 hours
-		bool verizonSIM;                                  // Are we using a Verizon SIM?
-		uint8_t sensorType;								  // What sensor if any is on this device (0-none, 1-PIR, 2-Pressure, ...)
+		uint8_t sensorType;								  // What sensor if any is on this device (0-none, 1-PIR, 2-Pressure, 3 - Soil...)
 	};
 	SysData sysData;
 
@@ -162,9 +161,6 @@ public:
 
 	uint8_t get_closeTime() const;
 	void set_closeTime(uint8_t value);
-
-	bool get_verizonSIM() const;
-	void set_verizonSIM(bool value);
 
 	uint8_t get_sensorType() const;
 	void set_sensorType(uint8_t value);
@@ -285,7 +281,7 @@ public:
 		uint8_t batteryState;                             // Stores the current battery state (charging, discharging, etc)
 		uint8_t resetCount;								  // This is the number of resets for the node publishing data
 		int16_t RSSI;                                     // Latest LoRA signal strength value from the Node
-		int16_t SNR;									  // Latest LoRA Signal to Noise Ration from the Node
+		int16_t SNR;									  // Latest LoRA Signal to Noise Ratio from the Node
 		uint8_t messageCount;                             // What message are we on
 		uint8_t successCount;							  // How many attempts have been successful - from the node
 		time_t lastCountTime;                             // When did we last record a count
@@ -297,6 +293,7 @@ public:
 		uint8_t sensorType;								  // What is the sensor type of the node sending current data
 		uint8_t	hops;									  // How many hops did the message take to get to the gateway
 		uint16_t productVersion;						  // What release is the node running?
+		float soilVWC;									  // Soil Volumetric Water Content
 		// OK to add more fields here 
 	};
 	CurrentData currentData;
@@ -388,6 +385,9 @@ public:
 
 	uint16_t get_productVersion() const;
 	void set_productVersion(uint16_t value);
+
+	float get_soilVWC() const;
+	void set_soilVWC(float value);
 
 
 		//Members here are internal only and therefore protected

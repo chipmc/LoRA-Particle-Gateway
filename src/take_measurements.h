@@ -28,6 +28,7 @@ extern char signalStr[64];
  */
 bool takeMeasurements();                               // Function that calls the needed functions in turn
 
+
 /**
  * @brief tmp36TemperatureC
  * 

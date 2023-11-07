@@ -24,7 +24,6 @@ bool takeMeasurements() {
 
 }
 
-
 float tmp36TemperatureC (int adcValue) { 
     // Analog inputs have values from 0-4095, or
     // 12-bit precision. 0 = 0V, 4095 = 3.3V, 0.0008 volts (0.8 mV) per unit

@@ -126,10 +126,11 @@ bool  LoRA_Functions::initializeRadio() {  			// Set up the Radio Module
 	}
 	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
 	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
-	driver.setModemConfig(RH_RF95::Bw125Cr45Sf2048);
+	// driver.setModemConfig(RH_RF95::Bw125Cr45Sf2048);  // This is the setting appropriate for parks
+	driver.setModemConfig(RH_RF95::Bw500Cr45Sf128);	 // Optimized for fast transmission and short range - MAFC
 	//driver.setModemConfig(RH_RF95::Bw125Cr48Sf4096);	// This optimized the radio for long range - https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html
 	driver.setLowDatarate();						// https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html#a8e2df6a6d2cb192b13bd572a7005da67
-	manager.setTimeout(2000);						// 200mSec is the default - may need to extend once we play with other settings on the modem - https://www.airspayce.com/mikem/arduino/RadioHead/classRHReliableDatagram.html
+	manager.setTimeout(1000);						// 200mSec is the default - may need to extend once we play with other settings on the modem - https://www.airspayce.com/mikem/arduino/RadioHead/classRHReliableDatagram.html
 return true;
 }
 
@@ -196,9 +197,27 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 // These are the receive and respond messages for data reports
 
 bool LoRA_Functions::decipherDataReportGateway() {			// Receives the data report and loads results into current object for reporting
-	current.set_hourlyCount(buf[4] << 8 | buf[5]);
-	current.set_dailyCount(buf[6] << 8 | buf[7]);
+
+	union floatToByte
+	{
+	unsigned char buf[4];
+	float number;
+	} floatToByte;
+
 	current.set_sensorType(buf[8]);
+	if (current.get_sensorType() <=2) {
+		current.set_hourlyCount(buf[4] << 8 | buf[5]);
+		current.set_dailyCount(buf[6] << 8 | buf[7]);
+		Log.info("Sensor type of %d with hourly count of %d and daily count of %d", current.get_sensorType(), current.get_hourlyCount(), current.get_dailyCount());
+	}
+	else {
+		floatToByte.buf[3] = buf[4];
+		floatToByte.buf[2] = buf[5];
+		floatToByte.buf[1] = buf[6];
+		floatToByte.buf[0] = buf[7];
+		current.set_soilVWC(floatToByte.number);
+		Log.info("Soil VWC is %4.2f - %d/%d/%d/%d",current.get_soilVWC(),floatToByte.buf[3],floatToByte.buf[2],floatToByte.buf[1],floatToByte.buf[0]);
+	}
 	current.set_internalTempC(buf[9]);
 	current.set_stateOfCharge(buf[10]);
 	current.set_batteryState(buf[11]);
@@ -207,6 +226,8 @@ bool LoRA_Functions::decipherDataReportGateway() {			// Receives the data report
 	current.set_successCount(buf[14]);
 	current.set_RSSI(buf[15] << 8 | buf[16]);				// These values are from the node based on the last successful data report
 	current.set_SNR(buf[17] << 8 | buf[18]);
+
+	Log.info("Data recieved from the report: hourly %d, daily %d, sensorType %d, temp %d, battery %d, batteryState %d, resets %d, message count %d, success count %d, RSSI %d, SNR %d", (buf[4] << 8 | buf[5]), (buf[6] <<8 | buf[7]), buf[8], buf[9], buf[10], buf[11], buf[12], buf[13], buf[14], buf[15] << 8 | buf[16], buf[17] << 8 | buf[18]);
 
 	lora_state = DATA_ACK;		// Prepare to respond
 	return true;
@@ -255,8 +276,8 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 	buf[10] = current.get_openHours();
 	buf[11] = current.get_messageCount();			// Repeat back message number
 
-	// nodeDatabase.flush(true);					// Save updates to the nodID database
-	// current.flush(true);							// Save values reported by the nodes
+	nodeDatabase.flush(true);						// Save updates to the nodID database
+	current.flush(true);							// Save values reported by the nodes
 	digitalWrite(BLUE_LED,HIGH);			       	// Sending data
 
 	byte nodeAddress = (current.get_tempNodeNumber() == 0) ? current.get_nodeNumber() : current.get_tempNodeNumber();  // get the return address right
@@ -279,17 +300,12 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 
 // These are the receive and respond messages for join requests
 bool LoRA_Functions::decipherJoinRequestGateway() {			// Ths only question here is whether the node with the join request needs a new nodeNumber or is just looking for a clock set
-	char nodeDeviceID[25];
 	// buf[0] - buf[1] Magic number processed above
-	// but[2] - buf[3] nodeID processed above
-	// buf[4] - buf[28] needs to be loaded here
-	for (uint8_t i=0; i<sizeof(nodeDeviceID); i++) {
-		nodeDeviceID[i] = buf[i+4];
-	}
-	current.set_sensorType(buf[29]);								// Store device type in the current data buffer 
-	current.set_nodeNumber(findNodeNumber(nodeDeviceID,current.get_nodeID()));		// Look up the new node number
+	// buf[2] - buf[3] NodeID processed above
+	current.set_sensorType(buf[4]);								// Store device type in the current data buffer 
+	current.set_nodeNumber(findNodeNumber(current.get_nodeNumber(), current.get_nodeID()));		// Look up the new node number
 	
-	Log.info("Node %d join request from %s will change node number to %d", current.get_tempNodeNumber(), nodeDeviceID ,current.get_nodeNumber());
+	Log.info("Node %d join request from nodeID %d will change node number to %d", current.get_tempNodeNumber(), current.get_nodeID(),current.get_nodeNumber());
 
 	current.set_alertCodeNode(1);									// This is a join request so alert code is 1
 	current.set_alertTimestampNode(Time.now());
@@ -348,8 +364,7 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 {nodes:[
 	{
 		{node:(int)nodeNumber},
-		{dID: (String)deviceID},
-		{rID: (int)radioID},
+		{nID: (int)nodeID},
 		{last: (time_t)lastConnectTime},
 		{type: (int)sensorType},
 		{succ: (float)successfulSent%},
@@ -361,16 +376,10 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 
 
 // These functions access data in the nodeID JSON
-uint8_t LoRA_Functions::findNodeNumber(const char* deviceID, int radioID) {
+uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, int nodeID) {
 	int index=1;															// Variables to hold values for the function
-	String nodeDeviceID;
-	int nodeNumber;
-
-	if (radioID != LoRA_Functions::stringCheckSum(deviceID)) {
-		Log.info("DeviceID and checksum mismatch - setting node to 11");
-		return 11;															// Return value for unconfigured node
-	}
-	else Log.info("Checksum validated");
+	int nodeDeviceNumber;
+	int nodeDeviceID;
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
@@ -382,26 +391,25 @@ uint8_t LoRA_Functions::findNodeNumber(const char* deviceID, int radioID) {
 			Log.info("findNodeNumber ran out of entries at i = %d",i);
 			break;															// Ran out of entries - no match found
 		} 
-		jp.getValueByKey(nodeObjectContainer, "dID", nodeDeviceID);			// Get the deviceID and compare
-		if (nodeDeviceID == deviceID) {
-			jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);		// A match!
-			return nodeNumber;												// All is good - return node number for the deviceID passed to the function
+		jp.getValueByKey(nodeObjectContainer, "nID", nodeDeviceID);			// Get the deviceID and compare
+		if (nodeDeviceID == nodeID) {
+			jp.getValueByKey(nodeObjectContainer, "node", nodeDeviceNumber);		// A match!
+			return nodeDeviceNumber;												// All is good - return node number for the deviceID passed to the function
 		}
 		index++;															// This will be the node number for the next node if no match is found
 	}
-	// If we got to here, the deviceID was not a match for any entry and a new nodeNumer will be assigned
+	// If we got to here, the nodeID was not a match for any entry and a new nodeNumer will be assigned
 	nodeNumber = index;
 	JsonModifier mod(jp);
 
-	Log.info("New node will be assigned number %d, deviceID of %s",nodeNumber, deviceID);
+	Log.info("New node will be assigned node number %d, nodeID of %d",nodeNumber, nodeID);
 
 	mod.startAppend(jp.getOuterArray());
 		mod.startObject();
 		mod.insertKeyValue("node", nodeNumber);
-		mod.insertKeyValue("dID", deviceID);
-		mod.insertKeyValue("rID",radioID);
+		mod.insertKeyValue("nID", nodeID);
 		mod.insertKeyValue("last", Time.now());
-		mod.insertKeyValue("type", (int)3);									// This is a temp value that will be updated
+		mod.insertKeyValue("type", (int)9);									// This is a temp value that will be updated
 		mod.insertKeyValue("succ",(float)0.0);								// This is a temp value that will be updated
 		mod.insertKeyValue("pend",(int)0);
 		mod.finishObjectOrArray();
@@ -575,8 +583,7 @@ bool LoRA_Functions::changeAlert(int nodeNumber, int newAlert) {
 
 void LoRA_Functions::printNodeData(bool publish) {
 	int nodeNumber;
-	int radioID;
-	String nodeDeviceID;
+	int nodeID;
 	int lastConnect;
 	int sensorType;
 	float successPercent;
@@ -592,15 +599,14 @@ void LoRA_Functions::printNodeData(bool publish) {
 		if(nodeObjectContainer == NULL) {
 			break;								// Ran out of entries 
 		} 
-		jp.getValueByKey(nodeObjectContainer, "dID", nodeDeviceID);
-		jp.getValueByKey(nodeObjectContainer,"rID", radioID);
+		jp.getValueByKey(nodeObjectContainer, "nID", nodeID);
 		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);
 		jp.getValueByKey(nodeObjectContainer, "last", lastConnect);
 		jp.getValueByKey(nodeObjectContainer, "type", sensorType);
 		jp.getValueByKey(nodeObjectContainer, "succ", successPercent);
 		jp.getValueByKey(nodeObjectContainer, "pend", pendingAlert);
 
-		snprintf(data, sizeof(data), "Node %d, deviceID: %s, checksum %d, lastConnected: %s, type %d, success %4.2f with pending alert %d", nodeNumber, nodeDeviceID.c_str(), radioID, Time.timeStr(lastConnect).c_str(), sensorType, successPercent, pendingAlert);
+		snprintf(data, sizeof(data), "Node %d, nodeID %d, lastConnected: %s, type %d, success %4.2f with pending alert %d", nodeNumber, nodeID, Time.timeStr(lastConnect).c_str(), sensorType, successPercent, pendingAlert);
 		Log.info(data);
 		if (Particle.connected() && publish) {
 			Particle.publish("nodeData", data, PRIVATE);

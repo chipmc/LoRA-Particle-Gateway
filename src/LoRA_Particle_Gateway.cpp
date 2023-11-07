@@ -34,6 +34,10 @@
 // V6.00 - Reliability Updates - Stays connected longer if a node fails to check in - deployed to Pilot Mountain on 2/16/23
 // v7.00 - Added Signal to Noise Ratio to hourly reporting / webhook, battery level monitoring improvements, added power cycle function - Optimized for stick antenna - new center freq
 // v9.00 - Breaking Change - v10 Node Required - Node Now Reports RSSI / SNR to Gateway, Simplified Join Request Logic, Storing / reporting hops
+// v9.10 - Added Verizon code
+// v11.00 - Verizon code no longer needed, Updated to include Soil Moisture sensor type and webhook
+// v12.00 - Added support for the See Insights LoRA Node v1
+
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -52,7 +56,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(9);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="9.00";
+char currentPointRelease[6] ="12.00";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -90,7 +94,7 @@ void setup()
 	sysStatus.setup();
 	current.setup();
 	nodeDatabase.setup();
-
+	
     Particle_Functions::instance().setup();         // Sets up all the Particle functions and variables defined in particle_fn.h
                          
     ab1805.withFOUT(D8).setup();                	// Initialize AB1805 RTC   
@@ -180,6 +184,7 @@ void loop() {
 			} 
 
 			if (LoRA_Functions::instance().listenForLoRAMessageGateway()) {
+				Log.info("Received LoRA message from node %d", current.get_nodeNumber());
 				if (current.get_alertCodeNode() != 1 && current.get_openHours()) {				// We don't report Join alerts or after hours
 					state = REPORTING_STATE; 													// Received and acknowledged data from a node - need to report the alert
 				}
@@ -325,22 +330,37 @@ void publishWebhook(uint8_t nodeNumber) {
 	char data[256];                             						// Store the date in this character array - not global
 	// Battery conect information - https://docs.particle.io/reference/device-os/firmware/boron/#batterystate-
     const char* batteryContext[8] = {"Unknown","Not Charging","Charging","Charged","Discharging","Fault","Diconnected"};
+	Log.info("Publishing webhook for node %d", nodeNumber);
 
-	if (!Time.isValid()) return;										// A webhook without a valid timestamp is worthless
+	if (!Time.isValid()) {
+		return;										// A webhook without a valid timestamp is worthless
+		Log.info("Time is not valid - not publishing webhook");
+	}
+	Log.info("Time is valid - publishing webhook");
 	unsigned long endTimePeriod = Time.now() - (Time.second() + 1);		// Moves the timestamp withing the reporting boundary - so 18:00:14 becomes 17:59:59 - helps in Ubidots reporting
 
 	if (nodeNumber > 0) {												// Webhook for a node
-		String deviceID = LoRA_Functions::instance().findDeviceID(nodeNumber, current.get_nodeID());
-		if (deviceID == "null") return;									// A webhook without a deviceID is worthless
+		Log.info("Publishing for nodeNumber is %i with %i", nodeNumber, current.get_nodeID());
 
 		float percentSuccess = ((current.get_successCount() * 1.0)/ current.get_messageCount())*100.0;
 
-		snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"hourly\":%u, \"daily\":%u, \"sensortype\":%d, \"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d,  \"snr\":%d, \"hops\":%d, \"msg\":%d, \"success\":%4.2f, \"timestamp\":%lu000}",\
-		deviceID.c_str(), current.get_hourlyCount(), current.get_dailyCount(), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
-		current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_hops(), current.get_messageCount(), percentSuccess, endTimePeriod);
-		PublishQueuePosix::instance().publish("Ubidots-LoRA-Node-v1", data, PRIVATE | WITH_ACK);
+		if (current.get_sensorType() <= 2) {			// Visitation Counter Webhooks
+			snprintf(data, sizeof(data), "{\"deviceid\":\"%i\", \"hourly\":%u, \"daily\":%u, \"sensortype\":%d, \"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d,  \"snr\":%d, \"hops\":%d, \"msg\":%d, \"success\":%4.2f, \"timestamp\":%lu000}",\
+			current.get_nodeID(), current.get_hourlyCount(), current.get_dailyCount(), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
+			current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_hops(), current.get_messageCount(), percentSuccess, endTimePeriod);
+			Log.info("Data is %s", data);
+			PublishQueuePosix::instance().publish("Ubidots-LoRA-Node-v1", data, PRIVATE | WITH_ACK);
+		}
+		else {										// Soil Moisture Webhook
+			snprintf(data, sizeof(data), "{\"deviceid\":\"%i\", \"soilvwc\":%4.2f, \"sensortype\":%d, \"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d,  \"snr\":%d, \"hops\":%d, \"msg\":%d, \"success\":%4.2f, \"timestamp\":%lu000}",\
+			current.get_nodeID(), current.get_soilVWC(), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
+			current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_hops(), current.get_messageCount(), percentSuccess, endTimePeriod);
+			Log.info("Data is %s", data);
+			PublishQueuePosix::instance().publish("Ubidots-LoRA-Node-Soil-v1", data, PRIVATE | WITH_ACK);	
+		}
 	}
 	else {																// Webhook for the gateway
+		Log.info("Publishing for gateway");
 		takeMeasurements();												// Loads the current values for the Gateway
 
 		snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"hourly\":%u, \"daily\":%u, \"sensortype\":%d, \"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d, \"msg\":%d, \"timestamp\":%lu000}",\

@@ -12,8 +12,11 @@
 /*
 buf[0 - 1] magicNumber                      // Magic number for devices
 buf[2 - 3] nodeID                           // nodeID for verification
-buf[4 - 5] hourly                           // Hourly count
-buf[6 - 7] = daily                          // Daily Count
+For Visitation Counters
+    buf[4 - 5] hourly                           // Hourly count
+    buf[6 - 7] daily                            // Daily Count
+For Soil Sensors
+    buf[4-7] Soil VWC
 buf[8] sensorType                           // What sensor type is it
 buf[9] temp;                                // Enclosure temp
 buf[10] battChg;                            // State of charge
@@ -37,11 +40,12 @@ buf[17-18] SNR                              // From the Node's perspective
 */
 
 // Format of a join request
+// SensorType - 0/pressure, 1/PIR, 2/Magnetometer, 4/Soil
+
 /*
-buf[0-1] magicNumber;                       // Magic Number
+buf[0 - 1] magicNumber;                      // Magic Number
 buf[2 - 3] nodeID                            // nodeID for verification
-buf[4- 28] Particle deviceID;               // deviceID is unique to the device
-buf[29] sensorType				            // Identifies sensor type to Gateway
+buf[4] sensorType				             // Identifies sensor type to Gateway
 */
 
 // Format for a join acknowledgement
@@ -193,7 +197,7 @@ public:
      * @returns the node number for this deviceID
      * 
      */
-    uint8_t findNodeNumber(const char* deviceID, int radioID);
+    uint8_t findNodeNumber(int nodeNumber, int nodeID);
     /**
      * @brief Returns the deviceID for a provided node number.  this is used in composing Particle publish payloads
      *

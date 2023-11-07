@@ -84,7 +84,6 @@ void sysStatusData::initialize() {
     sysStatus.set_alertTimestampGateway(0);
     sysStatus.set_openTime(6);
     sysStatus.set_closeTime(22);
-    sysStatus.set_verizonSIM(false);
 
     // If you manually update fields here, be sure to update the hash
     updateHash();
@@ -210,14 +209,6 @@ void sysStatusData::set_closeTime(uint8_t value) {
     setValue<uint8_t>(offsetof(SysData, closeTime), value);
 }
 
-bool sysStatusData::get_verizonSIM() const {
-    return getValue<bool>(offsetof(SysData, verizonSIM));
-}
-
-void sysStatusData::set_verizonSIM(bool value) {
-    setValue<bool>(offsetof(SysData, verizonSIM), value);
-}
-
 uint8_t sysStatusData::get_sensorType() const {
     return getValue<uint8_t>(offsetof(SysData, sensorType));
 }
@@ -225,6 +216,8 @@ uint8_t sysStatusData::get_sensorType() const {
 void sysStatusData::set_sensorType(uint8_t value) {
     setValue<uint8_t>(offsetof(SysData, sensorType), value);
 }
+
+
 
 // *****************  Current Status Storage Object *******************
 // Offset of 100 bytes - make room for SysStatus
@@ -459,6 +452,14 @@ uint16_t currentStatusData::get_productVersion() const {
 
 void currentStatusData::set_productVersion(uint16_t value) {
     setValue<uint16_t>(offsetof(CurrentData, productVersion), value);
+}
+
+float currentStatusData::get_soilVWC() const {
+    return getValue<float>(offsetof(CurrentData, soilVWC));
+}
+
+void currentStatusData::set_soilVWC(float value) {
+    setValue<float>(offsetof(CurrentData,soilVWC), value);
 }
 
 // *******************  nodeID Storage Object **********************

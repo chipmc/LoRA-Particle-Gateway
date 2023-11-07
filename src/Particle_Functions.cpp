@@ -184,27 +184,13 @@ int Particle_Functions::jsonFunctionParser(String command) {
       // Format - function - type, node - nodeNumber, variables - 0 (car), 1(person), 2(TBD) 
       // Test - {"cmd":[{"node":1, "var":"1","fn":"type"}]}
       int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
-      if ((tempValue >= 0 ) && (tempValue <= 2)) {
+      if ((tempValue >= 0 ) && (tempValue <= 3)) {
         snprintf(messaging,sizeof(messaging),"Setting sensor type to %d for node %d", tempValue, nodeNumber);
         if (!LoRA_Functions::instance().changeType(nodeNumber,tempValue)) success = false;  // Make a new entry in the nodeID database
         else LoRA_Functions::instance().changeAlert(nodeNumber,7);         // Forces the node to update its sensor Type (on Join, node sets the Gateway)
       }
       else {
         snprintf(messaging,sizeof(messaging),"Sensor Type  - must be 0-2");
-        success = false;                                                       // Make sure it falls in a valid range or send a "fail" result
-      }
-    }
-    // Setting a Verizon SIM flag
-    else if (function == "sim") {
-      // Format - function - sim, node - 0, variables - 0 (Particle), 1(Verizon)
-      // Test - {"cmd":[{"node":0, "var":"1","fn":"sim"}]}
-      int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
-      if ((tempValue >= 0 ) && (tempValue <= 1)) {
-        snprintf(messaging,sizeof(messaging),"Setting SIM to %s", (tempValue == 0)? "Particle":"Verizon");
-        sysStatus.set_verizonSIM(tempValue);
-      }
-      else {
-        snprintf(messaging,sizeof(messaging),"SIM Type  - must be 0 (Particle) or 1 (Verizon)");
         success = false;                                                       // Make sure it falls in a valid range or send a "fail" result
       }
     }
