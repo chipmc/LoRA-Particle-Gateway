@@ -9,22 +9,21 @@
 char openTimeStr[8] = " ";
 char closeTimeStr[8] = " ";
 
-
 // Prototypes and System Mode calls
 SYSTEM_MODE(SEMI_AUTOMATIC);                        // This will enable user code to start executing automatically.
 SYSTEM_THREAD(ENABLED);                             // Means my code will not be held up by Particle processes.
 STARTUP(System.enableFeature(FEATURE_RESET_INFO));
 
-SerialLogHandler logHandler(LOG_LEVEL_INFO);     // Easier to see the program flow
+SerialLogHandler logHandler(LOG_LEVEL_INFO);        // Easier to see the program flow
 
 Particle_Functions *Particle_Functions::_instance;
 
 // [static]
 Particle_Functions &Particle_Functions::instance() {
-    if (!_instance) {
-        _instance = new Particle_Functions();
-    }
-    return *_instance;
+  if (!_instance) {
+    _instance = new Particle_Functions();
+  }
+  return *_instance;
 }
 
 Particle_Functions::Particle_Functions() {
@@ -34,18 +33,18 @@ Particle_Functions::~Particle_Functions() {
 }
 
 void Particle_Functions::setup() {
-    Log.info("Initializing Particle functions and variables");     // Note: Don't have to be connected but these functions need to in first 30 seconds
-    Particle.function("Commands", &Particle_Functions::jsonFunctionParser, this);
+  Log.info("Initializing Particle functions and variables");     // Note: Don't have to be connected but these functions need to in first 30 seconds
+  Particle.function("Commands", &Particle_Functions::jsonFunctionParser, this);
 }
 
 
 void Particle_Functions::loop() {
-    // Put your code to run during the application thread loop here
+  // Put your code to run during the application thread loop here
 }
 
 int Particle_Functions::jsonFunctionParser(String command) {
-    // const char * const commandString = "{\"cmd\":[{\"node\":1,\"var\":\"hourly\",\"fn\":\"reset\"},{\"node\":0,\"var\":1,\"fn\":\"lowpowermode\"},{\"node\":2,\"var\":\"daily\",\"fn\":\"report\"}]}";
-    // String to put into Uber command window {"cmd":[{"node":1,"var":"hourly","fn":"reset"},{"node":0,"var":1,"fn":"lowpowermode"},{"node":2,"var":"daily","fn":"report"}]}
+  // const char * const commandString = "{\"cmd\":[{\"node\":1,\"var\":\"hourly\",\"fn\":\"reset\"},{\"node\":0,\"var\":1,\"fn\":\"lowpowermode\"},{\"node\":2,\"var\":\"daily\",\"fn\":\"report\"}]}";
+  // String to put into Uber command window {"cmd":[{"node":1,"var":"hourly","fn":"reset"},{"node":0,"var":1,"fn":"lowpowermode"},{"node":2,"var":"daily","fn":"report"}]}
 
 	int nodeNumber;
 	String variable;

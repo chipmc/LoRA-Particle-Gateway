@@ -287,6 +287,8 @@ public:
 		time_t lastCountTime;                             // When did we last record a count
 		uint16_t hourlyCount;                             // Current Hourly Count
 		uint16_t dailyCount;                              // Current Daily Count
+		uint16_t hourlyPIRInterrupts;                             // Current Hourly PIR Interrupt Count
+		uint16_t dailyPIRInterrupts;                              // Current Daily PIR Interrupt Count
 		uint8_t alertCodeNode;                            // Alert code from node
 		time_t alertTimestampNode;                 	      // Timestamp of alert
 		bool openHours; 								  // Will set to true or false based on time of dat
@@ -367,6 +369,12 @@ public:
 
 	uint16_t get_dailyCount() const;
 	void set_dailyCount(uint16_t value);
+
+	uint16_t get_hourlyPIRInterrupts() const;
+	void set_hourlyPIRInterrupts(uint16_t value);
+
+	uint16_t get_dailyPIRInterrupts() const;
+	void set_dailyPIRInterrupts(uint16_t value);
 
 	uint8_t get_alertCodeNode() const;
 	void set_alertCodeNode(uint8_t value);
