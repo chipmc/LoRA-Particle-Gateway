@@ -26,6 +26,8 @@ buf[13] messageCount;                       // Sequential message number
 buf[14] successCount;                       // How many successful sends
 buf[15-16] RSSI                             // From the Node's perspective
 buf[17-18] SNR                              // From the Node's perspective
+buf[19 - 20] hourlyPIRInterrupts            // Hourly PIR Interrupt Count
+buf[21 - 22] dailyPIRInterrupts             // Daily PIR Interrupt Count
 */
 
 // Format of a data acknowledgement

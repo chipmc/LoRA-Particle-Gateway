@@ -226,9 +226,11 @@ bool LoRA_Functions::decipherDataReportGateway() {			// Receives the data report
 	current.set_successCount(buf[14]);
 	current.set_RSSI(buf[15] << 8 | buf[16]);				// These values are from the node based on the last successful data report
 	current.set_SNR(buf[17] << 8 | buf[18]);
+	current.set_hourlyPIRInterrupts(buf[19] << 8 | buf[20]);
+	current.set_dailyPIRInterrupts(buf[21] << 8 | buf[22]);
 
-	Log.info("Data recieved from the report: hourly %d, daily %d, sensorType %d, temp %d, battery %d, batteryState %d, resets %d, message count %d, success count %d, RSSI %d, SNR %d", (buf[4] << 8 | buf[5]), (buf[6] <<8 | buf[7]), buf[8], buf[9], buf[10], buf[11], buf[12], buf[13], buf[14], buf[15] << 8 | buf[16], buf[17] << 8 | buf[18]);
-
+	Log.info("Data recieved from the report: hourly %d, daily %d, sensorType %d, temp %d, battery %d, batteryState %d, resets %d, message count %d, success count %d,", (buf[4] << 8 | buf[5]), (buf[6] <<8 | buf[7]), buf[8], buf[9], buf[10], buf[11], buf[12], buf[13], buf[14]);
+	Log.info("RSSI %d, SNR %d, hourlyPIRInterrupts %d, dailyPIRInterrupts %d", (buf[15] << 8 | buf[16]), (buf[17] << 8 | buf[18]), (buf[19] << 8 | buf[20]), (buf[21] << 8 | buf[22]));
 	lora_state = DATA_ACK;		// Prepare to respond
 	return true;
 }

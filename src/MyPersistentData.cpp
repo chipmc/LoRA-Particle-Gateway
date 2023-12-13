@@ -257,8 +257,8 @@ void currentStatusData::loop() {
 bool currentStatusData::validate(size_t dataSize) {
     bool valid = PersistentDataFRAM::validate(dataSize);
     if (valid) {
-        if (current.get_hourlyCount() < 0 || current.get_hourlyCount() > 1024) {
-            Log.info("current data not valid hourlyCount=%d" , current.get_hourlyCount());
+        if (current.get_hourlyCount() < 0 || current.get_hourlyCount() > 1024 || current.get_hourlyPIRInterrupts() < 0 || current.get_hourlyPIRInterrupts() > 1024) {
+            Log.info("current data not valid hourlyCount=%d hourlyPIRInterrupts=%d" , current.get_hourlyCount(), current.get_hourlyPIRInterrupts());
             valid = false;
         }
     }
@@ -287,6 +287,8 @@ void currentStatusData::resetEverything() {                             // The d
   current.set_alertTimestampNode(0);
   current.set_dailyCount(0);                                            // Reset the counts in FRAM as well
   current.set_hourlyCount(0);
+  current.set_dailyPIRInterrupts(0);                                    // Reset the PIR interrupt counts in FRAM as well
+  current.set_hourlyPIRInterrupts(0);
   current.set_messageCount(0);
   current.set_successCount(0);
   current.set_lastCountTime(Time.now());
@@ -403,6 +405,22 @@ uint16_t currentStatusData::get_dailyCount() const {
 }
 
 void currentStatusData::set_dailyCount(uint16_t value) {
+    setValue<uint16_t>(offsetof(CurrentData, dailyCount), value);
+}
+
+uint16_t currentStatusData::get_hourlyPIRInterrupts() const {
+    return getValue<uint16_t>(offsetof(CurrentData, hourlyPIRInterrupts));
+}
+
+void currentStatusData::set_hourlyPIRInterrupts(uint16_t value) {
+    setValue<uint16_t>(offsetof(CurrentData, hourlyCount), value);
+}
+
+uint16_t currentStatusData::get_dailyPIRInterrupts() const {
+    return getValue<uint16_t>(offsetof(CurrentData, dailyPIRInterrupts));
+}
+
+void currentStatusData::set_dailyPIRInterrupts(uint16_t value) {
     setValue<uint16_t>(offsetof(CurrentData, dailyCount), value);
 }
 
