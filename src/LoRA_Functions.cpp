@@ -156,7 +156,7 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 			Log.info("Node %d message magic number of %d did not match the Magic Number in memory %d - Ignoring", current.get_nodeNumber(), current_magicNumber, sysStatus.get_magicNumber());
 			return false;
 		}
-
+		current.set_alertCodeNode(0);												// Clear the alert code for the node
 		current.set_tempNodeNumber(0);												// Clear for new response
 		current.set_hops(hops);														// How many hops to get here
 		current.set_token(buf[3] << 8 | buf[4]);									// The token sent by the note - need to check it is valid
@@ -257,33 +257,6 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 	buf[13] = 0;
 	buf[14] = 0;								// Will be over-written if needed
 
-	// The next few bytes of the response will depend on whether the node is configured or not
-	if (current.get_nodeNumber() == 255) {			// This is a data report from an unconfigured node - need to tell it to rejoin
-		Log.info("Node %d is invalid, setting alert code to 1", current.get_nodeNumber());
-		current.set_alertCodeNode(1);				// This will ensure the node rejoins the network
-
-	}
-	else {											// This is a data report from a configured node - will use the node database
-		/*
-		current.set_alertCodeNode(LoRA_Functions::getAlert(current.get_nodeNumber()));
-		if (current.get_alertCodeNode() > 0) Log.info("Node %d has a pending alert %d", current.get_nodeNumber(), current.get_alertCodeNode());
-	
-		if (current.get_alertCodeNode() == 7) {		// if it is a change in type alert - we can do that here
-			int newSensorType = LoRA_Functions::getType(current.get_nodeNumber());
-			Log.info("In data acknowledge, changing type to from %d to %d", current.get_sensorType(), newSensorType );
-			current.set_sensorType(newSensorType);	// Update current value for data report
-			buf[9] = newSensorType;
-		}
-		else buf[9] = current.get_sensorType();
-
-		if (current.get_alertCodeNode() != 0) LoRA_Functions::changeAlert(current.get_nodeNumber(),0); 	// The alert was serviced or applied - no longer pending
-		buf[8] = current.get_alertCodeNode();
-
-		*/
-		// I need to rethink this part - need to figure out how the gateway can remember that a node has a pending alert without setting up a whole database lookup
-	}
-
-	// nodeDatabase.flush(true);						// Save updates to the nodID database
 	current.flush(true);							// Save values reported by the nodes
 	digitalWrite(BLUE_LED,HIGH);			       	// Sending data
 
