@@ -98,11 +98,12 @@ int Particle_Functions::jsonFunctionParser(String command) {
         else if (variable == "all") {
             snprintf(messaging,sizeof(messaging),"Resetting the gateway's system and current data");
             sysStatus.initialize();                     // All will reset system values as well
-            current.resetEverything();
             nodeDatabase.initialize();
         }
         else snprintf(messaging,sizeof(messaging),"Resetting the gateway's current data");
-        current.resetEverything();
+        sysStatus.set_messageCount(0);                  // Reset the message count
+        sysStatus.set_alertCodeGateway(20);              // Alert code 2 will reset the current data on the gateway
+        sysStatus.set_resetCount(0);
       } 
       else {
         if (variable == "all") {

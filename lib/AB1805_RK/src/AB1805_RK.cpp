@@ -33,8 +33,9 @@ void AB1805::setup(bool callBegin) {
         if (isBitClear(REG_CTRL_1, REG_CTRL_1_WRTC) && !Time.isValid()) {
             // Set system clock from RTC
             time_t time;
+            uint8_t hundredths;
 
-            getRtcAsTime(time);
+            getRtcAsTime(time, hundredths);
             Time.setTime(time);
 
             _log.info("set system clock from RTC %s", Time.format(time, TIME_FORMAT_DEFAULT).c_str());
@@ -51,11 +52,21 @@ void AB1805::loop() {
     if (!timeSet && Time.isValid() && Particle.timeSyncedLast() != 0) {
         timeSet = true;
 
-        time_t time = Time.now();
-        setRtcFromTime(time);
+        time_t time = Time.now();   // Current System time after being set by the cloud
+        time_t RTC_Time;            // UNIX time value of the RTC
+        uint8_t hundredths;
+        
+        getRtcAsTime(RTC_Time,hundredths);
+
+        int32_t deltaTime_sec = (int64_t)Time.now() - (int64_t)RTC_Time;
+
+        // If the difference in time is more than 10 seconds, then we will correct the time. Otherwise, lets keep the AB1805 time and let it slowly self correct to prevent big jumps when using LoRa nodes. 
+        if (abs(deltaTime_sec) > 10){
+            setRtcFromTime(time);
+        }
 
         time = 0;
-        getRtcAsTime(time);
+        getRtcAsTime(time, hundredths);
         _log.info("set RTC from cloud %s", Time.format(time, TIME_FORMAT_DEFAULT).c_str());
 
     }
@@ -85,8 +96,6 @@ bool AB1805::detectChip() {
                 break;
             }
             if (!ready) {
-                _log.info("FOUT did not go HIGH");
-
                 // May just want to return false here
             }
         }
@@ -118,6 +127,126 @@ bool AB1805::usingRCOscillator() {
     else {
         return false;
     }
+}
+
+bool AB1805::IRQClockOut(uint8_t SQW_SEL) {
+    bool bResult;
+    static const char *errorMsg = "failure in IRQClockOut %d";
+    
+    // First let's log the current register values
+    // _log.info("REG_SQW=0x%2x", readRegister(REG_SQW));
+    // _log.info("REG_CTRL_1=0x%2x", readRegister(REG_CTRL_1));
+    // _log.info("REG_CTRL_2=0x%2x", readRegister(REG_CTRL_2));
+    
+    //Requires setting Ctrl_1_Out = 1 to enable the Square Wave output. 
+    bResult = maskRegister(REG_CTRL_2, ~REG_CTRL_1_OUT, 0xff);
+
+    // Set FOUT/nIRQ control in Control2 to SQW
+    bResult = maskRegister(REG_CTRL_2, ~REG_CTRL_2_OUT1S_MASK, REG_CTRL_2_OUT1S_SQW);
+    if (!bResult) {
+        _log.error(errorMsg, __LINE__);
+        return false;
+    }
+
+    // Set REQ_SQW to the desired frequency and enable SQWE 
+    bResult = writeRegister(REG_SQW, SQW_SEL);
+    if (!bResult) {
+        _log.error(errorMsg, __LINE__);
+        return false;
+    }
+
+    // Let's print the registers after to confirm we wrote them correctly
+    // _log.info("IRQ is 32768 hz Output");
+    // _log.info("REG_SQW=0x%2x", readRegister(REG_SQW));
+    // _log.info("REG_CTRL_1=0x%2x", readRegister(REG_CTRL_1));
+    // _log.info("REG_CTRL_2=0x%2x", readRegister(REG_CTRL_2));
+
+    return true;
+}
+
+bool AB1805::setPPMAdj(int16_t PPM_Adj) {
+    bool bResult;
+    int16_t Adj = 0; 
+    uint8_t XTCAL = 0;
+    uint8_t CMDX = 0;
+    int8_t OFFSETX = 0;
+    uint8_t CAL_XT_Value; 
+    static const char *errorMsg = "failure in IRQClockOut %d";
+
+    //Per the XT Calibration Procedure section 5.9.1 of the AB1805 Application Manual:
+    Adj = PPM_Adj/(1.90735);
+
+    if ( Adj < -320 ){
+        _log.error("The XT frequency is too high to be calibrated");
+        return false;;
+    }
+    else if (Adj < -256){ 
+        XTCAL = 3; 
+        CMDX = 1; 
+        OFFSETX = (Adj +192)/2;
+        }
+    else if (Adj < -192){
+        XTCAL = 3;
+        CMDX = 0; 
+        OFFSETX = Adj +192;
+        }
+    else if (Adj < -128){
+        XTCAL = 2;
+        CMDX = 0;
+        OFFSETX = Adj +128;
+        }
+    else if (Adj < -64){
+        XTCAL = 1;
+        CMDX = 0;
+        OFFSETX = Adj + 64;
+        }
+    else if (Adj < 64){
+        XTCAL = 0;
+        CMDX = 0;
+        OFFSETX = Adj;
+        }
+    else if (Adj < 128){
+        XTCAL = 0;
+        CMDX = 1;
+        OFFSETX = Adj/2;
+        }
+    else {
+        Log.error("The XT frequency is too low to be calibrated");
+        return false;;
+    }
+
+    _log.info("PPM_Adj= %d, Adj=%d | XTCAL=%u | CMDX=%u | OFFSETX=%i",PPM_Adj, Adj, XTCAL, CMDX, OFFSETX);
+
+    //Determine the value of the entire register. The offset register is 7 bit 2's complement. 
+    if (OFFSETX < 0) {
+        CAL_XT_Value = ((~abs(OFFSETX))+1 & 0x7F) | CMDX << 7;
+    }
+    else{
+        CAL_XT_Value = (OFFSETX & 0x7F) | CMDX << 7;
+    }
+
+    // _log.info("Before: CAL_XT_Value=0x%2x", CAL_XT_Value);
+    // _log.info("Before: REG_CAL_XT=0x%2x", readRegister(REG_CAL_XT));
+    // _log.info("Before: REG_OSC_STATUS=0x%2x", readRegister(REG_OSC_STATUS));
+
+    // Adjust the XT Calibration Registers based on the value sent
+     bResult = writeRegister(REG_CAL_XT, CAL_XT_Value);
+     if (!bResult) {
+        _log.error(errorMsg, __LINE__);
+        return false;
+    }
+
+    // Set the first two bits of the OSC status register to XTCAL
+    bResult = writeRegister(REG_OSC_STATUS, XTCAL << 6);
+     if (!bResult) {
+        _log.error(errorMsg, __LINE__);
+        return false;
+    }
+
+    // _log.info("After: REG_CAL_XT=0x%2x", readRegister(REG_CAL_XT));
+    // _log.info("After: REG_OSC_STATUS=0x%2x", readRegister(REG_OSC_STATUS));
+
+    return true;
 }
 
 bool AB1805::resetConfig(uint32_t flags) {
@@ -251,22 +380,22 @@ bool AB1805::setRtcFromSystem() {
     }
 }
 
-bool AB1805::setRtcFromTime(time_t time, bool lock) {
+bool AB1805::setRtcFromTime(time_t time, uint8_t hundredths,  bool lock) {
     struct tm *tm = gmtime(&time);
-    return setRtcFromTm(tm, lock);
+    return setRtcFromTm(tm, hundredths, lock);
 }
 
-bool AB1805::setRtcFromTm(const struct tm *timeptr, bool lock) {
+bool AB1805::setRtcFromTm(const struct tm *timeptr, uint8_t hundredths,  bool lock) {
     static const char *errorMsg = "failure in setRtcFromTm %d";
     uint8_t array[8];
 
-    _log.info("setRtcAsTm %s", tmToString(timeptr).c_str());
+    _log.info("setRtcAsTm %s.%d", tmToString(timeptr).c_str(),hundredths);
 
     if (lock) {
         wire.lock();
     }
 
-    array[0] = 0x00; // hundredths
+    array[0] = valueToBcd(hundredths); // hundredths
     tmToRegisters(timeptr, &array[1], true);
 
     // Can only write RTC registers when WRTC is 1
@@ -293,22 +422,72 @@ bool AB1805::setRtcFromTm(const struct tm *timeptr, bool lock) {
     return bResult;
 }
 
-bool AB1805::getRtcAsTime(time_t &time) {
-    struct tm tmstruct;
+bool AB1805::getRtcAsTime(time_t &time, uint8_t &hundrths) {
+    struct tm tmstruct1;
+    struct tm tmstruct2;
+    struct tm tmstruct3;
+    uint8_t _hundrths1;
+    uint8_t _hundrths2;
+    uint8_t _hundrths3;
 
-    bool bResult = getRtcAsTm(&tmstruct);
-    if (bResult) {
-        // Technically mktime is local time, not UTC. However, the standard library
-        // is set at +0000 so the local time happens to also be UTC. This is the
-        // case even if Time.zone() is called, which only affects the Wiring
-        // API and does not affect the standard time library.
-        time = mktime(&tmstruct);
+    // Hundredths Synchronization per: https://abracon.com/Support/AppsManuals/Precisiontiming/AB18XX-Application-Manual.pdf section 5.6:
+    /*
+    If the Hundredths Counter is read as part of the burst read from the counter registers, the following algorithm must be used to guarantee correct read information.
+    1. Read the Counters, using a burst read. If the Hundredths Counter is neither 00 nor 99, the read is correct.
+    2. If the Hundredths Counter was 00, perform the read again. The resulting value from this second read is guaranteed to be correct.
+    3. If the Hundredths Counter was 99, perform the read again.
+    A. If the Hundredths Counter is still 99, the results of the first read are guaranteed to be correct.
+    Note that it is possible that the second read is not correct.
+    B. If the Hundredths Counter has rolled over to 00, and the Seconds Counter value from the second read is equal to the Seconds Counter value from the first read plus 1, both reads produced
+     correct values. Alternatively, perform the read again. The resulting value from this third read is guaranteed to be correct.
+    C. If the Hundredths Counter has rolled over to 00, and the Seconds Counter value from the second read is equal to the Seconds Counter value from the first read, perform the read again. The
+    resulting value from this third read is guaranteed to be correct.
+    */
+
+    // First perform a burst read:
+    bool bResult = getRtcAsTm(&tmstruct1, _hundrths1);
+
+    //2. If the Hundredths Counter was 00, perform the read again. The resulting value from this second read is guaranteed to be correct.
+    if (_hundrths1 == 0){
+        bResult = getRtcAsTm(&tmstruct2, _hundrths2);
+        time = mktime(&tmstruct2);
+        hundrths = _hundrths2;
+        return bResult;
     }
 
+    //3. If the Hundredths Counter was 99, perform the read again.
+    //     A. If the Hundredths Counter is still 99, the results of the first read are guaranteed to be correct.
+    //     Note that it is possible that the second read is not correct.
+    //     B. If the Hundredths Counter has rolled over to 00, and the Seconds Counter value from the second read is equal to the Seconds Counter value from the first read plus 1, both reads produced
+    //     correct values. Alternatively, perform the read again. The resulting value from this third read is
+    //     guaranteed to be correct.
+    //     C. If the Hundredths Counter has rolled over to 00, and the Seconds Counter value from the second read is equal to the Seconds Counter value from the first read, perform the read again. The
+    //     resulting value from this third read is guaranteed to be correct.
+    else if(_hundrths1 == 99){
+        bResult = getRtcAsTm(&tmstruct2, _hundrths2);
+        if(_hundrths2 == 99){
+            time = mktime(&tmstruct1);
+            hundrths = _hundrths1;
+        }
+        else{
+            bResult = getRtcAsTm(&tmstruct3, _hundrths3);
+            time = mktime(&tmstruct3);
+            hundrths = _hundrths3;
+            return bResult;
+        }
+    } 
+
+    // 1. Read the Counters, using a burst read. If the Hundredths Counter is neither 00 nor 99, the read is correct.
+    else{
+        time = mktime(&tmstruct1);
+        hundrths = _hundrths1;
+        return bResult;
+    }
+    
     return bResult;   
 }
 
-bool AB1805::getRtcAsTm(struct tm *timeptr) {
+bool AB1805::getRtcAsTm(struct tm *timeptr, uint8_t &hundredths) {
     uint8_t array[8];
     bool bResult = false;
 
@@ -318,8 +497,9 @@ bool AB1805::getRtcAsTm(struct tm *timeptr) {
         bResult = readRegisters(REG_HUNDREDTH, array, sizeof(array));
         if (bResult) {
             registersToTm(&array[1], timeptr, true);
+            hundredths = bcdToValue(array[0]);
 
-            _log.info("getRtcAsTm %s", tmToString(timeptr).c_str());
+            _log.info("getRtcAsTm %s.%d", tmToString(timeptr).c_str(), hundredths);
         }
     }
     if (!bResult) {
@@ -353,16 +533,16 @@ bool AB1805::testEN() {
 }  
 #endif
 
-bool AB1805::interruptAtTime(time_t time) {
+bool AB1805::interruptAtTime(time_t time, uint8_t hundredths) {
     struct tm *tm = gmtime(&time);
-    return interruptAtTm(tm);
+    return interruptAtTm(tm, hundredths);
 }
 
-bool AB1805::interruptAtTm(struct tm *timeptr) {
-    return repeatingInterrupt(timeptr, REG_TIMER_CTRL_RPT_DATE);
+bool AB1805::interruptAtTm(struct tm *timeptr, uint8_t hundredths) {
+    return repeatingInterrupt(timeptr, REG_TIMER_CTRL_RPT_DATE, hundredths);
 }
 
-bool AB1805::repeatingInterrupt(struct tm *timeptr, uint8_t rptValue) {
+bool AB1805::repeatingInterrupt(struct tm *timeptr, uint8_t rptValue, uint8_t hundredths) {
     static const char *errorMsg = "failure in repeatingInterrupt %d";
     bool bResult;
 
@@ -383,7 +563,7 @@ bool AB1805::repeatingInterrupt(struct tm *timeptr, uint8_t rptValue) {
     // Set alarm registers
     uint8_t array[7];
 
-    array[0] = 0x00; // hundredths
+    array[0] = valueToBcd(hundredths); // hundredths
     tmToRegisters(timeptr, &array[1], false);
 
     bResult = writeRegisters(REG_HUNDREDTH_ALARM, array, sizeof(array));

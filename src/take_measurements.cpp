@@ -91,21 +91,6 @@ void getSignalStrength() {
   Log.info(signalStr);
 }
 
-
-bool recordCount() // This is where we check to see if an interrupt is set when not asleep or act on a tap that woke the device
-{
-  pinSetFast(BLUE_LED);                                                                               // Turn on the blue LED
-
-  current.set_lastCountTime(Time.now());
-  current.set_hourlyCount(current.get_hourlyCount() +1);                                              // Increment the PersonCount
-  current.set_dailyCount(current.get_dailyCount() +1);                                               // Increment the PersonCount
-  Log.info("Count, hourly: %i. daily: %i",current.get_hourlyCount(),current.get_dailyCount());
-  delay(200);
-  pinResetFast(BLUE_LED);
-
-  return true;
-}
-
 /**
  * @brief soft delay let's us process Particle functions and service the sensor interrupts while pausing
  * 

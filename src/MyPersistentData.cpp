@@ -30,11 +30,13 @@ sysStatusData::~sysStatusData() {
 void sysStatusData::setup() {
     fram.begin();
     sysStatus
-    //    .withLogData(true)
+    //  .withLogData(true)
         .withSaveDelayMs(500)
         .load();
 
     // Log.info("sizeof(SysData): %u", sizeof(SysData));
+    sysStatus.set_tokenCore(random(1,255));
+    Log.info("Token Core is %d", sysStatus.get_tokenCore());
 }
 
 void sysStatusData::loop() {
@@ -129,12 +131,12 @@ void sysStatusData::set_resetCount(uint8_t value) {
     setValue<uint8_t>(offsetof(SysData, resetCount), value);
 }
 
-uint8_t sysStatusData::get_messageCount() const {
-    return getValue<uint8_t>(offsetof(SysData, messageCount));
+uint16_t sysStatusData::get_messageCount() const {
+    return getValue<uint16_t>(offsetof(SysData, messageCount));
 }
 
-void sysStatusData::set_messageCount(uint8_t value) {
-    setValue<uint8_t>(offsetof(SysData, messageCount), value);
+void sysStatusData::set_messageCount(uint16_t value) {
+    setValue<uint16_t>(offsetof(SysData, messageCount), value);
 }
 
 time_t sysStatusData::get_lastHookResponse() const {
@@ -209,15 +211,13 @@ void sysStatusData::set_closeTime(uint8_t value) {
     setValue<uint8_t>(offsetof(SysData, closeTime), value);
 }
 
-uint8_t sysStatusData::get_sensorType() const {
-    return getValue<uint8_t>(offsetof(SysData, sensorType));
+uint8_t sysStatusData::get_tokenCore() const {
+    return getValue<uint8_t>(offsetof(SysData, tokenCore));
 }
 
-void sysStatusData::set_sensorType(uint8_t value) {
-    setValue<uint8_t>(offsetof(SysData, sensorType), value);
+void sysStatusData::set_tokenCore(uint8_t value) {
+    setValue<uint8_t>(offsetof(SysData, tokenCore), value);
 }
-
-
 
 // *****************  Current Status Storage Object *******************
 // Offset of 100 bytes - make room for SysStatus
@@ -256,42 +256,15 @@ void currentStatusData::loop() {
 
 bool currentStatusData::validate(size_t dataSize) {
     bool valid = PersistentDataFRAM::validate(dataSize);
-    if (valid) {
-        if (current.get_hourlyCount() < 0 || current.get_hourlyCount() > 1024) {
-            Log.info("current data not valid hourlyCount=%d" , current.get_hourlyCount());
-            valid = false;
-        }
-    }
     if (!valid) Log.info("current data is %s",(valid) ? "valid": "not valid");
     return valid;
 }
 
 void currentStatusData::initialize() {
     PersistentDataFRAM::initialize();
-
     Log.info("Current Data Initialized");
-
-    currentStatusData::resetEverything();
-
     // If you manually update fields here, be sure to update the hash
     updateHash();
-}
-
-
-void currentStatusData::resetEverything() {                             // The device is waking up in a new day or is a new install
-  Log.info("A new day - resetting everything");
-  current.set_nodeNumber(11);
-  current.set_tempNodeNumber(0);
-  current.set_nodeID(0);
-  current.set_alertCodeNode(0);
-  current.set_alertTimestampNode(0);
-  current.set_dailyCount(0);                                            // Reset the counts in FRAM as well
-  current.set_hourlyCount(0);
-  current.set_messageCount(0);
-  current.set_successCount(0);
-  current.set_lastCountTime(Time.now());
-  sysStatus.set_resetCount(0);                                          // Reset the reset count as well
-  sysStatus.set_messageCount(0);
 }
 
 uint8_t currentStatusData::get_nodeNumber() const {
@@ -310,12 +283,124 @@ void currentStatusData::set_tempNodeNumber(uint8_t value) {
     setValue<uint8_t>(offsetof(CurrentData, tempNodeNumber), value);
 }
 
-uint16_t currentStatusData::get_nodeID() const {
-    return getValue<uint16_t>(offsetof(CurrentData, nodeID));
+uint16_t currentStatusData::get_token() const {
+    return getValue<uint16_t>(offsetof(CurrentData, token));
 }
 
-void currentStatusData::set_nodeID(uint16_t value) {
-    setValue<uint16_t>(offsetof(CurrentData, nodeID), value);
+void currentStatusData::set_token(uint16_t value) {
+    setValue<uint16_t>(offsetof(CurrentData, token), value);
+}
+
+uint8_t currentStatusData::get_sensorType() const {
+    return getValue<uint8_t>(offsetof(CurrentData, sensorType));
+}
+
+void currentStatusData::set_sensorType(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, sensorType), value);
+}
+
+uint32_t currentStatusData::get_uniqueID() const {
+    return getValue<uint32_t>(offsetof(CurrentData, uniqueID));
+}
+
+void currentStatusData::set_uniqueID(uint32_t value) {
+    setValue<uint32_t>(offsetof(CurrentData, uniqueID), value);
+}
+
+uint8_t currentStatusData::get_payload1() const {
+    return getValue<uint8_t>(offsetof(CurrentData, payload1));
+}
+
+void currentStatusData::set_payload1(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, payload1), value);
+}   
+
+uint8_t currentStatusData::get_payload2() const {
+    return getValue<uint8_t>(offsetof(CurrentData, payload2));
+}
+
+void currentStatusData::set_payload2(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, payload2), value);
+}   
+
+uint8_t currentStatusData::get_payload3() const {
+    return getValue<uint8_t>(offsetof(CurrentData, payload3));
+}
+
+void currentStatusData::set_payload3(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, payload3), value);
+}
+
+uint8_t currentStatusData::get_payload4() const {
+    return getValue<uint8_t>(offsetof(CurrentData, payload4));
+}
+
+void currentStatusData::set_payload4(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, payload4), value);
+}   
+
+uint8_t currentStatusData::get_payload5() const {
+    return getValue<uint8_t>(offsetof(CurrentData, payload5));
+}
+
+void currentStatusData::set_payload5(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, payload5), value);
+}
+
+uint8_t currentStatusData::get_payload6() const {
+    return getValue<uint8_t>(offsetof(CurrentData, payload6));
+}
+
+void currentStatusData::set_payload6(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, payload6), value);
+}
+
+uint8_t currentStatusData::get_payload7() const {
+    return getValue<uint8_t>(offsetof(CurrentData, payload7));
+}
+
+void currentStatusData::set_payload7(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, payload7), value);
+}
+
+uint8_t currentStatusData::get_payload8() const {
+    return getValue<uint8_t>(offsetof(CurrentData, payload8));
+}
+
+void currentStatusData::set_payload8(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, payload8), value);
+}
+
+uint8_t currentStatusData::get_payload9() const {
+    return getValue<uint8_t>(offsetof(CurrentData, payload9));
+}
+
+void currentStatusData::set_payload9(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, payload9), value);
+}
+
+uint8_t currentStatusData::get_payload10() const {
+    return getValue<uint8_t>(offsetof(CurrentData, payload10));
+}
+
+void currentStatusData::set_payload10(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, payload10), value);
+}
+
+uint8_t currentStatusData::get_payload11() const {
+    return getValue<uint8_t>(offsetof(CurrentData, payload11));
+}
+
+void currentStatusData::set_payload11(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, payload11), value);
+}
+
+uint8_t currentStatusData::get_payload12() const {
+    return getValue<uint8_t>(offsetof(CurrentData, payload12));
+}
+
+void currentStatusData::set_payload12(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, payload12), value);
 }
 
 uint8_t currentStatusData::get_internalTempC() const {
@@ -326,12 +411,12 @@ void currentStatusData::set_internalTempC(uint8_t value) {
     setValue<uint8_t>(offsetof(CurrentData, internalTempC), value);
 }
 
-double currentStatusData::get_stateOfCharge() const {
-    return getValue<double>(offsetof(CurrentData, stateOfCharge));
+int8_t currentStatusData::get_stateOfCharge() const {
+    return getValue<int8_t>(offsetof(CurrentData, stateOfCharge));
 }
 
-void currentStatusData::set_stateOfCharge(double value) {
-    setValue<double>(offsetof(CurrentData, stateOfCharge), value);
+void currentStatusData::set_stateOfCharge(int8_t value) {
+    setValue<int8_t>(offsetof(CurrentData, stateOfCharge), value);
 }
 
 uint8_t currentStatusData::get_batteryState() const {
@@ -366,46 +451,6 @@ void currentStatusData::set_SNR(int16_t value) {
     setValue<int16_t>(offsetof(CurrentData, SNR), value);
 }
 
-uint8_t currentStatusData::get_messageCount() const {
-    return getValue<uint8_t>(offsetof(CurrentData, messageCount));
-}
-
-void currentStatusData::set_messageCount(uint8_t value) {
-    setValue<uint8_t>(offsetof(CurrentData, messageCount), value);
-}
-
-uint8_t currentStatusData::get_successCount() const {
-    return getValue<uint8_t>(offsetof(CurrentData, successCount));
-}
-
-void currentStatusData::set_successCount(uint8_t value) {
-    setValue<uint8_t>(offsetof(CurrentData, successCount), value);
-}
-
-time_t currentStatusData::get_lastCountTime() const {
-    return getValue<time_t>(offsetof(CurrentData, lastCountTime));
-}
-
-void currentStatusData::set_lastCountTime(time_t value) {
-    setValue<time_t>(offsetof(CurrentData, lastCountTime), value);
-}
-
-uint16_t currentStatusData::get_hourlyCount() const {
-    return getValue<uint16_t>(offsetof(CurrentData, hourlyCount));
-}
-
-void currentStatusData::set_hourlyCount(uint16_t value) {
-    setValue<uint16_t>(offsetof(CurrentData, hourlyCount), value);
-}
-
-uint16_t currentStatusData::get_dailyCount() const {
-    return getValue<uint16_t>(offsetof(CurrentData, dailyCount));
-}
-
-void currentStatusData::set_dailyCount(uint16_t value) {
-    setValue<uint16_t>(offsetof(CurrentData, dailyCount), value);
-}
-
 uint8_t currentStatusData::get_alertCodeNode() const {
     return getValue<uint8_t>(offsetof(CurrentData, alertCodeNode));
 }
@@ -414,28 +459,12 @@ void currentStatusData::set_alertCodeNode(uint8_t value) {
     setValue<uint8_t>(offsetof(CurrentData, alertCodeNode), value);
 }
 
-time_t currentStatusData::get_alertTimestampNode() const {
-    return getValue<time_t>(offsetof(CurrentData, alertTimestampNode));
+uint8_t currentStatusData::get_openHours() const {
+    return getValue<uint8_t>(offsetof(CurrentData, openHours));
 }
 
-void currentStatusData::set_alertTimestampNode(time_t value) {
-    setValue<time_t>(offsetof(CurrentData, alertTimestampNode), value);
-}
-
-bool currentStatusData::get_openHours() const {
-    return getValue<bool>(offsetof(CurrentData, openHours));
-}
-
-void currentStatusData::set_openHours(bool value) {
-    setValue<bool>(offsetof(CurrentData, openHours), value);
-}
-
-uint8_t currentStatusData::get_sensorType() const {
-    return getValue<uint8_t>(offsetof(CurrentData, sensorType));
-}
-
-void currentStatusData::set_sensorType(uint8_t value) {
-    setValue<uint8_t>(offsetof(CurrentData, sensorType), value);
+void currentStatusData::set_openHours(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, openHours), value);
 }
 
 uint8_t currentStatusData::get_hops() const {
@@ -446,21 +475,22 @@ void currentStatusData::set_hops(uint8_t value) {
     setValue<uint8_t>(offsetof(CurrentData, hops), value);
 }
 
-uint16_t currentStatusData::get_productVersion() const {
-    return getValue<uint16_t>(offsetof(CurrentData, productVersion));
+uint8_t currentStatusData::get_retryCount() const {
+    return getValue<uint8_t>(offsetof(CurrentData, retryCount));
 }
 
-void currentStatusData::set_productVersion(uint16_t value) {
-    setValue<uint16_t>(offsetof(CurrentData, productVersion), value);
+void currentStatusData::set_retryCount(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, retryCount), value);
 }
 
-float currentStatusData::get_soilVWC() const {
-    return getValue<float>(offsetof(CurrentData, soilVWC));
+uint8_t currentStatusData::get_retransmissionDelay() const {
+    return getValue<uint8_t>(offsetof(CurrentData, retransmissionDelay));
 }
 
-void currentStatusData::set_soilVWC(float value) {
-    setValue<float>(offsetof(CurrentData,soilVWC), value);
+void currentStatusData::set_retransmissionDelay(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, retransmissionDelay), value);
 }
+
 
 // *******************  nodeID Storage Object **********************
 //

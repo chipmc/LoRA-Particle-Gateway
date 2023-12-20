@@ -220,19 +220,14 @@ bool RHRouter::recvfromAck(uint8_t* buf, uint8_t* len, uint8_t* source, uint8_t*
     {
 	// Here we simulate networks with limited visibility between nodes
 	// so we can test routing
-	//#define RH_TEST_NETWORK 1
-
 #ifdef RH_TEST_NETWORK
 	if (
 #if RH_TEST_NETWORK==1
-	    // This network looks like 0-1-2-3
-		//						   | | | |	
-		// 							--11--
-	       (_thisAddress == 0 && (_from == 1 || _from == 11)
-	    || (_thisAddress == 1 && (_from == 0 || _from == 2 || _from == 11))
-	    || (_thisAddress == 2 && (_from == 1 || _from == 3 || _from == 11))
-	    || (_thisAddress == 3 && (_from == 2 || _from == 11))
-		|| (_thisAddress == 11)
+	    // This network looks like 1-2-3-4
+	       (_thisAddress == 1 && _from == 2)
+	    || (_thisAddress == 2 && (_from == 1 || _from == 3))
+	    || (_thisAddress == 3 && (_from == 2 || _from == 4))
+	    || (_thisAddress == 4 && _from == 3)
 	    
 #elif RH_TEST_NETWORK==2
 	       // This network looks like 1-2-4
@@ -262,13 +257,8 @@ bool RHRouter::recvfromAck(uint8_t* buf, uint8_t* len, uint8_t* source, uint8_t*
 	    || (_thisAddress == 4 && _from == 2)
 
 #elif RH_TEST_NETWORK==5
-	       // This network looks like 0-1-3
-	       //                         | | |
-	       //                         --2--
-	       (_thisAddress == 0 && (_from == 1 || _from == 2))
-	    ||  _thisAddress == 1
-	    ||  _thisAddress == 2
-	    || (_thisAddress == 3 && (_from == 1 || _from == 2))
+	    // This network looks like 1-10-11-12 and respond to all nodes >1 and < 10 
+	       (_thisAddress == 0 && _from == 10)
 
 #endif
 	    )

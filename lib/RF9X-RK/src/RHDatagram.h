@@ -10,7 +10,7 @@
 
 // This is the maximum possible message size for radios supported by RadioHead.
 // Not all radios support this length, and many are much smaller
-#define RH_MAX_MESSAGE_LEN 127
+#define RH_MAX_MESSAGE_LEN 255
 
 /////////////////////////////////////////////////////////////////////
 /// \class RHDatagram RHDatagram.h <RHDatagram.h>

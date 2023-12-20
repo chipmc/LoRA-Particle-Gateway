@@ -1,10 +1,4 @@
 #include "LoRA_Functions.h"
-#include <RHMesh.h>
-#include <RH_RF95.h>						        // https://docs.particle.io/reference/device-os/libraries/r/RH_RF95/
-#include "device_pinout.h"
-#include "MyPersistentData.h"
-#include "JsonParserGeneratorRK.h"
-#include "Particle_Functions.h"
 
 // Singleton instantiation - from template
 LoRA_Functions *LoRA_Functions::_instance;
@@ -39,7 +33,7 @@ JsonParserStatic<1024, 50> jp;						// Make this global - reduce possibility of 
 //
 const uint8_t GATEWAY_ADDRESS = 0;
 // const double RF95_FREQ = 915.0;				 	// Frequency - ISM
-const double RF95_FREQ = 926.84;				// Center frequency for the omni-directional antenna I am using
+const double RF95_FREQ = 92684;				// Center frequency for the omni-directional antenna I am using x100 as per Jeff's modification of the RFM95 Library
 
 // Define the message flags
 typedef enum { NULL_STATE, JOIN_REQ, JOIN_ACK, DATA_RPT, DATA_ACK, ALERT_RPT, ALERT_ACK} LoRA_State;
@@ -47,10 +41,13 @@ char loraStateNames[7][16] = {"Null", "Join Req", "Join Ack", "Data Report", "Da
 static LoRA_State lora_state = NULL_STATE;
 
 // Singleton instance of the radio driver
-RH_RF95 driver(RFM95_CS, RFM95_INT);
+RH_RF95 rf95(RFM95_CS, RFM95_INT);
+Speck myCipher;                             // Class instance for Speck block ciphering     
+RHEncryptedDriver driver(rf95, myCipher);   // Class instance for Encrypted RFM95 driver
 
 // Class to manage message delivery and receipt, using the driver declared above
 RHMesh manager(driver, GATEWAY_ADDRESS);
+
 
 // Mesh has much greater memory requirements, and you may need to limit the
 // max message length to prevent wierd crashes
@@ -124,12 +121,12 @@ bool  LoRA_Functions::initializeRadio() {  			// Set up the Radio Module
 		Log.info("init failed");					// Defaults after init are 434.0MHz, 0.05MHz AFC pull-in, modulation FSK_Rb2_4Fd36
 		return false;
 	}
-	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
-	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
+	rf95.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
+	rf95.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
 	// driver.setModemConfig(RH_RF95::Bw125Cr45Sf2048);  // This is the setting appropriate for parks
-	driver.setModemConfig(RH_RF95::Bw500Cr45Sf128);	 // Optimized for fast transmission and short range - MAFC
+	rf95.setModemConfig(RH_RF95::Bw500Cr45Sf128);	 // Optimized for fast transmission and short range - MAFC
 	//driver.setModemConfig(RH_RF95::Bw125Cr48Sf4096);	// This optimized the radio for long range - https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html
-	driver.setLowDatarate();						// https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html#a8e2df6a6d2cb192b13bd572a7005da67
+	rf95.setLowDatarate();						// https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html#a8e2df6a6d2cb192b13bd572a7005da67
 	manager.setTimeout(1000);						// 200mSec is the default - may need to extend once we play with other settings on the modem - https://www.airspayce.com/mikem/arduino/RadioHead/classRHReliableDatagram.html
 return true;
 }
@@ -151,27 +148,36 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 	if (manager.recvfromAck(buf, &len, &from, &dest, &id, &messageFlag, &hops))	{	// We have received a message - need to validate it
 		buf[len] = 0;
 
+		current.set_nodeNumber(from);												// Captures the nodeNumber
+		uint16_t current_magicNumber = (buf[0] << 8 | buf[1]);								// Magic number
+
 		// First we will validate that this node belongs in this network by checking the magic number
-		if (!((buf[0] << 8 | buf[1]) == sysStatus.get_magicNumber())) {
-			Log.info("Node %d message magic number of %d did not match the Magic Number in memory %d - Ignoring", current.get_nodeNumber(),(buf[0] << 8 | buf[1]), sysStatus.get_magicNumber());
+		if (current_magicNumber != sysStatus.get_magicNumber()) {
+			Log.info("Node %d message magic number of %d did not match the Magic Number in memory %d - Ignoring", current.get_nodeNumber(), current_magicNumber, sysStatus.get_magicNumber());
 			return false;
 		}
-		current.set_nodeNumber(from);												// Captures the nodeNumber 
+
 		current.set_tempNodeNumber(0);												// Clear for new response
 		current.set_hops(hops);														// How many hops to get here
-		current.set_nodeID(buf[2] << 8 | buf[3]);									// Captures the nodeID for Data or Alert reports
+		current.set_token(buf[3] << 8 | buf[4]);									// The token sent by the note - need to check it is valid
+		current.set_sensorType(buf[5]);												// Sensor type reported by the node
+		current.set_uniqueID(buf[6] << 24 | buf[7] << 16 | buf[8] << 8 | buf[9]);	// Unique ID of the node - this is like the Particle deviceID
+
 		lora_state = (LoRA_State)(0x0F & messageFlag);								// Strip out the overhead byte to get the message flag
-		Log.info("Node %d with ID %d a %s message with RSSI/SNR of %d / %d in %d hops", current.get_nodeNumber(), current.get_nodeID(), loraStateNames[lora_state], driver.lastRssi(), driver.lastSNR(), current.get_hops());
+		Log.info("Node %d with uniqueID %lu a %s message with RSSI/SNR of %d / %d in %d hops", current.get_nodeNumber(), current.get_uniqueID(), loraStateNames[lora_state], rf95.lastRssi(), rf95.lastSNR(), current.get_hops());
 
 		// Next we need to test the nodeNumber / deviceID to make sure this node is properly configured
-		if (current.get_nodeNumber() < 11 && !LoRA_Functions::instance().nodeConfigured(current.get_nodeNumber(),current.get_nodeID())) {
-			Log.info("Node not properly configured, resetting node number");
-			current.set_tempNodeNumber(current.get_nodeNumber());					// Store node number in temp for the repsonse
-			current.set_nodeNumber(11);												// Set node number to 11
-		}
-		else if (current.get_nodeNumber() >= 11) {
-			current.set_tempNodeNumber(from);										// We need this address for the reply					
-			current.set_nodeNumber(11);												// This way an unconfigured nor invalid node ends up wtih a node number of 11
+		if (!(current.get_nodeNumber() < 255 && LoRA_Functions::checkForValidToken(current.get_nodeNumber(), current.get_token()))) {  // This not is a valid node number and token combo
+
+			if (LoRA_Functions::nodeConfigured(current.get_nodeNumber(), current.get_uniqueID())) {	// This will return true if the node is configured
+				Log.info("Node %d is configured but the token is invalid - resetting token", current.get_nodeNumber());
+				current.set_token(setNodeToken(current.get_nodeNumber()));	// This is a valid node number but the token is not valid - reset the token
+			}
+			else {																// This is an unconfigured node - need to assign it a node number
+				Log.info("Node %d is unconfigured", current.get_nodeNumber());
+				current.set_tempNodeNumber(current.get_nodeNumber());			// Store node number in temp for the repsonse
+				current.set_nodeNumber(255);									// Set node number to unconfigured
+			}
 		}
 
 		if (lora_state == DATA_RPT) {if(!LoRA_Functions::instance().decipherDataReportGateway()) return false;}
@@ -195,39 +201,35 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 }
 
 // These are the receive and respond messages for data reports
-
 bool LoRA_Functions::decipherDataReportGateway() {			// Receives the data report and loads results into current object for reporting
-
-	union floatToByte
-	{
-	unsigned char buf[4];
-	float number;
-	} floatToByte;
-
-	current.set_sensorType(buf[8]);
-	if (current.get_sensorType() <=2) {
-		current.set_hourlyCount(buf[4] << 8 | buf[5]);
-		current.set_dailyCount(buf[6] << 8 | buf[7]);
-		Log.info("Sensor type of %d with hourly count of %d and daily count of %d", current.get_sensorType(), current.get_hourlyCount(), current.get_dailyCount());
-	}
-	else {
-		floatToByte.buf[3] = buf[4];
-		floatToByte.buf[2] = buf[5];
-		floatToByte.buf[1] = buf[6];
-		floatToByte.buf[0] = buf[7];
-		current.set_soilVWC(floatToByte.number);
-		Log.info("Soil VWC is %4.2f - %d/%d/%d/%d",current.get_soilVWC(),floatToByte.buf[3],floatToByte.buf[2],floatToByte.buf[1],floatToByte.buf[0]);
-	}
-	current.set_internalTempC(buf[9]);
-	current.set_stateOfCharge(buf[10]);
-	current.set_batteryState(buf[11]);
-	current.set_resetCount(buf[12]);
-	current.set_messageCount(buf[13]);
-	current.set_successCount(buf[14]);
-	current.set_RSSI(buf[15] << 8 | buf[16]);				// These values are from the node based on the last successful data report
-	current.set_SNR(buf[17] << 8 | buf[18]);
-
-	Log.info("Data recieved from the report: hourly %d, daily %d, sensorType %d, temp %d, battery %d, batteryState %d, resets %d, message count %d, success count %d, RSSI %d, SNR %d", (buf[4] << 8 | buf[5]), (buf[6] <<8 | buf[7]), buf[8], buf[9], buf[10], buf[11], buf[12], buf[13], buf[14], buf[15] << 8 | buf[16], buf[17] << 8 | buf[18]);
+	// buf[0] - buf[1] Magic number processed above
+	// buf[2] - nodeNumber processed above
+	// buf[3] - buf[4] is token - processed above
+	// buf[5] - Sensor type - processed above
+	// buf[6] - buf[9] is the unique ID of the node - processed above
+	current.set_payload1(buf[10]);
+	current.set_payload2(buf[11]);
+	current.set_payload3(buf[12]);
+	current.set_payload4(buf[13]);
+	current.set_payload5(buf[14]);
+	current.set_payload6(buf[15]);
+	current.set_payload7(buf[16]);
+	current.set_payload8(buf[17]);
+	current.set_payload9(buf[18]);
+	current.set_payload10(buf[19]);
+	current.set_payload11(buf[20]);
+	current.set_payload12(buf[21]);
+	// Then, we will get the rest of the data from the payload
+	current.set_internalTempC(buf[22]);
+	current.set_stateOfCharge(buf[23]);
+	current.set_batteryState(buf[24]);
+	current.set_resetCount(buf[25]);
+	current.set_RSSI(buf[26] << 8 | buf[27]);				// These values are from the node based on the last successful data report
+	current.set_SNR(buf[28] << 8 | buf[29]);
+	current.set_retryCount(buf[30]);
+	current.set_retransmissionDelay(buf[31]);
+	
+	Log.info("Data recieved from the report: sensorType %d, temp %d, battery %d, batteryState %d, resets %d, message count %d, RSSI %d, SNR %d", current.get_sensorType(), current.get_internalTempC(), current.get_stateOfCharge(), current.get_batteryState(), current.get_resetCount(), sysStatus.get_messageCount(), current.get_RSSI(), current.get_SNR());
 
 	lora_state = DATA_ACK;		// Prepare to respond
 	return true;
@@ -237,21 +239,32 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 	char messageString[128];
 
 	// buf[0] - buf[1] is magic number - processed above
-	buf[2] = ((uint8_t) ((Time.now()) >> 24)); 		// Fourth byte - current time
-	buf[3] = ((uint8_t) ((Time.now()) >> 16));		// Third byte
-	buf[4] = ((uint8_t) ((Time.now()) >> 8));		// Second byte
-	buf[5] = ((uint8_t) (Time.now()));		    	// First byte			
-	buf[6] = highByte(sysStatus.get_frequencyMinutes());	// Frequency of reports set by the gateway
-	buf[7] = lowByte(sysStatus.get_frequencyMinutes());	
+	// buf[2] is nodeNumber - processed above
+	buf[3] = highByte(current.get_token());			// Token - May have changed in the listening function above
+	buf[4] = lowByte(current.get_token());			// Token - so I can trust you
+	buf[5] = ((uint8_t) ((Time.now()) >> 24)); 		// Fourth byte - current time
+	buf[6] = ((uint8_t) ((Time.now()) >> 16));		// Third byte
+	buf[7] = ((uint8_t) ((Time.now()) >> 8));		// Second byte
+	buf[8] = ((uint8_t) (Time.now()));		    	// First byte	
+
+	// Here we calculate the seconds to the next report
+	buf[9] = highByte(sysStatus.get_frequencyMinutes());	// Frequency of reports set by the gateway
+	buf[10] = lowByte(sysStatus.get_frequencyMinutes());	
+	// If the next report takes us into the new day, we need to tell the node to reset its data with AlertCode 6
+
+	buf[11] = (current.get_openHours() == 1) ?  0 : 6;		// Set an alert code if the node is not in open hours - this will reset the current data										
+	buf[12] = current.get_sensorType();			// Since the node is unconfigured, we need to beleive it when it tells us the type
+	buf[13] = 0;
+	buf[14] = 0;								// Will be over-written if needed
+
 	// The next few bytes of the response will depend on whether the node is configured or not
-	if (current.get_nodeNumber() == 11) {			// This is a data report from an unconfigured node - need to tell it to rejoin
+	if (current.get_nodeNumber() == 255) {			// This is a data report from an unconfigured node - need to tell it to rejoin
 		Log.info("Node %d is invalid, setting alert code to 1", current.get_nodeNumber());
 		current.set_alertCodeNode(1);				// This will ensure the node rejoins the network
-		current.set_alertTimestampNode(Time.now());
-		buf[8] = current.get_alertCodeNode();												
-		buf[9] = current.get_sensorType();			// Since the node is unconfigured, we need to beleive it when it tells us the type
+
 	}
 	else {											// This is a data report from a configured node - will use the node database
+		/*
 		current.set_alertCodeNode(LoRA_Functions::getAlert(current.get_nodeNumber()));
 		if (current.get_alertCodeNode() > 0) Log.info("Node %d has a pending alert %d", current.get_nodeNumber(), current.get_alertCodeNode());
 	
@@ -266,28 +279,23 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 		if (current.get_alertCodeNode() != 0) LoRA_Functions::changeAlert(current.get_nodeNumber(),0); 	// The alert was serviced or applied - no longer pending
 		buf[8] = current.get_alertCodeNode();
 
-		// At this point we can update the last connection time in the node database
-		float successPercent;
-		if (current.get_messageCount()==0) successPercent = 0.0;
-		else successPercent = ((current.get_successCount()+1.0)/(float)current.get_messageCount()) * 100.0;  // Add one to success because we are receving the message
-		LoRA_Functions::instance().nodeUpdate(current.get_nodeNumber(), successPercent);
-
+		*/
+		// I need to rethink this part - need to figure out how the gateway can remember that a node has a pending alert without setting up a whole database lookup
 	}
-	buf[10] = current.get_openHours();
-	buf[11] = current.get_messageCount();			// Repeat back message number
 
-	nodeDatabase.flush(true);						// Save updates to the nodID database
+	// nodeDatabase.flush(true);						// Save updates to the nodID database
 	current.flush(true);							// Save values reported by the nodes
 	digitalWrite(BLUE_LED,HIGH);			       	// Sending data
 
 	byte nodeAddress = (current.get_tempNodeNumber() == 0) ? current.get_nodeNumber() : current.get_tempNodeNumber();  // get the return address right
 
-	if (manager.sendtoWait(buf, 12, nodeAddress, DATA_ACK) == RH_ROUTER_ERROR_NONE) {
+	if (manager.sendtoWait(buf, 15, nodeAddress, DATA_ACK) == RH_ROUTER_ERROR_NONE) {
 		digitalWrite(BLUE_LED,LOW);
 
-		snprintf(messageString,sizeof(messageString),"Node %d data report %d acknowledged with alert %d, and RSSI / SNR of %d / %d", current.get_nodeNumber(), buf[10], buf[8], current.get_RSSI(), current.get_SNR());
+		snprintf(messageString,sizeof(messageString),"Node %d data report %d acknowledged with alert %d, and RSSI / SNR of %d / %d", current.get_nodeNumber(), sysStatus.get_messageCount(), current.get_alertCodeNode(), current.get_RSSI(), current.get_SNR());
 		Log.info(messageString);
 		if (Particle.connected()) Particle.publish("status", messageString,PRIVATE);
+		sysStatus.set_messageCount(sysStatus.get_messageCount() + 1);		// Increment the message count
 		return true;
 	}
 	else {
@@ -301,14 +309,31 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 // These are the receive and respond messages for join requests
 bool LoRA_Functions::decipherJoinRequestGateway() {			// Ths only question here is whether the node with the join request needs a new nodeNumber or is just looking for a clock set
 	// buf[0] - buf[1] Magic number processed above
-	// buf[2] - buf[3] NodeID processed above
-	current.set_sensorType(buf[4]);								// Store device type in the current data buffer 
-	current.set_nodeNumber(findNodeNumber(current.get_nodeNumber(), current.get_nodeID()));		// Look up the new node number
-	
-	Log.info("Node %d join request from nodeID %d will change node number to %d", current.get_tempNodeNumber(), current.get_nodeID(),current.get_nodeNumber());
+	// buf[2] - nodeNumber processed above
+	// buf[3] - buf[4] is token - processed above
+	// buf[5] - Sensor type - processed above
+	// buf[6] - buf[9] is the unique ID of the node - processed above
+	current.set_retryCount(buf[10]);
+	current.set_retransmissionDelay(buf[11]);
+
+	if (buf[6] == 255 && buf[7] == 255) {													// This is a virgin node - need to assign it a uniqueID
+		uint8_t random1 = random(0,254);													// Not to 255 so we can see if it is a virgin node
+		uint8_t random2 = random(0,254);
+		uint8_t time1 = ((uint8_t) ((Time.now()) >> 8));									// Second byte
+		uint8_t time2 = ((uint8_t) (Time.now()));											// First byte
+		current.set_uniqueID(random1 << 24 | random2 << 16 | time1 << 8 | time2);	// This should be unique for the numbers we are talking
+		Log.info("Node %d is a virgin node, assigning uniqueID of %lu", current.get_nodeNumber(), current.get_uniqueID());
+	}
+
+	current.set_nodeNumber(LoRA_Functions::findNodeNumber(current.get_nodeNumber(), current.get_uniqueID()));	// This will return the nodeNumber for the nodeID passed to the function
+
+	if (!LoRA_Functions::checkForValidToken(current.get_nodeNumber(), current.get_token())) {
+		current.set_token(sysStatus.get_tokenCore() * Time.day() + current.get_nodeNumber());	// This is the token for the node - it is a function of the core token and the day of the month
+	}
+
+	Log.info("Node %d join request will change node number to %d with a token of %d", current.get_tempNodeNumber(), current.get_nodeNumber(), current.get_token());
 
 	current.set_alertCodeNode(1);									// This is a join request so alert code is 1
-	current.set_alertTimestampNode(Time.now());
 
 	LoRA_Functions::changeType(current.get_nodeNumber(),current.get_sensorType());  // Record the sensor type in the nodeID structure
 
@@ -319,29 +344,37 @@ bool LoRA_Functions::decipherJoinRequestGateway() {			// Ths only question here 
 bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	char messageString[128];
 	Log.info("Acknowledge Join Request");
-	// This is a response to a data message and a specific payload and message flag
-	// Send a reply back to the originator client
-     
+
+	// Gateway's response to a join request from a node
 	buf[0] = highByte(sysStatus.get_magicNumber());					// Magic number - so you can trust me
 	buf[1] = lowByte(sysStatus.get_magicNumber());					// Magic number - so you can trust me
-	buf[2] = ((uint8_t) ((Time.now()) >> 24));  					// Fourth byte - current time
-	buf[3] = ((uint8_t) ((Time.now()) >> 16));						// Third byte
-	buf[4] = ((uint8_t) ((Time.now()) >> 8));						// Second byte
-	buf[5] = ((uint8_t) (Time.now()));		    					// First byte		
-	buf[6] = highByte(sysStatus.get_frequencyMinutes());			// Frequency of reports - for Gateways
-	buf[7] = lowByte(sysStatus.get_frequencyMinutes());	
-	buf[8] = (current.get_nodeNumber() != 11) ?  0 : 1;				// Clear the alert code for the node unless the nodeNumber process failed
-	buf[9] = current.get_nodeNumber();								
-	buf[10] = current.get_sensorType();								// In a join request the node type overwrites the node database value
-
-
-	digitalWrite(BLUE_LED,HIGH);			        				// Sending data
+	buf[2] = current.get_nodeNumber();
+	buf[3] = highByte(current.get_token());							// Token - so I can trust you
+	buf[4] = lowByte(current.get_token());							// Token - so I can trust you
+	buf[5] = ((uint8_t) ((Time.now()) >> 24));  					// Fourth byte - current time
+	buf[6] = ((uint8_t) ((Time.now()) >> 16));						// Third byte
+	buf[7] = ((uint8_t) ((Time.now()) >> 8));						// Second byte
+	buf[8] = ((uint8_t) (Time.now()));		    					// First byte		
+	// Need to calculate the seconds to the next report
+	buf[9] = highByte(sysStatus.get_frequencyMinutes());			// Frequency of reports - for Gateways
+	buf[10] = lowByte(sysStatus.get_frequencyMinutes());	
+	buf[11] = (current.get_nodeNumber() != 255) ?  0 : 1;				// Clear the alert code for the node unless the nodeNumber process failed
+	buf[12] = current.get_sensorType();								// In a join request the node type overwrites the node database value
+	buf[13] = current.get_uniqueID() >> 24;							// Unique ID of the node
+	buf[14] = current.get_uniqueID() >> 16;	
+	buf[15] = current.get_uniqueID() >> 8;
+	buf[16] = current.get_uniqueID();
+	buf[17] = current.get_nodeNumber();
+	buf[18] = 0;													// Set retries and retransmissinos to zero for now
+	buf[19] = 0;
 
 	byte nodeAddress = (current.get_tempNodeNumber() == 0) ? current.get_nodeNumber() : current.get_tempNodeNumber();  // get the return address right
+					
+	digitalWrite(BLUE_LED,HIGH);			        				// Sending data
 
 	Log.info("Sending response to %d with free memory = %li", nodeAddress, System.freeMemory());
 
-	if (manager.sendtoWait(buf, 11, nodeAddress, JOIN_ACK) == RH_ROUTER_ERROR_NONE) {
+	if (manager.sendtoWait(buf, 20, nodeAddress, JOIN_ACK) == RH_ROUTER_ERROR_NONE) {
 		current.set_tempNodeNumber(0);								// Temp no longer needed
 		digitalWrite(BLUE_LED,LOW);
 		snprintf(messageString,sizeof(messageString),"Node %d joined with sensorType %s, alert %d and RSSI / SNR of %d / %d", nodeAddress, (buf[10] ==0)? "car":"person",current.get_alertCodeNode(), current.get_RSSI(), current.get_SNR());
@@ -364,22 +397,22 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 {nodes:[
 	{
 		{node:(int)nodeNumber},
-		{nID: (int)nodeID},
-		{last: (time_t)lastConnectTime},
+		{uID: (uint32_t)uniqueID},
 		{type: (int)sensorType},
-		{succ: (float)successfulSent%},
 		{pend: (int)pendingAlerts}
 	},
 	....]
 }
+
+Let's try something new here:
+
 */
 
-
 // These functions access data in the nodeID JSON
-uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, int nodeID) {
+uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, uint32_t uniqueID) {
 	int index=1;															// Variables to hold values for the function
 	int nodeDeviceNumber;
-	int nodeDeviceID;
+	uint32_t nodeDeviceID;
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
@@ -391,8 +424,8 @@ uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, int nodeID) {
 			Log.info("findNodeNumber ran out of entries at i = %d",i);
 			break;															// Ran out of entries - no match found
 		} 
-		jp.getValueByKey(nodeObjectContainer, "nID", nodeDeviceID);			// Get the deviceID and compare
-		if (nodeDeviceID == nodeID) {
+		jp.getValueByKey(nodeObjectContainer, "uID", nodeDeviceID);			// Get the deviceID and compare
+		if (nodeDeviceID == uniqueID) {
 			jp.getValueByKey(nodeObjectContainer, "node", nodeDeviceNumber);		// A match!
 			return nodeDeviceNumber;												// All is good - return node number for the deviceID passed to the function
 		}
@@ -402,15 +435,13 @@ uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, int nodeID) {
 	nodeNumber = index;
 	JsonModifier mod(jp);
 
-	Log.info("New node will be assigned node number %d, nodeID of %d",nodeNumber, nodeID);
+	Log.info("New node will be assigned node number %d, nodeID of %lu ",nodeNumber, uniqueID);
 
 	mod.startAppend(jp.getOuterArray());
 		mod.startObject();
 		mod.insertKeyValue("node", nodeNumber);
-		mod.insertKeyValue("nID", nodeID);
-		mod.insertKeyValue("last", Time.now());
-		mod.insertKeyValue("type", (int)9);									// This is a temp value that will be updated
-		mod.insertKeyValue("succ",(float)0.0);								// This is a temp value that will be updated
+		mod.insertKeyValue("uID", uniqueID);
+		mod.insertKeyValue("type", (int)current.get_sensorType());			// This is the sensor type reported by the node		
 		mod.insertKeyValue("pend",(int)0);
 		mod.finishObjectOrArray();
 	mod.finish();
@@ -419,6 +450,10 @@ uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, int nodeID) {
 
 	return index;
 }
+
+/*
+
+Not sure we will need this
 
 String LoRA_Functions::findDeviceID(int nodeNumber, int radioID)  {
 	String nodeDeviceID;
@@ -438,8 +473,9 @@ String LoRA_Functions::findDeviceID(int nodeNumber, int radioID)  {
 	if (nodeDeviceID == NULL) return "null";
 	else return nodeDeviceID;
 }
+*/
 
-bool LoRA_Functions::nodeConfigured(int nodeNumber, int radioID)  {
+bool LoRA_Functions::nodeConfigured(int nodeNumber, uint32_t radioID)  {
 	if (nodeNumber > 10) return false;
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
@@ -449,39 +485,13 @@ bool LoRA_Functions::nodeConfigured(int nodeNumber, int radioID)  {
 	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
 	if(nodeObjectContainer == NULL) return false;							// Ran out of entries - no match found
 	
-	jp.getValueByKey(nodeObjectContainer, "rID", radioID);					// Get the radioID for the node number in question
+	jp.getValueByKey(nodeObjectContainer, "uID", radioID);					// Get the radioID for the node number in question
 
-	if (radioID == current.get_nodeID()) return true;
+	if (radioID == current.get_uniqueID()) return true;
 	else {
 		Log.info("Node not configured");  // See the raw JSON string
 		return false;
 	}
-}
-
-bool LoRA_Functions::nodeUpdate(int nodeNumber, float successPercent)  {
-
-	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
-	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
-	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
-
-	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
-	if(nodeObjectContainer == NULL) return false;							// Ran out of entries - no match found
-
-	const JsonParserGeneratorRK::jsmntok_t *value;
-
-	jp.getValueTokenByKey(nodeObjectContainer, "last", value);			// Update last connection time
-	JsonModifier mod(jp);
-	mod.startModify(value);
-	mod.insertValue((int)Time.now());
-	mod.finish();
-
-	jp.getValueTokenByKey(nodeObjectContainer, "succ", value);			// Update the success percentage value
-	mod.startModify(value);
-	mod.insertValue((float)successPercent);
-	mod.finish();
-
-	nodeDatabase.set_nodeIDJson(jp.getBuffer());									// This should backup the nodeID database - now updated to persistent storage
-	return true;
 }
 
 byte LoRA_Functions::getType(int nodeNumber) {
@@ -503,7 +513,7 @@ byte LoRA_Functions::getType(int nodeNumber) {
 }
 
 bool LoRA_Functions::changeType(int nodeNumber, int newType) {
-	if (nodeNumber > 10) return false;
+	if (nodeNumber == 255) return false;
 	int type;
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
@@ -583,10 +593,8 @@ bool LoRA_Functions::changeAlert(int nodeNumber, int newAlert) {
 
 void LoRA_Functions::printNodeData(bool publish) {
 	int nodeNumber;
-	int nodeID;
-	int lastConnect;
+	int uniqueID;
 	int sensorType;
-	float successPercent;
 	int pendingAlert;
 	char data[256];
 
@@ -599,69 +607,35 @@ void LoRA_Functions::printNodeData(bool publish) {
 		if(nodeObjectContainer == NULL) {
 			break;								// Ran out of entries 
 		} 
-		jp.getValueByKey(nodeObjectContainer, "nID", nodeID);
+		jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);
 		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);
-		jp.getValueByKey(nodeObjectContainer, "last", lastConnect);
 		jp.getValueByKey(nodeObjectContainer, "type", sensorType);
-		jp.getValueByKey(nodeObjectContainer, "succ", successPercent);
 		jp.getValueByKey(nodeObjectContainer, "pend", pendingAlert);
 
-		snprintf(data, sizeof(data), "Node %d, nodeID %d, lastConnected: %s, type %d, success %4.2f with pending alert %d", nodeNumber, nodeID, Time.timeStr(lastConnect).c_str(), sensorType, successPercent, pendingAlert);
+		snprintf(data, sizeof(data), "Node %d, uniqueID %d, type %d with pending alert %d", nodeNumber, uniqueID, sensorType,pendingAlert);
 		Log.info(data);
 		if (Particle.connected() && publish) {
 			Particle.publish("nodeData", data, PRIVATE);
 			delay(1000);
 		}
 	}
-
 	// Log.info(nodeDatabase.get_nodeIDJson());  // See the raw JSON string
-
 }
 
-bool LoRA_Functions::nodeConnectionsHealthy() {								// Connections are healthy if at least one node connected in last two periods
-// Resets the LoRA Radio if not healthy
-	
-	int lastConnect;
-	time_t secondsPerPeriod = sysStatus.get_frequencyMinutes() * 60;
-	bool health = true;
+bool LoRA_Functions::checkForValidToken(uint8_t nodeNumber, uint16_t token) {
+	Log.info("Checking for a valid token - nodeNumber %d, token %d, tokenCore %d", nodeNumber, token, sysStatus.get_tokenCore());
 
-	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
-	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
-	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
-
-	for (int i=0; i<10; i++) {												// Iterate through the array looking for a match
-		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
-		if(nodeObjectContainer == NULL) break;								// Ran out of entries 
-
-		jp.getValueByKey(nodeObjectContainer, "last", lastConnect);
-
-		if ((Time.now() - lastConnect) > secondsPerPeriod) {				// If any of the nodes fail to connect - will extend loRA dwell time
-			health = false;
-			break;															// Don't need to keep checking
-		}
+	if (token / sysStatus.get_tokenCore() == nodeNumber) {
+		Log.info("Token is valid");
+		return true;
 	}
-
-	Log.info("Node connections are %s ", (health) ? "healthy":"unhealthy");
-	if(!health) LoRA_Functions::initializeRadio();
-	return health;
+	else return false;
 }
 
-int LoRA_Functions::stringCheckSum(String str){												// This function is made for the Particle DeviceID
-    int result = 0;
-    for(unsigned int i = 0; i < str.length(); i++){
-      int asciiCode = (int)str[i];
-
-      if (asciiCode >=48 && asciiCode <58) {              // 0-9
-        result += asciiCode - 48;
-      } 
-      else if (asciiCode >=65 && asciiCode < 71) {        // A-F
-        result += 10 + asciiCode -65;
-      }
-      else if (asciiCode >=97 && asciiCode < 103) {       // a - f
-        result += 10 + asciiCode -97;
-      }
-    }
-    return result;
+uint16_t LoRA_Functions::setNodeToken(uint8_t nodeNumber) {
+	uint16_t token = sysStatus.get_tokenCore() * nodeNumber;	// This is the token for the node - it is a function of the core token and the day of the month
+	Log.info("Setting token for node %d to %d", nodeNumber, token);
+	return token;
 }
 
 

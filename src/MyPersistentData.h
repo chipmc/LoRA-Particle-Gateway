@@ -78,8 +78,8 @@ public:
 		uint8_t structuresVersion;                        // Version of the data structures (system and data)
 		uint16_t magicNumber;							  // A way to identify nodes and gateways so they can trust each other
 		uint8_t connectivityMode;                         // 0 - standard LoRA and Cellular, 1 - Long LoRA  2 - Always on LoRA, 3 - Always on LoRA and Cellular
-		uint8_t resetCount;                               // reset count of device (0-256)
-		uint8_t messageCount;							  // This is how many messages the Gateay has composed for the day
+		uint8_t resetCount;                               // reset count of device (0-255)
+		uint16_t messageCount;							  // This is how many messages the Gateay has composed for the day
 		time_t lastHookResponse;                   		  // Last time we got a valid Webhook response
 		time_t lastConnection;                     		  // Last time we successfully connected to Particle
 		uint16_t lastConnectionDuration;                  // How long - in seconds - did it take to last connect to the Particle cloud
@@ -89,7 +89,8 @@ public:
 		time_t alertTimestampGateway;              		  // When was the last alert
 		uint8_t openTime;                                 // Open time 24 hours
 		uint8_t closeTime;                                // Close time 24 hours
-		uint8_t sensorType;								  // What sensor if any is on this device (0-none, 1-PIR, 2-Pressure, 3 - Soil...)
+		uint8_t tokenCore;								  // This is the random part of the daily token
+
 	};
 	SysData sysData;
 
@@ -132,8 +133,8 @@ public:
 	uint8_t get_resetCount() const;
 	void set_resetCount(uint8_t value);
 
-	uint8_t get_messageCount() const;
-	void set_messageCount(uint8_t value);
+	uint16_t get_messageCount() const;
+	void set_messageCount(uint16_t value);
 
 	time_t get_lastHookResponse() const;
 	void set_lastHookResponse(time_t value);
@@ -162,11 +163,8 @@ public:
 	uint8_t get_closeTime() const;
 	void set_closeTime(uint8_t value);
 
-	uint8_t get_sensorType() const;
-	void set_sensorType(uint8_t value);
-
-	uint16_t get_RSSI() const;
-	void set_RSSI(uint16_t value);
+	uint8_t get_tokenCore() const;
+	void set_tokenCore(uint8_t value);
 
 	//Members here are internal only and therefore protected
 protected:
@@ -275,25 +273,32 @@ public:
 		// Size is 28 plus a header of 16
 		uint8_t nodeNumber;                               // The nodeNumber of the device providing the current data 
 		uint8_t tempNodeNumber;                           // Used when an unconfigured node joins the network
-		uint16_t nodeID;									  // One byte that can help us determine if a nodeNumber is misconfigured
+		uint16_t token;								  	  // Two bytes that can help us determine if a nodeNumber is misconfigured
+		uint8_t sensorType;								  // What is the sensor type of the node sending current data
+		uint32_t uniqueID;								  // Unique ID of the node sending current data
+		uint8_t payload1;							  	  // Payload Data Byte 1
+		uint8_t payload2;							  	  // Payload Data Byte 2
+		uint8_t payload3;							  	  // Payload Data Byte 3
+		uint8_t payload4;							  	  // Payload Data Byte 4
+		uint8_t payload5;							  	  // Payload Data Byte 5
+		uint8_t payload6;							  	  // Payload Data Byte 6
+		uint8_t payload7;							  	  // Payload Data Byte 7
+		uint8_t payload8;							  	  // Payload Data Byte 8
+		uint8_t payload9;							  	  // Payload Data Byte 9
+		uint8_t payload10;							  	  // Payload Data Byte 10
+		uint8_t payload11;							  	  // Payload Data Byte 11
+		uint8_t payload12;							  	  // Payload Data Byte 12
 		uint8_t internalTempC;                            // Enclosure temperature in degrees C
-		double stateOfCharge;                             // Battery charge level
+		int8_t stateOfCharge;                             // Battery charge level
 		uint8_t batteryState;                             // Stores the current battery state (charging, discharging, etc)
 		uint8_t resetCount;								  // This is the number of resets for the node publishing data
 		int16_t RSSI;                                     // Latest LoRA signal strength value from the Node
 		int16_t SNR;									  // Latest LoRA Signal to Noise Ratio from the Node
-		uint8_t messageCount;                             // What message are we on
-		uint8_t successCount;							  // How many attempts have been successful - from the node
-		time_t lastCountTime;                             // When did we last record a count
-		uint16_t hourlyCount;                             // Current Hourly Count
-		uint16_t dailyCount;                              // Current Daily Count
 		uint8_t alertCodeNode;                            // Alert code from node
-		time_t alertTimestampNode;                 	      // Timestamp of alert
-		bool openHours; 								  // Will set to true or false based on time of dat
-		uint8_t sensorType;								  // What is the sensor type of the node sending current data
+		uint8_t openHours; 								  // Will set to true or false based on time of dat
 		uint8_t	hops;									  // How many hops did the message take to get to the gateway
-		uint16_t productVersion;						  // What release is the node running?
-		float soilVWC;									  // Soil Volumetric Water Content
+		uint8_t retryCount;								  // How many retries did the message take to get to the gateway
+		uint8_t retransmissionDelay;					  // How extra time did retransmissinos add to the time it took the message to get to the gateway
 		// OK to add more fields here 
 	};
 	CurrentData currentData;
@@ -329,14 +334,56 @@ public:
 	uint8_t get_tempNodeNumber() const;
 	void set_tempNodeNumber(uint8_t value);
 
-	uint16_t get_nodeID() const;
-	void set_nodeID(uint16_t value);
+	uint16_t get_token() const;
+	void set_token(uint16_t value);
+
+	uint8_t get_sensorType() const;
+	void set_sensorType(uint8_t value);
+
+	uint32_t get_uniqueID() const;
+	void set_uniqueID(uint32_t value);
+
+	uint8_t get_payload1() const;
+	void set_payload1(uint8_t value);
+
+	uint8_t get_payload2() const;
+	void set_payload2(uint8_t value);
+
+	uint8_t get_payload3() const;
+	void set_payload3(uint8_t value);
+
+	uint8_t get_payload4() const;
+	void set_payload4(uint8_t value);
+
+	uint8_t get_payload5() const;
+	void set_payload5(uint8_t value);
+
+	uint8_t get_payload6() const;
+	void set_payload6(uint8_t value);
+
+	uint8_t get_payload7() const;
+	void set_payload7(uint8_t value);
+
+	uint8_t get_payload8() const;
+	void set_payload8(uint8_t value);
+
+	uint8_t get_payload9() const;
+	void set_payload9(uint8_t value);
+
+	uint8_t get_payload10() const;
+	void set_payload10(uint8_t value);
+
+	uint8_t get_payload11() const;
+	void set_payload11(uint8_t value);
+
+	uint8_t get_payload12() const;
+	void set_payload12(uint8_t value);
 
 	uint8_t get_internalTempC() const ;
 	void set_internalTempC(uint8_t value);
 
-	double get_stateOfCharge() const;
-	void set_stateOfCharge(double value);
+	int8_t get_stateOfCharge() const;
+	void set_stateOfCharge(int8_t value);
 
 	uint8_t get_batteryState() const;
 	void set_batteryState(uint8_t value);
@@ -344,53 +391,28 @@ public:
 	uint8_t get_resetCount() const;
 	void set_resetCount(uint8_t value);
 
-	time_t get_lastSampleTime() const;
-	void set_lastSampleTime(time_t value);
-
 	int16_t get_RSSI() const;
 	void set_RSSI(int16_t value);
 
 	int16_t get_SNR() const;
 	void set_SNR(int16_t value);
 
-	uint8_t get_messageCount() const;
-	void set_messageCount(uint8_t value);
-
-	uint8_t get_successCount() const;
-	void set_successCount(uint8_t value);
-
-	time_t get_lastCountTime() const;
-	void set_lastCountTime(time_t value);
-
-	uint16_t get_hourlyCount() const;
-	void set_hourlyCount(uint16_t value);
-
-	uint16_t get_dailyCount() const;
-	void set_dailyCount(uint16_t value);
-
 	uint8_t get_alertCodeNode() const;
 	void set_alertCodeNode(uint8_t value);
 
-	time_t get_alertTimestampNode() const;
-	void set_alertTimestampNode(time_t value);
-
-	bool get_openHours() const;
-	void set_openHours(bool value);
-
-	uint8_t get_sensorType() const;
-	void set_sensorType(uint8_t value);
+	uint8_t get_openHours() const;
+	void set_openHours(uint8_t value);
 
 	uint8_t get_hops() const;
 	void set_hops(uint8_t value);
 
-	uint16_t get_productVersion() const;
-	void set_productVersion(uint16_t value);
+	uint8_t get_retryCount() const;
+	void set_retryCount(uint8_t value);
 
-	float get_soilVWC() const;
-	void set_soilVWC(float value);
+	uint8_t get_retransmissionDelay() const;
+	void set_retransmissionDelay(uint8_t value);
 
-
-		//Members here are internal only and therefore protected
+	//Members here are internal only and therefore protected
 protected:
     /**
      * @brief The constructor is protected because the class is a singleton

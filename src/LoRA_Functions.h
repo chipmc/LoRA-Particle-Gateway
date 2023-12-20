@@ -8,61 +8,83 @@
  */
 
 // Data exchange formats
-// Format of a data report
+// Format of a data report - From the Node to the Gateway so includes a token
 /*
-buf[0 - 1] magicNumber                      // Magic number for devices
-buf[2 - 3] nodeID                           // nodeID for verification
-For Visitation Counters
-    buf[4 - 5] hourly                           // Hourly count
-    buf[6 - 7] daily                            // Daily Count
-For Soil Sensors
-    buf[4-7] Soil VWC
-buf[8] sensorType                           // What sensor type is it
-buf[9] temp;                                // Enclosure temp
-buf[10] battChg;                            // State of charge
-buf[11] battState;                          // Battery State
-buf[12] resets                              // Reset count
-buf[13] messageCount;                       // Sequential message number
-buf[14] successCount;                       // How many successful sends
-buf[15-16] RSSI                             // From the Node's perspective
-buf[17-18] SNR                              // From the Node's perspective
+*** Header Section - Common to all Nodes
+buf[0 - 1] magicNumber                      // Magic number that identifies the Gateway's network
+buf[2] nodeNumber                           // nodeNumber - unique to each node on the gateway's network
+buf[3 - 4] Token                            // Token given to the node and good for 24 hours
+buf[5] sensorType                           // What sensor type is it
+buf[6 - 9] uniqueID          // This is a 4-byte identifier that is unique to each node and is only set once
+*** Payload Section - 12 Bytes but interpretion is different for each sensor type
+buf[10 - 21] payload                        // Payload - 12 bytes sensor type determines interpretation
+*** Status Data - Common to all Nodes
+buf[22] temp;                               // Enclosure temp (single byte signed integer -127 to 127 degrees C)
+buf[23] battChg;                            // State of charge (single byte signed integer -1 to 100%)
+buf[24] battState;                          // Battery State (single byte signed integer 0 to 6)
+buf[25] resets                              // Reset count
+buf[26-27] RSSI                             // From the Node's perspective
+buf[28-29] SNR                              // From the Node's perspective
+*** Re-Transmission Data - Common to all Nodes
+buf[30] Re-Tries                            // This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
+buf[31] Re-Transmission Delay               // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
 */
 
-// Format of a data acknowledgement
+// Format of a data acknowledgement - From the Gateway to the Node
 /*    
-    buf[0 - 1 ] magicNumber                 // Magic Number
-    buf[2 - 5 ] Time.now()                  // Set the time 
-    buf[6 - 7] frequencyMinutes             // For the Gateway minutes on the hour
-    buf[8] alertCode                        // This lets the Gateway trigger an alert on the node - typically a join request
-    buf[9] sensorType                       // Let's the Gateway reset the sensor if needed 
-    buf[10] openHours                        // From the Gateway to the node - is the park open?
-    buf[11] message number                  // Parrot this back to see if it matches
+    buf[0 - 1] magicNumber                  // Magic Number
+    buf[2] nodeNumber                       // Node number (unique for the network)
+    buf[3 - 4] Token                        // Parrot the token back to the node
+    buf[5 - 8] Time.now()                   // Set the time 
+    buf[9 - 10] Seconds to next Report      // The gateway tells the node how many seconds until next transmission window - up to 18 hours
+    buf[11] alertCode                       // This lets the Gateway trigger an alert on the node - typically a join request
+    buf[12] sensorType                      // Let's the Gateway reset the sensor if needed 
+    buf[13] Re-Tries                        // This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
+    buf[14] Re-Transmission Delay           // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
 */
 
-// Format of a join request
+// Format of a join request - From the Node to the Gateway
 // SensorType - 0/pressure, 1/PIR, 2/Magnetometer, 4/Soil
 
 /*
-buf[0 - 1] magicNumber;                      // Magic Number
-buf[2 - 3] nodeID                            // nodeID for verification
-buf[4] sensorType				             // Identifies sensor type to Gateway
+buf[0-1] magicNumber;                       // Magic Number
+buf[2] nodeNumber;                          // nodeNumber - typically 255 for a join request
+buf[3 - 4] token                            // token for validation - may not be valid - if it is valid - response is to set the clock only
+buf[5] sensorType				            // Identifies sensor type to Gateway
+buf[6 - 9] Unique Node Identifier           // This is a 4-byte identifier that is unique to each node and is only set once
+buf[10]  Re-Tries                           // This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
+buf[11]  Re-Transmission Delay              // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
 */
 
-// Format for a join acknowledgement
+// Format for a join acknowledgement -  From the Gateway to the Node
 /*
-    buf[0 - 1 ]  magicNumber                // Magic Number
-    buf[2 - 5 ] Time.now()                  // Set the time 
-    buf[6 - 7] frequencyMinutes             // For the Gateway minutes on the hour  
-    buf[8] alertCodeNode                   // Gateway can set an alert code here
-    buf[9]  newNodeNumber                   // New Node Number for device
-    buf[10]  sensorType				        // Gateway confirms sensor type
-
+    buf[0 - 1]  magicNumber                 // Magic Number
+    buf[2] nodeNumber;                      // nodeNumber - assigned by the Gateway
+    buf[3 - 4] token                        // token for validation - good for the day
+    buf[5 - 8] Time.now()                   // Set the time 
+    buf[9 - 10] Seconds till next report    // For the Gateway minutes on the hour  
+    buf[11] alertCodeNode                   // Gateway can set an alert code here
+    buf[12]  sensorType				        // Gateway confirms sensor type
+    buf[13 - 16] uniqueID                   // This is a 4-byte identifier that is unique to each node and is only set once by the gateway on 1st joining
+    buf[17] new nodeNumber                  // Gateway assigns a node number
+    buf[18]  Re-Tries                       //  This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
+    buf[19] Re-Transmission Delay           // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
 */
 
 #ifndef __LORA_FUNCTIONS_H
 #define __LORA_FUNCTIONS_H
 
 #include "Particle.h"
+#include "Particle_Functions.h"
+#include <RH_RF95.h>
+#include <RHEncryptedDriver.h>
+#include <RHMesh.h>
+#include <Speck.h>
+#include <base64RK.h>
+#include "device_pinout.h"
+#include "MyPersistentData.h"
+#include "JsonParserGeneratorRK.h"
+#include "LocalTimeRK.h"
 
 /**
  * This class is a singleton; you do not create one as a global, on the stack, or with new.
@@ -134,15 +156,6 @@ public:
      */
     bool listenForLoRAMessageGateway();     
 
-    /**
-     * @brief Function used to respond to messages from nodes to the gateway
-     * 
-     * @param nextSeconds - the number of seconds till next transmission window
-     * @return true - response acknowledged
-     * @return false 
-     */
-    bool respondToLoRAMessageGateway();  
-
     // Specific Gateway Message Functions
     /**
      * @brief Function that unpacks a data report from a node
@@ -158,13 +171,7 @@ public:
      * @return false 
      */
     bool decipherJoinRequestGateway();     
-    /**
-     * @brief Function that unpacks an alert report from a node
-     * 
-     * @return true 
-     * @return false 
-     */
-    bool decipherAlertReportGateway();  
+
     /**    
      * @brief Sends an acknolwedgement from the gateway to the node after successfully unpacking an alert report.
      * Also sends the number of seconds until next transmission window.
@@ -182,14 +189,7 @@ public:
      * @return false 
      */
     bool acknowledgeJoinRequestGateway();   // Gateway - acknowledged receipt of a join request
-    /**
-     * @brief Sends an acknolwedgement from the gateway to the node after successfully unpacking a join request.
-     * Also sends the number of seconds until next transmission window.
-     * @param nextSeconds 
-     * @return true 
-     * @return false 
-     */
-    bool acknowledgeAlertReportGateway();   // Gateway - acknowledged receipt of an alert report
+
     /**
      * @brief Returns the node number for the deviceID provided.  This is used in join requests
      * 
@@ -197,15 +197,8 @@ public:
      * @returns the node number for this deviceID
      * 
      */
-    uint8_t findNodeNumber(int nodeNumber, int nodeID);
-    /**
-     * @brief Returns the deviceID for a provided node number.  this is used in composing Particle publish payloads
-     *
-     * @param nodeNumber
-     * @returns device ID
-     * 
-     */
-    String findDeviceID(int nodeNumber, int radioID);
+    uint8_t findNodeNumber(int nodeNumber, uint32_t nodeID);
+
     /**
      * @brief Get Type is a function that returns the sensor Type for a given node number
      * 
@@ -251,33 +244,20 @@ public:
      * @param nodeNumber and a float for the % of successful messages delivered
      * @returns true or false
      */
-    bool nodeConfigured(int nodeNumber, int radioID);
-    /**
-     * @brief Update the success percent and last connect time for a node
-     * 
-     * @param nodeNumber 
-     * @param successPercent 
-     * @return true 
-     * @return false 
-     */
-    bool nodeUpdate(int nodeNumber, float successPercent);
-    /**
-     * @brief Checks to see if the nodes have checked in recently
-     * 
-     * @returns true if healthy and false if not
-     * 
-     * @details Note: this function will reset the LoRA radio if no nodes have checked in over last two periods
-     * 
-     */
-    bool nodeConnectionsHealthy();
+    bool nodeConfigured(int nodeNumber, uint32_t radioID);
+ 
+
+    /** 
+     * @brief This function returns true if the nodeNumber / Token combination is valid
+    */
+    bool checkForValidToken(uint8_t nodeNumber, uint16_t token);
 
     /**
-     * @brief computes a two digit checksum based on the Particle deviceID
-     * 
-     * @param str - a 24 character hex number string
-     * @return int - a value from 0 to 360 based on the character string
+     * @brief This function calculates a valid token for a node
+     *
      */
-    int stringCheckSum(String str);
+    uint16_t setNodeToken(uint8_t nodeNumber);
+
 
 protected:
     /**
