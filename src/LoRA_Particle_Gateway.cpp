@@ -38,6 +38,7 @@
 // v11.00 - Verizon code no longer needed, Updated to include Soil Moisture sensor type and webhook
 // v12.00 - Added support for the See Insights LoRA Node v1
 // v13.00 - Breaking change - updated libraries (see below) and data structures.  Also, implemented a "token" and node API endpoint process that is new.  Requires node ver v4 or higher.  Minimal Gateway model.
+// v14.00 - See Read.md for details.  Added support (persistent storage, Join Ack, Particle function) for "spaces" and "placement" enabled WebHooks - moved Gateways to "LoRA Gateway" product group (requires node v7 or above)
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -55,8 +56,8 @@
 #include "MyPersistentData.h"						// Where my persistent storage files are kept
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
-PRODUCT_VERSION(13);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="13.00";
+PRODUCT_VERSION(14);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
+char currentPointRelease[6] ="14.00";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging

@@ -8,7 +8,7 @@
  */
 
 // Data exchange formats
-// Format of a data report - From the Node to the Gateway so includes a token
+// Format of a data report - From the Node to the Gateway so includes a token - most common message from node to gateway
 /*
 *** Header Section - Common to all Nodes
 buf[0 - 1] magicNumber                      // Magic number that identifies the Gateway's network
@@ -30,7 +30,7 @@ buf[30] Re-Tries                            // This byte is dedicated to RHRelia
 buf[31] Re-Transmission Delay               // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
 */
 
-// Format of a data acknowledgement - From the Gateway to the Node
+// Format of a data acknowledgement - From the Gateway to the Node - Most common message from gatewat to node
 /*    
     buf[0 - 1] magicNumber                  // Magic Number
     buf[2] nodeNumber                       // Node number (unique for the network)
@@ -52,8 +52,9 @@ buf[2] nodeNumber;                          // nodeNumber - typically 255 for a 
 buf[3 - 4] token                            // token for validation - may not be valid - if it is valid - response is to set the clock only
 buf[5] sensorType				            // Identifies sensor type to Gateway
 buf[6 - 9] Unique Node Identifier           // This is a 4-byte identifier that is unique to each node and is only set once
-buf[10]  Re-Tries                           // This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
-buf[11]  Re-Transmission Delay              // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
+buf[10-13] Payload                          // Payload - 4 bytes sensor type determines interpretation
+buf[14]  Re-Tries                           // This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
+buf[15]  Re-Transmission Delay              // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
 */
 
 // Format for a join acknowledgement -  From the Gateway to the Node
@@ -67,8 +68,9 @@ buf[11]  Re-Transmission Delay              // This byte is dedicated to RHRelia
     buf[12]  sensorType				        // Gateway confirms sensor type
     buf[13 - 16] uniqueID                   // This is a 4-byte identifier that is unique to each node and is only set once by the gateway on 1st joining
     buf[17] new nodeNumber                  // Gateway assigns a node number
-    buf[18]  Re-Tries                       //  This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
-    buf[19] Re-Transmission Delay           // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
+    buf[18-21] Payload                      // Payload - 4 bytes sensor type determines interpretation                         
+    buf[22]  Re-Tries                       // This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
+    buf[23] Re-Transmission Delay           // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
 */
 
 #ifndef __LORA_FUNCTIONS_H
@@ -257,6 +259,17 @@ public:
      *
      */
     uint16_t setNodeToken(uint8_t nodeNumber);
+
+    /**
+     * @brief Loads the current payload values with the values from the node
+    */
+   void getPayload(uint8_t nodeNumber);
+
+
+   /**
+    * @brief Changes the payload values for a given node
+   */
+   void changePayload(uint8_t nodeNumber);
 
 
 protected:

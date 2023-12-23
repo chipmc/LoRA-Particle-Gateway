@@ -68,13 +68,13 @@ bool LoRA_Functions::setup(bool gatewayID) {
 		sysStatus.set_nodeNumber(GATEWAY_ADDRESS);							// Gateway - Manager is initialized by default with GATEWAY_ADDRESS - make sure it is stored in FRAM
 		Log.info("LoRA Radio initialized as a gateway (address %d) with a deviceID of %s", GATEWAY_ADDRESS, System.deviceID().c_str());
 	}
-	else if (sysStatus.get_nodeNumber() > 0 && sysStatus.get_nodeNumber() <= 10) {
+	else if (sysStatus.get_nodeNumber() > 0 && sysStatus.get_nodeNumber() <= 255) {
 		manager.setThisAddress(sysStatus.get_nodeNumber());// Node - use the Node address in valid range from memory
 		Log.info("LoRA Radio initialized as node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
 	}
 	else {																						// Else, we will set as an unconfigured node
-		sysStatus.set_nodeNumber(11);
-		manager.setThisAddress(11);
+		sysStatus.set_nodeNumber(255);
+		manager.setThisAddress(255);
 		Log.info("LoRA Radio initialized as an unconfigured node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
 	}
 
@@ -177,6 +177,7 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 				Log.info("Node %d is unconfigured", current.get_nodeNumber());
 				current.set_tempNodeNumber(current.get_nodeNumber());			// Store node number in temp for the repsonse
 				current.set_nodeNumber(255);									// Set node number to unconfigured
+				current.set_alertCodeNode(1);									// This is a join request so alert code is 1
 			}
 		}
 
@@ -250,10 +251,13 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 	// Here we calculate the seconds to the next report
 	buf[9] = highByte(sysStatus.get_frequencyMinutes());	// Frequency of reports set by the gateway
 	buf[10] = lowByte(sysStatus.get_frequencyMinutes());	
-	// If the next report takes us into the new day, we need to tell the node to reset its data with AlertCode 6
-
-	buf[11] = (current.get_openHours() == 1) ?  0 : 6;		// Set an alert code if the node is not in open hours - this will reset the current data										
-	buf[12] = current.get_sensorType();			// Since the node is unconfigured, we need to beleive it when it tells us the type
+	// Send Alert Code - or, if it is zero and the park is closed, tell the node to reset its data with AlertCode 6
+	if (current.get_alertCodeNode()) {
+		buf[11] = current.get_alertCodeNode();		// Set an alert code if the node is not in open hours - this will reset the current data
+	}
+	else buf[11] = (current.get_openHours() == 1) ?  0 : 6;		// Set an alert code if the node is not in open hours - this will reset the current data
+										
+	buf[12] = current.get_sensorType();			// Set the sensor type - this is the sensor type reported by the node
 	buf[13] = 0;
 	buf[14] = 0;								// Will be over-written if needed
 
@@ -286,8 +290,12 @@ bool LoRA_Functions::decipherJoinRequestGateway() {			// Ths only question here 
 	// buf[3] - buf[4] is token - processed above
 	// buf[5] - Sensor type - processed above
 	// buf[6] - buf[9] is the unique ID of the node - processed above
-	current.set_retryCount(buf[10]);
-	current.set_retransmissionDelay(buf[11]);
+	current.set_payload1(buf[10]);
+	current.set_payload2(buf[11]);
+	current.set_payload3(buf[12]);
+	current.set_payload4(buf[13]);
+	current.set_retryCount(buf[14]);
+	current.set_retransmissionDelay(buf[15]);
 
 	if (buf[6] == 255 && buf[7] == 255) {													// This is a virgin node - need to assign it a uniqueID
 		uint8_t random1 = random(0,254);													// Not to 255 so we can see if it is a virgin node
@@ -299,6 +307,8 @@ bool LoRA_Functions::decipherJoinRequestGateway() {			// Ths only question here 
 	}
 
 	current.set_nodeNumber(LoRA_Functions::findNodeNumber(current.get_nodeNumber(), current.get_uniqueID()));	// This will return the nodeNumber for the nodeID passed to the function
+
+
 
 	if (!LoRA_Functions::checkForValidToken(current.get_nodeNumber(), current.get_token())) {
 		current.set_token(sysStatus.get_tokenCore() * Time.day() + current.get_nodeNumber());	// This is the token for the node - it is a function of the core token and the day of the month
@@ -338,8 +348,18 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	buf[15] = current.get_uniqueID() >> 8;
 	buf[16] = current.get_uniqueID();
 	buf[17] = current.get_nodeNumber();
-	buf[18] = 0;													// Set retries and retransmissinos to zero for now
-	buf[19] = 0;
+
+	if (LoRA_Functions::nodeConfigured(current.get_nodeNumber(), current.get_uniqueID())) {		// Check to make sure the node is configured
+		LoRA_Functions::getPayload(current.get_nodeNumber());			// Get the payload values from the nodeID database
+		buf[18] = current.get_payload1();													// Payload values from node database
+		buf[19] = current.get_payload2();
+		buf[20] = current.get_payload3();
+		buf[21] = current.get_payload4();	
+	}
+	else buf[18] = buf[19] = buf[20] = buf[21] = 0;					// Else, we will send 0's for the payload
+
+	buf[22] = 0;											// buf[22] and buf[23] are reserved for future use
+	buf[23] = 0;
 
 	byte nodeAddress = (current.get_tempNodeNumber() == 0) ? current.get_nodeNumber() : current.get_tempNodeNumber();  // get the return address right
 					
@@ -347,7 +367,7 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 
 	Log.info("Sending response to %d with free memory = %li", nodeAddress, System.freeMemory());
 
-	if (manager.sendtoWait(buf, 20, nodeAddress, JOIN_ACK) == RH_ROUTER_ERROR_NONE) {
+	if (manager.sendtoWait(buf, 24, nodeAddress, JOIN_ACK) == RH_ROUTER_ERROR_NONE) {
 		current.set_tempNodeNumber(0);								// Temp no longer needed
 		digitalWrite(BLUE_LED,LOW);
 		snprintf(messageString,sizeof(messageString),"Node %d joined with sensorType %s, alert %d and RSSI / SNR of %d / %d", nodeAddress, (buf[10] ==0)? "car":"person",current.get_alertCodeNode(), current.get_RSSI(), current.get_SNR());
@@ -372,6 +392,10 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 		{node:(int)nodeNumber},
 		{uID: (uint32_t)uniqueID},
 		{type: (int)sensorType},
+		{p1: (int)payload1},
+		{p2: (int)payload2},
+		{p3: (int)payload3},
+		{p4: (int)payload4},
 		{pend: (int)pendingAlerts}
 	},
 	....]
@@ -415,6 +439,10 @@ uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, uint32_t uniqueID) {
 		mod.insertKeyValue("node", nodeNumber);
 		mod.insertKeyValue("uID", uniqueID);
 		mod.insertKeyValue("type", (int)current.get_sensorType());			// This is the sensor type reported by the node		
+		mod.insertKeyValue("p1",(int)0);
+		mod.insertKeyValue("p2",(int)0);
+		mod.insertKeyValue("p3",(int)0);
+		mod.insertKeyValue("p4",(int)0);
 		mod.insertKeyValue("pend",(int)0);
 		mod.finishObjectOrArray();
 	mod.finish();
@@ -424,31 +452,8 @@ uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, uint32_t uniqueID) {
 	return index;
 }
 
-/*
 
-Not sure we will need this
-
-String LoRA_Functions::findDeviceID(int nodeNumber, int radioID)  {
-	String nodeDeviceID;
-	int nodeRadioID;
-
-	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
-	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
-	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
-
-	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
-	if(nodeObjectContainer == NULL) return "null";							// Ran out of entries - no match found
-
-	jp.getValueByKey(nodeObjectContainer,"rID", nodeRadioID);				// Get the radioID to see if it is a match
-	if (nodeRadioID != radioID) return "null";								// Not the right nodeNumber / nodeID combo
-
-	jp.getValueByKey(nodeObjectContainer, "dID", nodeDeviceID);				// Get the deviceID and compare
-	if (nodeDeviceID == NULL) return "null";
-	else return nodeDeviceID;
-}
-*/
-
-bool LoRA_Functions::nodeConfigured(int nodeNumber, uint32_t radioID)  {
+bool LoRA_Functions::nodeConfigured(int nodeNumber, uint32_t uniqueID)  {
 	if (nodeNumber > 10) return false;
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
@@ -458,9 +463,9 @@ bool LoRA_Functions::nodeConfigured(int nodeNumber, uint32_t radioID)  {
 	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
 	if(nodeObjectContainer == NULL) return false;							// Ran out of entries - no match found
 	
-	jp.getValueByKey(nodeObjectContainer, "uID", radioID);					// Get the radioID for the node number in question
+	jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);					// Get the radioID for the node number in question
 
-	if (radioID == current.get_uniqueID()) return true;
+	if (uniqueID == current.get_uniqueID()) return true;
 	else {
 		Log.info("Node not configured");  // See the raw JSON string
 		return false;
@@ -516,6 +521,93 @@ bool LoRA_Functions::changeType(int nodeNumber, int newType) {
 	return true;
 
 }
+
+void LoRA_Functions::getPayload(uint8_t nodeNumber) {
+	int payload1;
+	int payload2;
+	int payload3;
+	int payload4;
+
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
+	if(nodeObjectContainer == NULL) {
+		Log.info("From getPayload function Node number not found so returning");
+		return;
+	} 
+	// Else we will load the current values fomr the node
+	jp.getValueByKey(nodeObjectContainer, "p1", payload1);
+	jp.getValueByKey(nodeObjectContainer, "p2", payload2);
+	jp.getValueByKey(nodeObjectContainer, "p3", payload3);
+	jp.getValueByKey(nodeObjectContainer, "p4", payload4);
+	current.set_payload1(payload1);
+	current.set_payload2(payload2);
+	current.set_payload3(payload3);
+	current.set_payload4(payload4);	
+	Log.info("Loaded payload values of %d, %d, %d, %d", payload1, payload2, payload3, payload4);
+	return;
+}
+
+void LoRA_Functions::changePayload(uint8_t nodeNumber) {
+	if (nodeNumber == 255) return;
+	int payload1;
+	int payload2;
+	int payload3;
+	int payload4;
+
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
+	if(nodeObjectContainer == NULL) return;								// Ran out of entries
+
+	jp.getValueByKey(nodeObjectContainer, "p1", payload1);
+	jp.getValueByKey(nodeObjectContainer, "p2", payload2);
+	jp.getValueByKey(nodeObjectContainer, "p3", payload3);
+	jp.getValueByKey(nodeObjectContainer, "p4", payload4);
+
+	Log.info("Changing payload values from %d, %d, %d, %d", payload1, payload2, payload3, payload4);
+
+	payload1 = current.get_payload1();
+	payload2 = current.get_payload2();
+	payload3 = current.get_payload3();
+	payload4 = current.get_payload4();
+
+	Log.info("Changing payload values to %d, %d, %d, %d", payload1, payload2, payload3, payload4);
+
+	const JsonParserGeneratorRK::jsmntok_t *value;
+
+	jp.getValueTokenByKey(nodeObjectContainer, "p1", value);
+	JsonModifier mod(jp);
+	mod.startModify(value);
+	mod.insertValue((int)payload1);
+	mod.finish();
+
+	jp.getValueTokenByKey(nodeObjectContainer, "p2", value);
+	mod.startModify(value);
+	mod.insertValue((int)payload2);
+	mod.finish();
+
+	jp.getValueTokenByKey(nodeObjectContainer, "p3", value);
+	mod.startModify(value);
+	mod.insertValue((int)payload3);
+	mod.finish();
+
+	jp.getValueTokenByKey(nodeObjectContainer, "p4", value);
+	mod.startModify(value);
+	mod.insertValue((int)payload4);
+	mod.finish();
+
+	nodeDatabase.set_nodeIDJson(jp.getBuffer());									// This should backup the nodeID database - now updated to persistent storage
+
+	return;
+
+
+}
+
 
 byte LoRA_Functions::getAlert(int nodeNumber) {
 	if (nodeNumber > 10) return 255;										// Not a configured node

@@ -279,7 +279,7 @@ public:
 		uint8_t payload1;							  	  // Payload Data Byte 1
 		uint8_t payload2;							  	  // Payload Data Byte 2
 		uint8_t payload3;							  	  // Payload Data Byte 3
-		uint8_t payload4;							  	  // Payload Data Byte 4
+		uint8_t payload4;							  	  // Payload Data Byte 4  // First four bytes are used by both data and join messages
 		uint8_t payload5;							  	  // Payload Data Byte 5
 		uint8_t payload6;							  	  // Payload Data Byte 6
 		uint8_t payload7;							  	  // Payload Data Byte 7
@@ -287,7 +287,7 @@ public:
 		uint8_t payload9;							  	  // Payload Data Byte 9
 		uint8_t payload10;							  	  // Payload Data Byte 10
 		uint8_t payload11;							  	  // Payload Data Byte 11
-		uint8_t payload12;							  	  // Payload Data Byte 12
+		uint8_t payload12;							  	  // Payload Data Byte 12 // bytes 5-12 are used by data messages only
 		uint8_t internalTempC;                            // Enclosure temperature in degrees C
 		int8_t stateOfCharge;                             // Battery charge level
 		uint8_t batteryState;                             // Stores the current battery state (charging, discharging, etc)
