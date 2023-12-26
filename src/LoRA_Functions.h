@@ -215,7 +215,7 @@ public:
      * @returns sensor type
      * 
      */
-    bool changeType(int nodeNumber, int newType);
+    bool setType(int nodeNumber, int newType);
 
     /**
      * @brief Get the current alert pending value from the nodeID data strcuture
@@ -233,7 +233,7 @@ public:
      * @return true 
      * @return false 
      */
-    bool changeAlert(int nodeNumber, int newAlert);
+    bool setAlert(int nodeNumber, int newAlert);
 
     /**
      * @brief Primarily used for debugging
@@ -269,7 +269,7 @@ public:
    /**
     * @brief Changes the payload values for a given node
    */
-   void changePayload(uint8_t nodeNumber);
+   void setPayload(uint8_t nodeNumber);
 
 
 protected:

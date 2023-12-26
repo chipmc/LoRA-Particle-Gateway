@@ -39,6 +39,7 @@
 // v12.00 - Added support for the See Insights LoRA Node v1
 // v13.00 - Breaking change - updated libraries (see below) and data structures.  Also, implemented a "token" and node API endpoint process that is new.  Requires node ver v4 or higher.  Minimal Gateway model.
 // v14.00 - See Read.md for details.  Added support (persistent storage, Join Ack, Particle function) for "spaces" and "placement" enabled WebHooks - moved Gateways to "LoRA Gateway" product group (requires node v7 or above)
+// v14.10 - Added support webhooks that are tied to four types: gateay, counter, occupancy and sensor.  This is a breaking change for the webhook names.  Also, added support for the "single" occupancy sensor type.
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -57,7 +58,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(14);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="14.00";
+char currentPointRelease[6] ="14.10";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -321,51 +322,73 @@ void userSwitchISR() {
  * 
  * @details Nodes and Gateways will use the same format for this webook - data sources will change
  * 
+ * Webhooks will come in a few flavors based on the type of sensors we are using.  To keep this from getting to tedious, we will use a single webhook for each class of node and the gateway.
+ * The classes of webhooks are: 
+ * 1. Gateway - This is the gateway webhook - it will be published every time the gateway wakes up and connects to Particle.  It uses the "Ubidots-LoRA-Gateway-v1" webhook
+ * 2. Counter - This is the webhook for the counter nodes.  It uses the "Ubidots-LoRA-Counter-v1" webhook
+ * 3. Occupancy - This is the webhook for the occupancy nodes.  It uses the "Ubidots-LoRA-Occupancy-v1" webhook
+ * 4. Sensor - This is the webhook for the sensor nodes.  It uses the "Ubidots-LoRA-Sensor-v1" webhook
+ * 
+ * See this article for details including the device type definitions:
+ * @link https://seeinsights.freshdesk.com/support/solutions/articles/154000101712-sensor-types-and-identifiers
  * 
  */
-
-void publishWebhook(uint8_t nodeNumber) {
+void publishWebhook(uint8_t nodeNumber) {							
 	char data[256];                             						// Store the date in this character array - not global
 	// Battery conect information - https://docs.particle.io/reference/device-os/firmware/boron/#batterystate-
     const char* batteryContext[8] = {"Unknown","Not Charging","Charging","Charged","Discharging","Fault","Diconnected"};
 	Log.info("Publishing webhook for node %d", nodeNumber);
 
 	if (!Time.isValid()) {
-		return;										// A webhook without a valid timestamp is worthless
+		return;															// A webhook without a valid timestamp is worthless
 		Log.info("Time is not valid - not publishing webhook");
 	}
-	Log.info("Time is valid - publishing webhook");
-	unsigned long endTimePeriod = Time.now() - (Time.second() + 1);		// Moves the timestamp withing the reporting boundary - so 18:00:14 becomes 17:59:59 - helps in Ubidots reporting
+	unsigned long endTimePeriod = Time.now() - (Time.second() + 1);		// Moves the timestamp within the reporting boundary - so 18:00:14 becomes 17:59:59 - helps in Ubidots reporting
 
-	if (nodeNumber > 0) {												// Webhook for a node
-		Log.info("Publishing for nodeNumber is %i with %i", nodeNumber, current.get_token());
-
-		if (current.get_sensorType() <= 3) {			// Visitation Counter Webhooks
-			snprintf(data, sizeof(data), "{\"deviceid\":\"%lu\", \"hourly\":%u, \"daily\":%u, \"sensortype\":%d, \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d,  \"snr\":%d, \"hops\":%d, \"msg\":%d, \"timestamp\":%lu000}",\
-			current.get_uniqueID(), (current.get_payload1() << 8 | current.get_payload2()), (current.get_payload3() << 8 | current.get_payload4()), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
-			current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_hops(), sysStatus.get_messageCount(), endTimePeriod);
-			Log.info("Data is %s", data);
-			PublishQueuePosix::instance().publish("Ubidots-LoRA-Node-v1", data, PRIVATE | WITH_ACK);
-		}
-		/*
-		else {										// Soil Moisture Webhook
-			snprintf(data, sizeof(data), "{\"deviceid\":\"%i\", \"soilvwc\":%4.2f, \"sensortype\":%d, \"battery\":%4.2f,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d,  \"snr\":%d, \"hops\":%d, \"msg\":%d, \"success\":%4.2f, \"timestamp\":%lu000}",\
-			current.get_nodeID(), current.get_soilVWC(), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
-			current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_hops(), current.get_messageCount(), percentSuccess, endTimePeriod);
-			Log.info("Data is %s", data);
-			PublishQueuePosix::instance().publish("Ubidots-LoRA-Node-Soil-v1", data, PRIVATE | WITH_ACK);	
-		}
-		*/
-	}
-	else {																// Webhook for the gateway
-		Log.info("Publishing for gateway");
+	if (nodeNumber == 0) {												// Webhook for the Gateway					
+		Log.info("Publishing for Gateway");
 		takeMeasurements();												// Loads the current values for the Gateway
 
-		snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d, \"msg\":%d, \"timestamp\":%lu000}",\
+		snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d, \"alerts\": %d, \"msg\":%d, \"timestamp\":%lu000}",\
 		Particle.deviceID().c_str(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
-		current.get_internalTempC(), sysStatus.get_resetCount(), sysStatus.get_messageCount(), endTimePeriod);
+		current.get_internalTempC(), sysStatus.get_resetCount(), sysStatus.get_alertCodeGateway(), sysStatus.get_messageCount(), endTimePeriod);
 		PublishQueuePosix::instance().publish("Ubidots-LoRA-Gateway-v1", data, PRIVATE | WITH_ACK);
 	}
+	else {
+		Log.info("Publishing for nodeNumber is %i of sensorType of %s", nodeNumber, (nodeNumber == 0) ? "Gateway" : (nodeNumber <= 9) ? "Visitation Counter" : (nodeNumber <= 19) ? "Occupancy Counter" : (nodeNumber <= 29) ? "Sensor" : "Unknown");
+
+		switch (current.get_sensorType()) {
+			case 1 ... 9: {													// Counter
+				snprintf(data, sizeof(data), "{\"uniqueid\":\"%lu\", \"hourly\":%u, \"daily\":%u, \"sensortype\":%d, \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d,  \"snr\":%d, \"hops\":%d,\"timestamp\":%lu000}",\
+				current.get_uniqueID(), (current.get_payload1() << 8 | current.get_payload2()), (current.get_payload3() << 8 | current.get_payload4()), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
+				current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_hops(), endTimePeriod);
+				Log.info("Data is %s", data);
+				PublishQueuePosix::instance().publish("Ubidots-LoRA-Counter-v1", data, PRIVATE | WITH_ACK);
+			} break;
+
+			case 10 ... 19: {												// Occupancy
+				snprintf(data, sizeof(data), "{\"uniqueid\":\"%lu\", \"gross\":%u, \"net\":%u, \"space\":%d, \"placement\":%d, \"single\":%d,  \"sensortype\":%d, \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d,  \"snr\":%d, \"hops\":%d,\"timestamp\":%lu000}",\
+				current.get_uniqueID(), (current.get_payload1() << 8 | current.get_payload2()), (current.get_payload3() << 8 | current.get_payload4()), current.get_payload5(), current.get_payload6(), current.get_payload7(), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
+				current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_hops(), endTimePeriod);
+				Log.info("Data is %s", data);
+				PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v1", data, PRIVATE | WITH_ACK);
+			} break;
+
+			case 20 ... 29: {												// Sensor
+				snprintf(data, sizeof(data), "{\"uniqueid\":\"%lu\", \"soilvwc\":%u, \"soiltemp\":%u, \"space\":%d, \"placement\":%d, \"sensortype\":%d, \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d,  \"snr\":%d, \"hops\":%d,\"timestamp\":%lu000}",\
+				current.get_uniqueID(), (current.get_payload1() << 8 | current.get_payload2()), (current.get_payload3() << 8 | current.get_payload4()), current.get_payload5(), current.get_payload6(),current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
+				current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_hops(), endTimePeriod);
+				Log.info("Data is %s", data);
+				PublishQueuePosix::instance().publish("Ubidots-LoRA-Sensor-v1", data, PRIVATE | WITH_ACK);
+			} break;
+
+			default: {														// Unknown
+				Log.info("Unknown sensor type %d", current.get_sensorType());
+				if (Particle.connected()) Particle.publish("Alert","Unknown sensor type", PRIVATE);
+			} break;
+		}
+	}
+
 	return;
 }
 

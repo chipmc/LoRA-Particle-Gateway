@@ -107,11 +107,11 @@ int Particle_Functions::jsonFunctionParser(String command) {
       else {
         if (variable == "all") {
           snprintf(messaging,sizeof(messaging),"Resetting node %d's system and current data", nodeNumber);
-          LoRA_Functions::instance().changeAlert(nodeNumber,5);    // Alertcode 5 will reset all data on the node
+          LoRA_Functions::instance().setAlert(nodeNumber,5);    // Alertcode 5 will reset all data on the node
         }
         else {
           snprintf(messaging,sizeof(messaging),"Resetting node %d's current data", nodeNumber);
-          LoRA_Functions::instance().changeAlert(nodeNumber,6);                    // Alertcode 6 will only reset all the current data on the node
+          LoRA_Functions::instance().setAlert(nodeNumber,6);                    // Alertcode 6 will only reset all the current data on the node
         }
       }
     }
@@ -184,13 +184,13 @@ int Particle_Functions::jsonFunctionParser(String command) {
       // Format - function - type, node - nodeNumber, variables - 0 (car), 1(person), 2(TBD) 
       // Test - {"cmd":[{"node":1, "var":"1","fn":"type"}]}
       int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
-      if ((tempValue >= 0 ) && (tempValue <= 3)) {
+      if ((tempValue >= 0 ) && (tempValue <= 29)) {           // See - https://seeinsights.freshdesk.com/support/solutions/articles/154000101712-sensor-types-and-identifiers
         snprintf(messaging,sizeof(messaging),"Setting sensor type to %d for node %d", tempValue, nodeNumber);
-        if (!LoRA_Functions::instance().changeType(nodeNumber,tempValue)) success = false;  // Make a new entry in the nodeID database
-        else LoRA_Functions::instance().changeAlert(nodeNumber,7);         // Forces the node to update its sensor Type (on Join, node sets the Gateway)
+        if (!LoRA_Functions::instance().setType(nodeNumber,tempValue)) success = false;  // Make a new entry in the nodeID database
+        else LoRA_Functions::instance().setAlert(nodeNumber,7);         // Forces the node to update its sensor Type (on Join, node sets the Gateway)
       }
       else {
-        snprintf(messaging,sizeof(messaging),"Sensor Type  - must be 0-2");
+        snprintf(messaging,sizeof(messaging),"Sensor Type  - must be 0-29");
         success = false;                                                       // Make sure it falls in a valid range or send a "fail" result
       }
     }
