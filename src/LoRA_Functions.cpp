@@ -215,19 +215,15 @@ bool LoRA_Functions::decipherDataReportGateway() {			// Receives the data report
 	current.set_payload6(buf[15]);
 	current.set_payload7(buf[16]);
 	current.set_payload8(buf[17]);
-	current.set_payload9(buf[18]);
-	current.set_payload10(buf[19]);
-	current.set_payload11(buf[20]);
-	current.set_payload12(buf[21]);
 	// Then, we will get the rest of the data from the payload
-	current.set_internalTempC(buf[22]);
-	current.set_stateOfCharge(buf[23]);
-	current.set_batteryState(buf[24]);
-	current.set_resetCount(buf[25]);
-	current.set_RSSI(buf[26] << 8 | buf[27]);				// These values are from the node based on the last successful data report
-	current.set_SNR(buf[28] << 8 | buf[29]);
-	current.set_retryCount(buf[30]);
-	current.set_retransmissionDelay(buf[31]);
+	current.set_internalTempC(buf[18]);
+	current.set_stateOfCharge(buf[19]);
+	current.set_batteryState(buf[20]);
+	current.set_resetCount(buf[21]);
+	current.set_RSSI(buf[22] << 8 | buf[23]);				// These values are from the node based on the last successful data report
+	current.set_SNR(buf[24] << 8 | buf[25]);
+	current.set_retryCount(buf[26]);
+	current.set_retransmissionDelay(buf[27]);
 	
 	Log.info("Data recieved from the report: sensorType %d, temp %d, battery %d, batteryState %d, resets %d, message count %d, RSSI %d, SNR %d", current.get_sensorType(), current.get_internalTempC(), current.get_stateOfCharge(), current.get_batteryState(), current.get_resetCount(), sysStatus.get_messageCount(), current.get_RSSI(), current.get_SNR());
 

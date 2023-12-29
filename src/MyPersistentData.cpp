@@ -371,38 +371,6 @@ void currentStatusData::set_payload8(uint8_t value) {
     setValue<uint8_t>(offsetof(CurrentData, payload8), value);
 }
 
-uint8_t currentStatusData::get_payload9() const {
-    return getValue<uint8_t>(offsetof(CurrentData, payload9));
-}
-
-void currentStatusData::set_payload9(uint8_t value) {
-    setValue<uint8_t>(offsetof(CurrentData, payload9), value);
-}
-
-uint8_t currentStatusData::get_payload10() const {
-    return getValue<uint8_t>(offsetof(CurrentData, payload10));
-}
-
-void currentStatusData::set_payload10(uint8_t value) {
-    setValue<uint8_t>(offsetof(CurrentData, payload10), value);
-}
-
-uint8_t currentStatusData::get_payload11() const {
-    return getValue<uint8_t>(offsetof(CurrentData, payload11));
-}
-
-void currentStatusData::set_payload11(uint8_t value) {
-    setValue<uint8_t>(offsetof(CurrentData, payload11), value);
-}
-
-uint8_t currentStatusData::get_payload12() const {
-    return getValue<uint8_t>(offsetof(CurrentData, payload12));
-}
-
-void currentStatusData::set_payload12(uint8_t value) {
-    setValue<uint8_t>(offsetof(CurrentData, payload12), value);
-}
-
 uint8_t currentStatusData::get_internalTempC() const {
     return getValue<uint8_t>(offsetof(CurrentData, internalTempC));
 }

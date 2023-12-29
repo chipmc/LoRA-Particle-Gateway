@@ -40,6 +40,7 @@
 // v13.00 - Breaking change - updated libraries (see below) and data structures.  Also, implemented a "token" and node API endpoint process that is new.  Requires node ver v4 or higher.  Minimal Gateway model.
 // v14.00 - See Read.md for details.  Added support (persistent storage, Join Ack, Particle function) for "spaces" and "placement" enabled WebHooks - moved Gateways to "LoRA Gateway" product group (requires node v7 or above)
 // v14.10 - Added support webhooks that are tied to four types: gateay, counter, occupancy and sensor.  This is a breaking change for the webhook names.  Also, added support for the "single" occupancy sensor type.
+// v15.00 - Breaking change - amended the data payload values for data and join requests - needs nodes v8 or above
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -58,7 +59,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(14);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="14.10";
+char currentPointRelease[6] ="15.00";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -367,7 +368,7 @@ void publishWebhook(uint8_t nodeNumber) {
 			} break;
 
 			case 10 ... 19: {												// Occupancy
-				snprintf(data, sizeof(data), "{\"uniqueid\":\"%lu\", \"gross\":%u, \"net\":%u, \"space\":%d, \"placement\":%d, \"single\":%d,  \"sensortype\":%d, \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d,  \"snr\":%d, \"hops\":%d,\"timestamp\":%lu000}",\
+				snprintf(data, sizeof(data), "{\"uniqueid\":\"%lu\", \"gross\":%u, \"net\":%u, \"space\":%d, \"placement\":%d, \"multi\":%d,  \"sensortype\":%d, \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d,  \"snr\":%d, \"hops\":%d,\"timestamp\":%lu000}",\
 				current.get_uniqueID(), (current.get_payload1() << 8 | current.get_payload2()), (current.get_payload3() << 8 | current.get_payload4()), current.get_payload5(), current.get_payload6(), current.get_payload7(), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
 				current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_hops(), endTimePeriod);
 				Log.info("Data is %s", data);

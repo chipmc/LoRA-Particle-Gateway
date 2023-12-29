@@ -17,17 +17,17 @@ buf[3 - 4] Token                            // Token given to the node and good 
 buf[5] sensorType                           // What sensor type is it
 buf[6 - 9] uniqueID          // This is a 4-byte identifier that is unique to each node and is only set once
 *** Payload Section - 12 Bytes but interpretion is different for each sensor type
-buf[10 - 21] payload                        // Payload - 12 bytes sensor type determines interpretation
+buf[10 - 17] payload                        // Payload - 8 bytes sensor type determines interpretation
 *** Status Data - Common to all Nodes
-buf[22] temp;                               // Enclosure temp (single byte signed integer -127 to 127 degrees C)
-buf[23] battChg;                            // State of charge (single byte signed integer -1 to 100%)
-buf[24] battState;                          // Battery State (single byte signed integer 0 to 6)
-buf[25] resets                              // Reset count
-buf[26-27] RSSI                             // From the Node's perspective
-buf[28-29] SNR                              // From the Node's perspective
+buf[18] temp;                               // Enclosure temp (single byte signed integer -127 to 127 degrees C)
+buf[19] battChg;                            // State of charge (single byte signed integer -1 to 100%)
+buf[20] battState;                          // Battery State (single byte signed integer 0 to 6)
+buf[21] resets                              // Reset count
+buf[22-23] RSSI                             // From the Node's perspective
+buf[24-25] SNR                              // From the Node's perspective
 *** Re-Transmission Data - Common to all Nodes
-buf[30] Re-Tries                            // This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
-buf[31] Re-Transmission Delay               // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
+buf[26] Re-Tries                            // This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
+buf[27] Re-Transmission Delay               // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
 */
 
 // Format of a data acknowledgement - From the Gateway to the Node - Most common message from gatewat to node
