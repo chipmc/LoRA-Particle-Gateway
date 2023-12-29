@@ -52,8 +52,8 @@ Alert Code 2 - Change the frequency of responses
 
 Payload Assignments for Data Report by Sensor Type
 
-| Type | Payload1  | Payload2  | Payload3  | Payload4  | Payload5  | Payload6  | Payload7  | Payload8  | Payload9  | Payload10 | Payload11 | Payload 12 |
-| -------- | ---------- | ---------- | ---------- | ---------- | ---------- | ---------- | ---------- | ---------- | ---------- | ---------- | ---------- | ---------- |
+| Type  | Payload1   | Payload2   | Payload3   | Payload4   | Payload5   | Payload6   | Payload7   | Payload8   | Payload9   | Payload10  | Payload11  | Payload 12  |
+| ---------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- |
 | Counter | Gross-H | Gross-L | Net - H | Net - L | Space | Placement | Multi | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Occupancy | Hourly - H | Hourly - L | Daily - H | Daily - L | TBD | TBF | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Sensor | Data1 - H | Data1 - L | Data2 - H | Data2 - L | Data3 - H | Data3 - L | Data4 - H | Data4 - L |  Space | Placement | TBD | TBD |
