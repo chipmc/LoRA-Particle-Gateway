@@ -3,6 +3,7 @@
 #include "take_measurements.h"
 #include "MyPersistentData.h"
 #include "Particle_Functions.h"
+#include "PublishQueuePosixRK.h"
 #include "LoRA_Functions.h"
 #include "JsonParserGeneratorRK.h"
 
@@ -46,12 +47,14 @@ int Particle_Functions::jsonFunctionParser(String command) {
   // const char * const commandString = "{\"cmd\":[{\"node\":1,\"var\":\"hourly\",\"fn\":\"reset\"},{\"node\":0,\"var\":1,\"fn\":\"lowpowermode\"},{\"node\":2,\"var\":\"daily\",\"fn\":\"report\"}]}";
   // String to put into Uber command window {"cmd":[{"node":1,"var":"hourly","fn":"reset"},{"node":0,"var":1,"fn":"lowpowermode"},{"node":2,"var":"daily","fn":"report"}]}
 
-	int nodeNumber;
+	uint32_t nodeUniqueID;
+  int nodeNumber;
 	String variable;
 	String function;
   char * pEND;
   char messaging[64];
-  bool success = true;
+  bool success = true;  
+  bool invalidCommand = false;
 
 	JsonParserStatic<1024, 80> jp;	// Global parser that supports up to 256 bytes of data and 20 tokens
 
@@ -62,6 +65,11 @@ int Particle_Functions::jsonFunctionParser(String command) {
 	if (!jp.parse()) {
 		Log.info("Parsing failed - check syntax");
     Particle.publish("cmd", "Parsing failed - check syntax",PRIVATE);
+		char data[128];  
+    snprintf(data, sizeof(data), "{\"commands\":%i,\"context\":\"%s,\"timestamp\":%lu000 }", -1, command.c_str(), Time.now());        // Send -1 (Syntax Error) to the 'commands' Synthetic Variable
+    PublishQueuePosix::instance().publish("Ubidots_Command_Hook", data, PRIVATE);
+    snprintf(data, sizeof(data), "{\"commands\":%i,\"context\":\"%s\",\"timestamp\":%lu000 }", -10, command.c_str(), Time.now());    // Send -10, resolve any events
+    PublishQueuePosix::instance().publish("Ubidots_Command_Hook", data, PRIVATE);
 		return 0;
 	}
 
@@ -75,17 +83,22 @@ int Particle_Functions::jsonFunctionParser(String command) {
       if (i == 0) return 0;                                       // No valid entries
 			else break;								                    // Ran out of entries 
 		} 
-		jp.getValueByKey(cmdObjectContainer, "node", nodeNumber);
+		jp.getValueByKey(cmdObjectContainer, "node", nodeUniqueID);
+    nodeNumber = LoRA_Functions::instance().getNodeNumberForUniqueID(nodeUniqueID); // nodeNumber is uniqueID
 		jp.getValueByKey(cmdObjectContainer, "var", variable);
 		jp.getValueByKey(cmdObjectContainer, "fn", function);
 
+    const JsonParserGeneratorRK::jsmntok_t *varArrayContainer;      // Token for the objects in the var array (if it is an array)
+    jp.getValueTokenByKey(cmdObjectContainer, "var", varArrayContainer);
+
     // In this section we will parse and execute the commands from the console or JSON - assumes connection to Particle
     // ****************  Note: currently there is no valudiation on the nodeNumbers ***************************
+    
     // Reset Function
 		if (function == "reset") {
       // Format - function - reset, node - nodeNumber, variables - either "current", "all" or "nodeData"
       // Test - {"cmd":[{"node":1,"var":"all","fn":"reset"}]}
-      if (nodeNumber == 0) {
+      if (nodeUniqueID == 0) {        // if the unique ID passed to the node is "0", we are talking about the gateway
         if (variable == "nodeData") {
           snprintf(messaging,sizeof(messaging),"Resetting the gateway's node Data");
           nodeDatabase.resetNodeIDs();
@@ -104,7 +117,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
         sysStatus.set_alertCodeGateway(20);              // Alert code 2 will reset the current data on the gateway
         sysStatus.set_resetCount(0);
       } 
-      else {
+      else if(nodeNumber != 0) {                        // if we could not set the nodeNumber from that unique ID, throw an error
         if (variable == "all") {
           snprintf(messaging,sizeof(messaging),"Resetting node %d's system and current data", nodeNumber);
           LoRA_Functions::instance().setAlert(nodeNumber,5);    // Alertcode 5 will reset all data on the node
@@ -113,8 +126,11 @@ int Particle_Functions::jsonFunctionParser(String command) {
           snprintf(messaging,sizeof(messaging),"Resetting node %d's current data", nodeNumber);
           LoRA_Functions::instance().setAlert(nodeNumber,6);                    // Alertcode 6 will only reset all the current data on the node
         }
+      } else {
+        snprintf(messaging,sizeof(messaging),"Not a valid node uniqueID");
       }
     }
+
     // Reporting Frequency Function
     else if (function == "freq") {   
       // Format - function - freq, node - 0, variables - 2-60 (must be divisiable by two)
@@ -129,6 +145,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
         success = false;                                                       // Make sure it falls in a valid range or send a "fail" result
       }
     }
+
     // Stay Connected
     else if (function == "stay") {
       // Format - function - rpt, node - 0, variables - true or false
@@ -145,6 +162,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
         System.reset();                                               // Needed to disconnect from LoRA
       }
     }
+
     // Node ID Report
     else if (function == "rpt") {
       // Format - function - rpt, node - 0, variables - NA
@@ -152,7 +170,8 @@ int Particle_Functions::jsonFunctionParser(String command) {
       snprintf(messaging,sizeof(messaging),"Printing nodeID Data");
       LoRA_Functions::instance().printNodeData(true);
     }
-    // Setting Open and close hours
+
+    // Sets Opening hour
     else if (function == "open") {
       // Format - function - open, node - 0, variables - 0-12 open hour
       // Test - {"cmd":[{"node":0, "var":"6","fn":"open"}]}
@@ -166,6 +185,8 @@ int Particle_Functions::jsonFunctionParser(String command) {
         success = false;                                                       // Make sure it falls in a valid range or send a "fail" result
       }
     }
+
+    // Sets Closing hour
     else if (function == "close") {
       // Format - function - close, node - 0, variables - 13-24 open hour
       // Test - {"cmd":[{"node":0, "var":"21","fn":"close"}]}
@@ -179,21 +200,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
         success = false;                                                       // Make sure it falls in a valid range or send a "fail" result
       }
     }
-    // Setting the sensor type
-    else if (function == "type") {
-      // Format - function - type, node - nodeNumber, variables - 0 (car), 1(person), 2(TBD) 
-      // Test - {"cmd":[{"node":1, "var":"1","fn":"type"}]}
-      int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
-      if ((tempValue >= 0 ) && (tempValue <= 29)) {           // See - https://seeinsights.freshdesk.com/support/solutions/articles/154000101712-sensor-types-and-identifiers
-        snprintf(messaging,sizeof(messaging),"Setting sensor type to %d for node %d", tempValue, nodeNumber);
-        if (!LoRA_Functions::instance().setType(nodeNumber,tempValue)) success = false;  // Make a new entry in the nodeID database
-        else LoRA_Functions::instance().setAlert(nodeNumber,7);         // Forces the node to update its sensor Type (on Join, node sets the Gateway)
-      }
-      else {
-        snprintf(messaging,sizeof(messaging),"Sensor Type  - must be 0-29");
-        success = false;                                                       // Make sure it falls in a valid range or send a "fail" result
-      }
-    }
+
     // Power Cycle the Device
     else if (function == "pwr") {
       // Format - function - pwr, node - 0, variables - 1
@@ -209,17 +216,125 @@ int Particle_Functions::jsonFunctionParser(String command) {
         success = false;                                                       // Make sure it falls in a valid range or send a "fail" result
       }
     }
+
+    // Sets the sensor type for a node
+    else if (function == "type") {
+      // Format - function - type, node - nodeNumber, variables 
+        // - 0 (Vehicle Pressure Sensor)
+        // - 1 (Pedestrian Infrared Sensor)
+        // - 2 (Vehicle Magnetometer Sensor)
+        // - 3 (Rain Sensor)
+        // - 4 (Vibration / Motion Sensor - Basic)
+        // - 5 (Vibration Sensor - Advanced)
+        // - 10 (Indoor Room Occupancy Sensor)
+        // - 11 (Outdoor Occupancy Sensor)
+        // - 20 (Soil Moisture Sensor)
+        // - 21 (Distance Sensor)
+      // Test - {"cmd":[{"node":1, "var":"1","fn":"type"}]}
+      if(nodeNumber != 0) {
+        int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+        if ((tempValue >= 0 ) && (tempValue <= 29)) {                    // See - https://seeinsights.freshdesk.com/support/solutions/articles/154000101712-sensor-types-and-identifiers
+          snprintf(messaging,sizeof(messaging),"Setting sensor type to %d for node %d", tempValue, nodeNumber);
+          if (!LoRA_Functions::instance().setType(nodeNumber,tempValue)) success = false;  // Make a new entry in the nodeID database
+          else LoRA_Functions::instance().setAlert(nodeNumber,7);        // Forces the node to update its sensor Type (on Join, node sets the Gateway)
+        }
+        else {
+          snprintf(messaging,sizeof(messaging),"Sensor Type - must be 0-29");
+          success = false;                                               // Make sure it falls in a valid range or send a "fail" result
+        }
+      } else {
+        snprintf(messaging,sizeof(messaging),"No node exists in the database with that uniqueID");
+        success = false; 
+      }
+    }
+
+    // Designates the space number (the room/area it is counting for) of an Occupancy Sensor (device type >= 10)
+    else if (function == "mountConfig") {
+      // Format - function - mountConfig, node - node uniqueID, variable - [INT (space), BOOL (placement), BOOL (multi)] 
+      // Test - {"cmd":[{"var":["31","true","true"],"fn":"mountConfig","node":"3"}]}
+      if (varArrayContainer->type == JsonParserGeneratorRK::JSMN_ARRAY) {   // Check if "var" is an array and if nodeNumber is erroneous
+              int spaceInt;
+              uint8_t placement; String placementStr;
+              uint8_t multi; String multiStr;
+              // int nothing;                                       // reserved for future use
+              jp.getValueByIndex(varArrayContainer, 0, spaceInt);
+              jp.getValueByIndex(varArrayContainer, 1, placementStr);
+              jp.getValueByIndex(varArrayContainer, 2, multiStr);
+              //jp.getValueByIndex(varArrayContainer, 3, nothing);     // reserved for future use
+              uint8_t space = static_cast<uint8_t>(spaceInt);
+              if(nodeNumber != 0) {
+                if(LoRA_Functions::instance().getPayload(nodeNumber)) {
+                  if(space < 64) {
+                    current.set_payload1(space);
+                    if(placementStr != "null"){                              // null is sent here when blank on ubidots widget - ignoring reduces punishment of user error
+                      placement = placementStr == "true" ? 1 : 0;
+                      current.set_payload2(placement);
+                    }
+                    if(multiStr != "null"){                                   // null is sent here when blank on ubidots widget - ignoring reduces punishment of user error
+                      multi = multiStr == "true" ? 1 : 0;
+                      current.set_payload3(multi);
+                    }
+                    snprintf(messaging,sizeof(messaging), "Set payload for node %d. space: %d, placement: %s, multi: %s", nodeNumber, space, placementStr.c_str(), multiStr.c_str());
+                    LoRA_Functions::instance().setPayload(nodeNumber);
+                    LoRA_Functions::instance().setAlert(nodeNumber,1);                   
+                  } else {
+                    snprintf(messaging,sizeof(messaging), "Error in mountConfig. \"Space\" must be less than 64.");
+                    success = false;
+                  }
+                } else {
+                  snprintf(messaging,sizeof(messaging), "Error in mountConfig. Could not set payload.");
+                  success = false;
+                }
+              } else {
+                snprintf(messaging,sizeof(messaging), "No node exists in the database with that uniqueID");
+                success = false;
+              }
+      } else {
+          snprintf(messaging,sizeof(messaging), "Error executing mountConfig - Var was not an array");
+          success = false;
+      }
+    }
+
     // What if none of these functions are recognized
     else {
       snprintf(messaging,sizeof(messaging),"Not a valid command");
       success = false;
+      invalidCommand = true;
     }
+    
+    if (!(strncmp(messaging," ",1) == 0)) {
+      Log.info(messaging);
+      if (Particle.connected()) Particle.publish("cmd",messaging,PRIVATE);
+    }
+  }
 
-    Log.info(messaging);
-    if (Particle.connected()) Particle.publish("cmd",messaging,PRIVATE);
+  if (Particle.connected()){
+    // char configData[256]; // Store the configuration data in this character array - not global
+    // snprintf(configData, sizeof(configData), "{\"timestamp\":%lu000, \"power\":\"%s\", \"lowPowerMode\":\"%s\", \"timeZone\":\"" + sysStatus.get_timeZoneStr() + "\", \"open\":%i, \"close\":%i, \"sensorType\":%i, \"verbose\":\"%s\", \"connecttime\":%i, \"battery\":%4.2f}", Time.now(), sysStatus.get_solarPowerMode() ? "Solar" : "Utility", sysStatus.get_lowPowerMode() ? "Low Power" : "Not Low Power", sysStatus.get_openTime(), sysStatus.get_closeTime(), sysStatus.get_sensorType(), sysStatus.get_verboseMode() ? "Verbose" : "Not Verbose", sysStatus.get_lastConnectionDuration(), current.get_stateOfCharge());
+    // PublishQueuePosix::instance().publish("Send-Configuration", configData, PRIVATE | WITH_ACK);                                    // Send new configuration to FleetManager backend. (v1.4)
+    if(success == true){           // send the Success slack notification if the command was not recognized
+      char data[128];
+      snprintf(data, sizeof(data), "{\"commands\":%i,\"context\":\"%s\",\"timestamp\":%lu000 }", 1, function.c_str(), Time.now());    // Send 1 (Execution Success) to the 'commands' Synthetic Variable
+      PublishQueuePosix::instance().publish("Ubidots_Command_Hook", data, PRIVATE);
+      snprintf(data, sizeof(data), "{\"commands\":%i,\"context\":\"%s\",\"timestamp\":%lu000 }", -10, function.c_str(), Time.now());  // Send -10, resolve any events
+      PublishQueuePosix::instance().publish("Ubidots_Command_Hook", data, PRIVATE);
+    } else {
+      char data[128];
+      if(invalidCommand == true){  // send the Invalid Command slack notification if the command was not recognized
+        snprintf(data, sizeof(data), "{\"commands\":%i,\"context\":\"%s\",\"timestamp\":%lu000 }", 2, function.c_str(), Time.now());    // Send 2 (Invalid Command) to the 'commands' Synthetic Variable
+        PublishQueuePosix::instance().publish("Ubidots_Command_Hook", data, PRIVATE);
+        snprintf(data, sizeof(data), "{\"commands\":%i,\"context\":\"%s\",\"timestamp\":%lu000 }", -10, function.c_str(), Time.now());  // Send -10, resolve any events
+        PublishQueuePosix::instance().publish("Ubidots_Command_Hook", data, PRIVATE);
+      } else {                     // send the Execution Failure slack notification if the command was not recognized
+        snprintf(data, sizeof(data), "{\"commands\":%i,\"context\":\"%s\",\"timestamp\":%lu000 }", 0, function.c_str(), Time.now());    // Send 0 (Execution Failure) to the 'commands' Synthetic Variable
+        PublishQueuePosix::instance().publish("Ubidots_Command_Hook", data, PRIVATE);
+        snprintf(data, sizeof(data), "{\"commands\":%i,\"context\":\"%s\",\"timestamp\":%lu000 }", -10, function.c_str(), Time.now());  // Send -10, resolve any events
+        PublishQueuePosix::instance().publish("Ubidots_Command_Hook", data, PRIVATE);
+      }
+    }
 	}
 	return success;
-}
+}                    
 
 bool Particle_Functions::disconnectFromParticle()                      // Ensures we disconnect cleanly from Particle
                                                                        // Updated based on this thread: https://community.particle.io/t/waitfor-particle-connected-timeout-does-not-time-out/59181
