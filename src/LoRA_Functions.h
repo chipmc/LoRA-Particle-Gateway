@@ -218,6 +218,14 @@ public:
     bool setType(int nodeNumber, int newType);
 
     /**
+     * @brief NodeNumberForUniqueId is a function that returns the node number for a given uniqueID
+     * 
+     * @param uniqueID
+     * @returns node number
+     */
+    byte getNodeNumberForUniqueID(uint32_t uniqueID);
+
+    /**
      * @brief Get the current alert pending value from the nodeID data strcuture
      * 
      * @param nodeNumber 
@@ -240,14 +248,23 @@ public:
      * 
      */
     void printNodeData(bool publish);
+    
     /**
      * @brief Returns true if node is configured and false if it is not
      * 
      * @param nodeNumber and a float for the % of successful messages delivered
+     * @param uniqueID the id to check
      * @returns true or false
      */
-    bool nodeConfigured(int nodeNumber, uint32_t radioID);
- 
+    bool nodeConfigured(int nodeNumber, uint32_t uniqueID);
+
+    /**
+     * @brief Returns true if the uniqueID for the node exists in the database false if it does not
+     * 
+     * @param radioID the id to check
+     * @returns true or false
+     */
+    bool uniqueIDExistsInDatabase(uint32_t uniqueID);
 
     /** 
      * @brief This function returns true if the nodeNumber / Token combination is valid
@@ -262,15 +279,79 @@ public:
 
     /**
      * @brief Loads the current payload values with the values from the node
+     * @return true if successful, false if not
     */
-   void getPayload(uint8_t nodeNumber);
+    bool getPayload(uint8_t nodeNumber);
 
-
-   /**
+    /**
     * @brief Changes the payload values for a given node
-   */
-   void setPayload(uint8_t nodeNumber);
+    * @return true if successful, false if not
+    */
+    bool setPayload(uint8_t nodeNumber);
 
+    /**
+     * @brief Compresses currentData's payload1 - payload4 based on a sensor type and returns it
+     *
+     * @details This function is a higher-level compression function that utilizes the 
+     * JSON database and compressData functions to compress the payload based on
+     * the device type that is stored in the JSON database.
+     * 
+     * @param sensorType the sensor type of the node who's payload we are decompressing
+     */
+    uint8_t getCompressedPayload(uint8_t sensorType);
+
+    /**
+     * @brief Decompresses the compressed payload and hydrates the currentData object for a payload based on a sensor type
+     *
+     * @details This function is a higher-level decompression function that utilizes the 
+     * JSON database and decompressData functions to decompress the payload based on
+     * a device type nd hydrates the currentData object for a payload based on a sensor type.
+     * 
+     * @param sensorType the sensor type of the node who's payload we are decompressing
+     * @param compressedPayload the payload variables compressed to 1 byte
+     * @return true if successful, false if not
+     */
+    bool hydratePayload(uint8_t sensorType, uint8_t compressedPayload);
+
+    /**
+     * @brief Parses a compressed payload and sets the payload1 - payload4 variables with those values.
+     *
+     * @details Takes a compressed payload and 4 uint8_t variables. Decompresses the payload into its
+     * components based on a given device type
+     * 
+     * @param sensorType the sensor type of the node who's payload we are decompressing
+     * @param compressedPayload the payload variables compressed to 1 byte
+     * @param payload1 payload1 to set
+     * @param payload2 payload2 to set
+     * @param payload3 payload3 to set
+     * @param payload4 payload4 to set
+     * @return true if successful, false if not
+     */
+    bool parsePayloadValues(uint8_t sensorType, uint8_t compressedPayload, uint8_t& payload1, uint8_t& payload2, uint8_t& payload3, uint8_t& payload4);
+
+    /**
+     * @brief Compresses up to four pieces of data into a single byte.
+     *
+     * @details This function compresses up to four pieces of data into a single byte
+     * using the specified number of bits for each data element.
+     *
+     * @param bitSizes An array specifying the number of bits for each data element.
+     * @param data An array containing the data to be compressed.
+     * @return The compressed data as a single byte.
+     */
+    uint8_t compressData(uint8_t bitSizes[], uint8_t data[]);
+
+    /**
+     * @brief Decompresses a single byte into up to four pieces of data.
+     *
+     * @details This function decompresses a single byte into up to four pieces of data
+     * using the specified number of bits for each data element.
+     *
+     * @param compressedData The compressed data as a single byte.
+     * @param bitSizes An array specifying the number of bits for each data element.
+     * @param data An array to store the decompressed data.
+     */
+    void decompressData(uint8_t compressedData, uint8_t bitSizes[], uint8_t data[]);
 
 protected:
     /**

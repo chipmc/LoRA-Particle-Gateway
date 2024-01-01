@@ -41,6 +41,11 @@
 // v14.00 - See Read.md for details.  Added support (persistent storage, Join Ack, Particle function) for "spaces" and "placement" enabled WebHooks - moved Gateways to "LoRA Gateway" product group (requires node v7 or above)
 // v14.10 - Added support webhooks that are tied to four types: gateay, counter, occupancy and sensor.  This is a breaking change for the webhook names.  Also, added support for the "single" occupancy sensor type.
 // v15.00 - Breaking change - amended the data payload values for data and join requests - needs nodes v8 or above
+// v16.00 - Breaking change - nodes v9 or above ...
+//			... redid all Particle Functions so they are called using node=[node uniqueID] instead of nodeNumber. Implemented mountConfig particle function that sets the payload for the node with the given uniqueID ...
+// 			... sensorType, space, placement and multi are now all set on Join requests given that the JSON database contains the uniqueID of the node on any nodeNumber. 
+//			To Test: (1) Make sure the device has joined and created a uniqueID in the node database (2) Set the sensorType and/or mountConfig on particle using the uniqueID as the 'node' variable (3) Press "Reset" on the node
+//          TODOs:: FleetManager queued updates system compatibility (need to copy particle integrations and put Update-Device hook somewhere)
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -356,8 +361,7 @@ void publishWebhook(uint8_t nodeNumber) {
 		PublishQueuePosix::instance().publish("Ubidots-LoRA-Gateway-v1", data, PRIVATE | WITH_ACK);
 	}
 	else {
-		Log.info("Publishing for nodeNumber is %i of sensorType of %s", nodeNumber, (nodeNumber == 0) ? "Gateway" : (nodeNumber <= 9) ? "Visitation Counter" : (nodeNumber <= 19) ? "Occupancy Counter" : (nodeNumber <= 29) ? "Sensor" : "Unknown");
-
+	Log.info("Publishing for nodeNumber is %i of sensorType of %s", nodeNumber, (nodeNumber == 0) ? "Gateway" : (current.get_sensorType() <= 9) ? "Visitation Counter" : (current.get_sensorType() <= 19) ? "Occupancy Counter" : (current.get_sensorType() <= 29) ? "Sensor" : "Unknown");
 		switch (current.get_sensorType()) {
 			case 1 ... 9: {													// Counter
 				snprintf(data, sizeof(data), "{\"uniqueid\":\"%lu\", \"hourly\":%u, \"daily\":%u, \"sensortype\":%d, \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d,  \"snr\":%d, \"hops\":%d,\"timestamp\":%lu000}",\
