@@ -250,7 +250,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
 
     // Designates the space number (the room/area it is counting for) of an Occupancy Sensor (device type >= 10)
     else if (function == "mountConfig") {
-      // Format - function - mountConfig, node - nodeNumber, variable - [INT (space), BOOL (placement), BOOL (multi)] 
+      // Format - function - mountConfig, node - node uniqueID, variable - [INT (space), BOOL (placement), BOOL (multi)] 
       // Test - {"cmd":[{"var":["31","true","true"],"fn":"mountConfig","node":"3"}]}
       if (varArrayContainer->type == JsonParserGeneratorRK::JSMN_ARRAY) {   // Check if "var" is an array and if nodeNumber is erroneous
               int spaceInt;
