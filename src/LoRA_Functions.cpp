@@ -21,7 +21,7 @@ LoRA_Functions::~LoRA_Functions() {
 // ******** JSON Object - Scoped to LoRA_Functions Class        ***********
 // ************************************************************************
 // JSON for node data
-JsonParserStatic<1024, 50> jp;						// Make this global - reduce possibility of fragmentation
+JsonParser jp;						// Make this global - reduce possibility of fragmentation
 
 
 // ************************************************************************
@@ -478,14 +478,13 @@ bool LoRA_Functions::nodeConfigured(int nodeNumber, uint32_t uniqueID)  {	// nod
 	}
 }
 
-bool LoRA_Functions::uniqueIDExistsInDatabase(uint32_t uniqueID)  {	// node is 'configured' if a uniqueID for it exists in the payload is set
-	int index = 1;
+bool LoRA_Functions::uniqueIDExistsInDatabase(uint32_t uniqueID)  {			// node is 'configured' if a uniqueID for it exists in the payload is set
 	uint32_t nodeDeviceID;
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
 	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
 
-	for (int i=0; i<10; i++) {												// Iterate through the array looking for a match
+	for (int i=0; i < 100; i++) {												// Iterate through the array looking for a match
 		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
 		if(nodeObjectContainer == NULL) {
 			Log.info("uniqueIDExistsInDatabase ran out of entries at i = %d",i);
@@ -496,7 +495,6 @@ bool LoRA_Functions::uniqueIDExistsInDatabase(uint32_t uniqueID)  {	// node is '
 			Log.info("uniqueIDExistsInDatabase returned true");
 			return true;													// All is good - return node number for the deviceID passed to the function
 		}
-		index++;															// This will be the node number for the next node if no match is found
 	}
 	return false;
 }
@@ -559,7 +557,7 @@ byte LoRA_Functions::getNodeNumberForUniqueID(uint32_t uniqueID) {
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
 	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
 
-	for (int i=0; i<10; i++) {												// Iterate through the array looking for a match
+	for (int i=0; i<100; i++) {												// Iterate through the array looking for a match
 		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
 		if(nodeObjectContainer == NULL) {
 			Log.info("getNodeNumberForUniqueID ran out of entries at i = %d",i);

@@ -46,6 +46,7 @@
 // 			... sensorType, space, placement and multi are now all set on Join requests given that the JSON database contains the uniqueID of the node on any nodeNumber. 
 //			To Test: (1) Make sure the device has joined and created a uniqueID in the node database (2) Set the sensorType and/or mountConfig on particle using the uniqueID as the 'node' variable (3) Press "Reset" on the node
 //          TODOs:: FleetManager queued updates system compatibility (need to copy particle integrations and put Update-Device hook somewhere)
+// v16.10 	Making small changes
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -64,7 +65,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(14);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="15.00";
+char currentPointRelease[6] ="16.10";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
