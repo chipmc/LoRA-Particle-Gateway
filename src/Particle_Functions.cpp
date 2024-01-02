@@ -219,7 +219,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
 
     // Sets the sensor type for a node
     else if (function == "type") {
-      // Format - function - type, node - nodeNumber, variables 
+      // Format - function - type, node - node uniqueID, variables 
         // - 0 (Vehicle Pressure Sensor)
         // - 1 (Pedestrian Infrared Sensor)
         // - 2 (Vehicle Magnetometer Sensor)

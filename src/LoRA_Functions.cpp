@@ -21,7 +21,7 @@ LoRA_Functions::~LoRA_Functions() {
 // ******** JSON Object - Scoped to LoRA_Functions Class        ***********
 // ************************************************************************
 // JSON for node data
-JsonParser jp;						// Make this global - reduce possibility of fragmentation
+JsonParserStatic<1024, 50> jp;						// Make this global - reduce possibility of fragmentation
 
 
 // ************************************************************************
