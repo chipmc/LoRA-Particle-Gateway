@@ -47,6 +47,7 @@
 //			To Test: (1) Make sure the device has joined and created a uniqueID in the node database (2) Set the sensorType and/or mountConfig on particle using the uniqueID as the 'node' variable (3) Press "Reset" on the node
 //          TODOs:: FleetManager queued updates system compatibility (need to copy particle integrations and put Update-Device hook somewhere)
 // v16.10 	Making small changes
+// v16.20 	Making small changes to troubleshoot hard fault
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
