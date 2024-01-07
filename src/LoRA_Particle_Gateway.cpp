@@ -48,6 +48,8 @@
 //          TODOs:: FleetManager queued updates system compatibility (need to copy particle integrations and put Update-Device hook somewhere)
 // v16.10 	Making small changes
 // v16.20 	Making small changes to troubleshoot hard fault
+// v17		Breaking Change - Added ability to configure the SPAD array by changing th "zoneMode" variable. 
+//  		... reworked the Alert system to include alertContext with the alert. Stored in the NodeArray as an integer and passed as a single byte
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -374,8 +376,8 @@ void publishWebhook(uint8_t nodeNumber) {
 			} break;
 
 			case 10 ... 19: {												// Occupancy
-				snprintf(data, sizeof(data), "{\"uniqueid\":\"%lu\", \"gross\":%u, \"net\":%u, \"space\":%d, \"placement\":%d, \"multi\":%d,  \"sensortype\":%d, \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d,  \"snr\":%d, \"hops\":%d,\"timestamp\":%lu000}",\
-				current.get_uniqueID(), (current.get_payload1() << 8 | current.get_payload2()), (current.get_payload3() << 8 | current.get_payload4()), current.get_payload5(), current.get_payload6(), current.get_payload7(), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
+				snprintf(data, sizeof(data), "{\"uniqueid\":\"%lu\", \"gross\":%u, \"net\":%u, \"space\":%d, \"placement\":%d, \"multi\":%d, \"zoneMode\":%d, \"sensortype\":%d, \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\":%d, \"node\":%d, \"rssi\":%d, \"snr\":%d,\"hops\":%d,\"timestamp\":%lu000}",\
+				current.get_uniqueID(), (current.get_payload1() << 8 | current.get_payload2()), (current.get_payload3() << 8 | current.get_payload4()), current.get_payload5(), current.get_payload6(), current.get_payload7(), current.get_payload8(), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
 				current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_hops(), endTimePeriod);
 				Log.info("Data is %s", data);
 				PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v1", data, PRIVATE | WITH_ACK);
