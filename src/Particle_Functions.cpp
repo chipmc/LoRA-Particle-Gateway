@@ -114,7 +114,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
         }
         else snprintf(messaging,sizeof(messaging),"Resetting the gateway's current data");
         sysStatus.set_messageCount(0);                  // Reset the message count
-        sysStatus.set_alertCodeGateway(20);              // Alert code 2 will reset the current data on the gateway
+        sysStatus.set_alertCodeGateway(20);              // Alert code 20 will reset the current data on the gateway
         sysStatus.set_resetCount(0);
       } 
       else if(nodeNumber != 0) {                        // if we could not set the nodeNumber from that unique ID, throw an error
