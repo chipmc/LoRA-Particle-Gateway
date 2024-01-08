@@ -43,8 +43,8 @@ The Alert Codes and their actions are key to this process:
 * No Alert Context. 
     * Utilizes the JSON node database instead to persist configuration values. 
 * Nodes may be: missing a proper node number, sensorType, space, placement, or multiEntrance designation, not having a valid uniqueID. or not knowing the time - or all of the above!
-* Alert code 1 is assigned as part of the "type" and "mountConfig" particle functions and the node Join payload triggers a configuration update based on the node's sensorType.
 * Prompts the node to contact the gateway using a "Join command" which will remedy all three issues above.
+* Alert code 1 is assigned as part of the "type" and "mountConfig" particle functions and the node Join payload triggers a configuration update based on the node's sensorType.
 * Part of the configuration process, the counts from the node are assigned to a "space" (could be a room, entrance, field, court) stored in the node Join payload so we know where to send data / counts / occupancy on the back end. Their mounting variables (placement, multi, etc.) are also set from the node Join payload. 
     * Node Join payload contains a payload of 4 bytes compressed into 1 byte. Data in the payload varies by sensorType. See chart for "Join Payload" at the bottom of this README for details.
 
