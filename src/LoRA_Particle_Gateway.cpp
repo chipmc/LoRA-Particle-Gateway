@@ -52,6 +52,8 @@
 //			... Added ability to configure the SPAD array by changing the "zoneMode" variable. 
 //  		... reworked the Alert system to include alertContext with the alert. Stored in the NodeArray as an integer and passed as a single byte
 // v17.10	Fixed data type issues when printing occupancyNet
+// v17.20	Fixed join process
+
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -70,7 +72,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(14);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="16.10";
+char currentPointRelease[6] ="17.20";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging

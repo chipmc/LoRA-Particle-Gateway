@@ -21,7 +21,10 @@ LoRA_Functions::~LoRA_Functions() {
 // ******** JSON Object - Scoped to LoRA_Functions Class        ***********
 // ************************************************************************
 // JSON for node data
-JsonParserStatic<1024, 50> jp;						// Make this global - reduce possibility of fragmentation
+JsonParserStatic<1024, 550> jp;						// Make this global - reduce possibility of fragmentation
+// So, here is how we arrived at this number:
+// 1.  We need to store 50 nodes - each node is 6 bytes (nodeNumber, uniqueID, sensorType, payload, pendingAlerts) - 300 bytes
+// 2.  We have one token for each object - 50 tokens and two tokens for each key value pair (50 * 5 * 2) - 500 tokens for a total of 550 tokens
 
 
 // ************************************************************************
@@ -174,9 +177,10 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 				current.set_token(setNodeToken(current.get_nodeNumber()));	// This is a valid node number but the token is not valid - reset the token
 			}
 			else {																// This is an unconfigured node - need to assign it a node number
-				Log.info("Node %d is unconfigured", current.get_nodeNumber());
 				current.set_tempNodeNumber(current.get_nodeNumber());			// Store node number in temp for the repsonse
 				current.set_nodeNumber(255);									// Set node number to unconfigured
+				current.set_alertCodeNode(255);									// This will ensure we get a join request to the node
+				Log.info("Node %d is unconfigured so setting alertCode to %d", current.get_nodeNumber(), current.get_alertCodeNode());
 			}
 		}
 
@@ -225,7 +229,7 @@ bool LoRA_Functions::decipherDataReportGateway() {			// Receives the data report
 	current.set_retryCount(buf[26]);
 	current.set_retransmissionDelay(buf[27]);
 	
-	Log.info("Data recieved from the report: sensorType %d, temp %d, battery %d, batteryState %d, resets %d, message count %d, RSSI %d, SNR %d", current.get_sensorType(), current.get_internalTempC(), current.get_stateOfCharge(), current.get_batteryState(), current.get_resetCount(), sysStatus.get_messageCount(), current.get_RSSI(), current.get_SNR());
+	// Log.info("Data recieved from the report: sensorType %d, temp %d, battery %d, batteryState %d, resets %d, message count %d, RSSI %d, SNR %d", current.get_sensorType(), current.get_internalTempC(), current.get_stateOfCharge(), current.get_batteryState(), current.get_resetCount(), sysStatus.get_messageCount(), current.get_RSSI(), current.get_SNR());
 
 	lora_state = DATA_ACK;		// Prepare to respond
 	return true;
@@ -248,19 +252,16 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 	buf[10] = lowByte(sysStatus.get_frequencyMinutes());	
 
 	// Next we have to determine if there is an alert code to send
-	if (current.get_alertCodeNode() == 255) {					// Unconfiggured node so the only alert that matters will trigger a join request
-		Log.info("In the data message ack composition, will send alert code of 1 for an unconfigured node");
-		buf[11] = 1;									// Set an alert code if the node is not configured
-	}
-	// If the node is configured, we will check for an alert code in the nodeID database
-	current.set_alertCodeNode(LoRA_Functions::getAlertCode(current.get_nodeNumber()));	// Get the alert code from the nodeID database if one is not already set
-	// Finally, we will check to make sure the alert code is validate
-	if (current.get_alertCodeNode() == 255) {				// If the alert code is 255 this means there is an errof - we will need to ask the node to join again (edge case)
-		Log.info("In the data message ack composition, alert code is not valid - sending alert code 1");
+	// If the node is not configured, we will set an alert code of 1
+	if (current.get_alertCodeNode() == 255) {
+		Log.info("Node %d is not configured so setting alert code to 1 - again!", current.get_nodeNumber());
 		current.set_alertCodeNode(1);
 	}
-	else Log.info("In the data message ack composition, alert code for node %d is %d", current.get_nodeNumber(), current.get_alertCodeNode());
-	buf[11] = current.get_alertCodeNode();	    // Set an alert code if the node is not in open hours - this will reset the current data
+	// If the node is configured, we will check for an alert code in the nodeID database
+	else current.set_alertCodeNode(LoRA_Functions::getAlertCode(current.get_nodeNumber()));		// Get the alert code from the nodeID database if one is not already set
+
+	Log.info("In the data message ack composition, alert code for node %d is %d", current.get_nodeNumber(), current.get_alertCodeNode());
+	buf[11] = current.get_alertCodeNode();	    // Send alert code to the node
 	buf[12] = LoRA_Functions::instance().getAlertContext(current.get_nodeNumber());	 // Set the alert context if any
 	buf[13] = current.get_sensorType();			// Set the sensor type - this is the sensor type reported by the node
 	buf[14] = 0;
@@ -311,6 +312,7 @@ bool LoRA_Functions::decipherJoinRequestGateway() {			// Ths only question here 
 		uint8_t time1 = ((uint8_t) ((Time.now()) >> 8));									// Second byte
 		uint8_t time2 = ((uint8_t) (Time.now()));											// First byte
 		current.set_uniqueID(random1 << 24 | random2 << 16 | time1 << 8 | time2);	// This should be unique for the numbers we are talking
+		current.set_sensorType(10);												// This is a virgin node - set the sensor type to 10
 		Log.info("Node %d is a virgin node, assigning uniqueID of %lu", current.get_nodeNumber(), current.get_uniqueID());
 	}
 
