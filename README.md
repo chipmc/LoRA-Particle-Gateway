@@ -41,7 +41,7 @@ The Alert Codes and their actions are key to this process:
 
 **Alert Code 1 - Unconfigured Node / Rejoin has been triggered**
 * No Alert Context. 
-    * Utilizes the more JSON node database instead to persist configuration values. 
+    * Utilizes the JSON node database instead to persist configuration values. 
 * Nodes may be: missing a proper node number, sensorType, space, placement, or multiEntrance designation, not having a valid uniqueID. or not knowing the time - or all of the above!
 * Alert code 1 is assigned as part of the "type" and "mountConfig" particle functions and the node Join payload triggers a configuration update based on the node's sensorType.
 * Prompts the node to contact the gateway using a "Join command" which will remedy all three issues above.
