@@ -114,17 +114,17 @@ int Particle_Functions::jsonFunctionParser(String command) {
         }
         else snprintf(messaging,sizeof(messaging),"Resetting the gateway's current data");
         sysStatus.set_messageCount(0);                  // Reset the message count
-        sysStatus.set_alertCodeGateway(20);              // Alert code 2 will reset the current data on the gateway
+        sysStatus.set_alertCodeGateway(20);              // Alert code 20 will reset the current data on the gateway
         sysStatus.set_resetCount(0);
       } 
       else if(nodeNumber != 0) {                        // if we could not set the nodeNumber from that unique ID, throw an error
         if (variable == "all") {
           snprintf(messaging,sizeof(messaging),"Resetting node %d's system and current data", nodeNumber);
-          LoRA_Functions::instance().setAlert(nodeNumber,5);    // Alertcode 5 will reset all data on the node
+          LoRA_Functions::instance().setAlertCode(nodeNumber,5);    // Alertcode 5 will reset all data on the node (requires no context)
         }
         else {
           snprintf(messaging,sizeof(messaging),"Resetting node %d's current data", nodeNumber);
-          LoRA_Functions::instance().setAlert(nodeNumber,6);                    // Alertcode 6 will only reset all the current data on the node
+          LoRA_Functions::instance().setAlertCode(nodeNumber,6);    // Alertcode 6 will only reset all the current data on the node (requires no context)
         }
       } else {
         snprintf(messaging,sizeof(messaging),"Not a valid node uniqueID");
@@ -230,13 +230,13 @@ int Particle_Functions::jsonFunctionParser(String command) {
         // - 11 (Outdoor Occupancy Sensor)
         // - 20 (Soil Moisture Sensor)
         // - 21 (Distance Sensor)
-      // Test - {"cmd":[{"node":1, "var":"1","fn":"type"}]}
+      // Test - {"cmd":[{"node":"3312487035", "var":"1","fn":"type"}]}
       if(nodeNumber != 0) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
         if ((tempValue >= 0 ) && (tempValue <= 29)) {                    // See - https://seeinsights.freshdesk.com/support/solutions/articles/154000101712-sensor-types-and-identifiers
           snprintf(messaging,sizeof(messaging),"Setting sensor type to %d for node %d", tempValue, nodeNumber);
           if (!LoRA_Functions::instance().setType(nodeNumber,tempValue)) success = false;  // Make a new entry in the nodeID database
-          else LoRA_Functions::instance().setAlert(nodeNumber,7);        // Forces the node to update its sensor Type (on Join, node sets the Gateway)
+          else LoRA_Functions::instance().setAlertCode(nodeNumber,1);        // Forces the node to update its sensor Type by setting it and triggering rejoin
         }
         else {
           snprintf(messaging,sizeof(messaging),"Sensor Type - must be 0-29");
@@ -251,7 +251,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
     // Designates the space number (the room/area it is counting for) of an Occupancy Sensor (device type >= 10)
     else if (function == "mountConfig") {
       // Format - function - mountConfig, node - node uniqueID, variable - [INT (space), BOOL (placement), BOOL (multi)] 
-      // Test - {"cmd":[{"var":["31","true","true"],"fn":"mountConfig","node":"3"}]}
+      // Test - {"cmd":[{"var":["31","true","true"],"fn":"mountConfig","node":3312487035}]}
       if (varArrayContainer->type == JsonParserGeneratorRK::JSMN_ARRAY) {   // Check if "var" is an array and if nodeNumber is erroneous
               int spaceInt;
               uint8_t placement; String placementStr;
@@ -276,7 +276,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
                     }
                     snprintf(messaging,sizeof(messaging), "Set payload for node %d. space: %d, placement: %s, multi: %s", nodeNumber, space, placementStr.c_str(), multiStr.c_str());
                     LoRA_Functions::instance().setPayload(nodeNumber);
-                    LoRA_Functions::instance().setAlert(nodeNumber,1);                   
+                    LoRA_Functions::instance().setAlertCode(nodeNumber, 1);    // trigger a rejoin alert code               
                   } else {
                     snprintf(messaging,sizeof(messaging), "Error in mountConfig. \"Space\" must be less than 64.");
                     success = false;
@@ -292,6 +292,100 @@ int Particle_Functions::jsonFunctionParser(String command) {
       } else {
           snprintf(messaging,sizeof(messaging), "Error executing mountConfig - Var was not an array");
           success = false;
+      }
+    }
+
+    // Sets the zoneMode for an occupancy node's SPAD configuration
+    else if (function == "zoneMode") {
+      // Test - {"cmd":[{"node":3312487035, "var":"1","fn":"zoneMode"}]}
+      if(nodeNumber != 0) {
+        int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+        if ((tempValue >= 0 ) && (tempValue <= 4)) {                   
+          snprintf(messaging,sizeof(messaging),"Setting zone mode to %d for node %d", tempValue, nodeNumber);
+          LoRA_Functions::instance().setAlertCode(nodeNumber,7);
+          LoRA_Functions::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its zone mode by setting an alert code and sending the value as context 
+        }
+        else {
+          snprintf(messaging,sizeof(messaging),"Zone Mode must be 0-4");
+          success = false;                                                   // Make sure it falls in a valid range or send a "fail" result
+        }
+      } else {
+        snprintf(messaging,sizeof(messaging),"No node exists in the database with that uniqueID");
+        success = false; 
+      }
+    }
+
+    // Sets the distanceMode for an occupancy node
+    else if (function == "distanceMode") {
+      // Test - {"cmd":[{"node":3312487035, "var":"1","fn":"distanceMode"}]}
+      if(nodeNumber != 0) {
+        int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+        if ((tempValue >= 0 ) && (tempValue <= 2)) {                   
+          snprintf(messaging,sizeof(messaging),"Setting distanceMode to %d for node %d", tempValue, nodeNumber);
+          LoRA_Functions::instance().setAlertCode(nodeNumber,8);
+          LoRA_Functions::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its floor interference buffer by setting an alert code and sending the value as context 
+        }
+        else {
+          snprintf(messaging,sizeof(messaging),"distanceMode must be 0 (short), 1(medium) or 2(long)");
+          success = false;                                                   // Make sure it falls in a valid range or send a "fail" result
+        }
+      } else {
+        snprintf(messaging,sizeof(messaging),"No node exists in the database with that uniqueID");
+        success = false; 
+      }
+    }
+
+    // Sets the interferenceBuffer for a node
+    else if (function == "interferenceBuffer") {
+      // Test - {"cmd":[{"node":3312487035, "var":"150","fn":"interferenceBuffer"}]}
+      if(nodeNumber != 0) {
+        int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+        if ((tempValue >= 0 ) && (tempValue <= 255)) {                   
+          snprintf(messaging,sizeof(messaging),"Setting interferenceBuffer to %d for node %d", tempValue, nodeNumber);
+          LoRA_Functions::instance().setAlertCode(nodeNumber,9);
+          LoRA_Functions::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its floor interference buffer by setting an alert code and sending the value as context 
+        }
+        else {
+          snprintf(messaging,sizeof(messaging),"Floor Interference Buffer must be 0-255mm");
+          success = false;                                                   // Make sure it falls in a valid range or send a "fail" result
+        }
+      } else {
+        snprintf(messaging,sizeof(messaging),"No node exists in the database with that uniqueID");
+        success = false; 
+      }
+    }
+
+    // Sets the number of calibration loops for an occupancy node
+    else if (function == "occupancyCalibrationLoops") {
+      // Test - {"cmd":[{"node":3312487035, "var":"50","fn":"occupancyCalibrationLoops"}]}
+      if(nodeNumber != 0) {
+        int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+        if ((tempValue >= 0 ) && (tempValue <= 255)) {                   
+          snprintf(messaging,sizeof(messaging),"Setting occupancyCalibrationLoops to %d for node %d", tempValue, nodeNumber);
+          LoRA_Functions::instance().setAlertCode(nodeNumber,10);
+          LoRA_Functions::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its floor interference buffer by setting an alert code and sending the value as context 
+        }
+        else {
+          snprintf(messaging,sizeof(messaging),"the number of calibration loops must be 0-255");
+          success = false;                                                   // Make sure it falls in a valid range or send a "fail" result
+        }
+      } else {
+        snprintf(messaging,sizeof(messaging),"No node exists in the database with that uniqueID");
+        success = false; 
+      }
+    }
+
+    // Sets the number of calibration loops for an occupancy node
+    else if (function == "recalibrate") {
+      // Test - {"cmd":[{"node":3312487035, "var":"true","fn":"recalibrate"}]}
+      if(nodeNumber != 0) {
+        if (variable == "true") {                   
+          snprintf(messaging,sizeof(messaging),"Initiating recalibration for node %d", nodeNumber);
+          LoRA_Functions::instance().setAlertCode(nodeNumber,11);
+        }
+      } else {
+        snprintf(messaging,sizeof(messaging),"No node exists in the database with that uniqueID");
+        success = false; 
       }
     }
 

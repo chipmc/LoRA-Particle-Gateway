@@ -37,10 +37,11 @@ buf[27] Re-Transmission Delay               // This byte is dedicated to RHRelia
     buf[3 - 4] Token                        // Parrot the token back to the node
     buf[5 - 8] Time.now()                   // Set the time 
     buf[9 - 10] Seconds to next Report      // The gateway tells the node how many seconds until next transmission window - up to 18 hours
-    buf[11] alertCode                       // This lets the Gateway trigger an alert on the node - typically a join request
-    buf[12] sensorType                      // Let's the Gateway reset the sensor if needed 
-    buf[13] Re-Tries                        // This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
-    buf[14] Re-Transmission Delay           // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
+    buf[11] alertCodeNode                   // This lets the Gateway trigger an alert on the node - typically a join request
+    buf[12] alertContextNode                // This lets the Gateway send context with an alert code if needed
+    buf[13] sensorType                      // Let's the Gateway reset the sensor if needed 
+    buf[14] Re-Tries                        // This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
+    buf[15] Re-Transmission Delay           // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
 */
 
 // Format of a join request - From the Node to the Gateway
@@ -65,12 +66,13 @@ buf[15]  Re-Transmission Delay              // This byte is dedicated to RHRelia
     buf[5 - 8] Time.now()                   // Set the time 
     buf[9 - 10] Seconds till next report    // For the Gateway minutes on the hour  
     buf[11] alertCodeNode                   // Gateway can set an alert code here
-    buf[12]  sensorType				        // Gateway confirms sensor type
-    buf[13 - 16] uniqueID                   // This is a 4-byte identifier that is unique to each node and is only set once by the gateway on 1st joining
-    buf[17] new nodeNumber                  // Gateway assigns a node number
-    buf[18-21] Payload                      // Payload - 4 bytes sensor type determines interpretation                         
-    buf[22]  Re-Tries                       // This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
-    buf[23] Re-Transmission Delay           // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
+    buf[12] alertContextNode                // This lets the Gateway send context with an alert code if needed
+    buf[13]  sensorType				        // Gateway confirms sensor type
+    buf[14 - 17] uniqueID                   // This is a 4-byte identifier that is unique to each node and is only set once by the gateway on 1st joining
+    buf[18] new nodeNumber                  // Gateway assigns a node number
+    buf[19-22] Payload                      // Payload - 4 bytes sensor type determines interpretation                         
+    buf[23]  Re-Tries                       // This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
+    buf[24] Re-Transmission Delay           // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
 */
 
 #ifndef __LORA_FUNCTIONS_H
@@ -226,22 +228,40 @@ public:
     byte getNodeNumberForUniqueID(uint32_t uniqueID);
 
     /**
-     * @brief Get the current alert pending value from the nodeID data strcuture
+     * @brief Get the current alert code pending value from the nodeID data structure
      * 
      * @param nodeNumber 
      * @return byte 
      */
-    byte getAlert(int nodeNumber);
+    byte getAlertCode(int nodeNumber);
+
+    /**
+     * @brief Get the current alert context pending value from the nodeID data structure
+     * 
+     * @param nodeNumber 
+     * @return byte 
+     */
+    byte getAlertContext(int nodeNumber);
 
     /**
      * @brief Changes the alert value that is pending for the next report from the node
      * 
      * @param nodeNumber 
-     * @param newAlert 
+     * @param newAlertCode
      * @return true 
      * @return false 
      */
-    bool setAlert(int nodeNumber, int newAlert);
+    bool setAlertCode(int nodeNumber, int newAlertCode);
+
+    /**
+     * @brief Changes the alert context that is pending for the next report from the node
+     * 
+     * @param nodeNumber 
+     * @param newAlertContext
+     * @return true 
+     * @return false 
+     */
+    bool setAlertContext(int nodeNumber, int newAlertContext);
 
     /**
      * @brief Primarily used for debugging
