@@ -52,7 +52,11 @@ The Alert Codes and their actions are key to this process:
 * No Alert Context
 * This alert code tells the node that it TODO:: finish Alert 2
 
-**[Alert Codes 3-4?]**
+**[Alert Codes 3]**
+* Sets the value of the current net count to the value sent in the alert context on the data acknowledgement
+
+
+**[Alert Codes 4?]**
 
 **Alert Code 5 - Resets ALL data of a node**
 * No Alert Context
@@ -171,8 +175,8 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 
 | Type  | Payload1   | Payload2   | Payload3   | Payload4   | Payload5   | Payload6   | Payload7   | Payload8   |
 | ---------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | 
-| Counter | Gross-H | Gross-L | Net - H | Net - L | TBD | TBD | TBD | TBD |
-| Occupancy | Hourly - H | Hourly - L | Daily - H | Daily - L | Space | Placement | Multi | Zone Mode | 
+| Counter | Hourly - H | Hourly - L | Daily - H | Daily - L | TBD | TBD | TBD | TBD |
+| Occupancy | Gross-H | Gross-L | Net - H | Net - L | Space | Placement | Multi | Zone Mode | 
 | Sensor | Data1 - H | Data1 - L | Data2 - H | Data2 - L | Data3 - H | Data3 - L | Data4 - H | Data4 - L | 
 
 ## Payload Assignments for Join Request by Sensor Type (4 values compressed to 1 byte)

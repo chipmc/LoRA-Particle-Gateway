@@ -5,6 +5,10 @@
 
 
 MB85RC64 fram(Wire, 0);
+// We use the 64kbit part so we have 8k bytes of storage
+// SysStatus Object - starts at 0
+// Current Object - starts at 100
+// Node Object - starts at 200
 
 // *******************  SysStatus Storage Object **********************
 //
@@ -458,6 +462,7 @@ uint8_t currentStatusData::get_retransmissionDelay() const {
 void currentStatusData::set_retransmissionDelay(uint8_t value) {
     setValue<uint8_t>(offsetof(CurrentData, retransmissionDelay), value);
 }
+
 
 
 // *******************  nodeID Storage Object **********************

@@ -15,7 +15,7 @@ buf[0 - 1] magicNumber                      // Magic number that identifies the 
 buf[2] nodeNumber                           // nodeNumber - unique to each node on the gateway's network
 buf[3 - 4] Token                            // Token given to the node and good for 24 hours
 buf[5] sensorType                           // What sensor type is it
-buf[6 - 9] uniqueID          // This is a 4-byte identifier that is unique to each node and is only set once
+buf[6 - 9] uniqueID                         // This is a 4-byte identifier that is unique to each node and is only set once
 *** Payload Section - 12 Bytes but interpretion is different for each sensor type
 buf[10 - 17] payload                        // Payload - 8 bytes sensor type determines interpretation
 *** Status Data - Common to all Nodes

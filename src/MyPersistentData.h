@@ -11,6 +11,11 @@
 #define sysStatus sysStatusData::instance()
 #define nodeDatabase nodeIDData::instance()
 
+// We use the 64kbit part so we have 8k bytes of storage
+// SysStatus Object - starts at 0
+// Current Object - starts at 100
+// Node Object - starts at 200
+
 /**
  * This class is a singleton; you do not create one as a global, on the stack, or with new.
  * 
@@ -90,7 +95,6 @@ public:
 		uint8_t openTime;                                 // Open time 24 hours
 		uint8_t closeTime;                                // Close time 24 hours
 		uint8_t tokenCore;								  // This is the random part of the daily token
-
 	};
 	SysData sysData;
 
@@ -431,6 +435,7 @@ protected:
 	static const uint32_t CURRENT_DATA_MAGIC = 0x20a99e80;
 	static const uint16_t CURRENT_DATA_VERSION = 3;
 };
+
 
 
 // *****************  nodeID Data Storage Object **********************

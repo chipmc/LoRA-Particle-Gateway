@@ -53,6 +53,10 @@
 //  		... reworked the Alert system to include alertContext with the alert. Stored in the NodeArray as an integer and passed as a single byte
 // v17.10	Fixed data type issues when printing occupancyNet
 // v17.20	Fixed join process
+// v17.30  	Added a function that will keep track of the net occupanncy of rooms. Will be specific for MAFC then will generalize
+			// - New class for Room Occupancy, new alert to adjust nodes for negative room occupancy (need to implement alert 3 on the node)
+			// - Instead of publishing node webhooks - just publish to the console - perhaps that is a special "verbose mode"
+			// - Nodes send updates to the gateway that captures the net and gross for each room in an array
 
 
 #define DEFAULT_LORA_WINDOW 5
@@ -69,10 +73,11 @@
 #include "Particle_Functions.h"							// Particle specific functions
 #include "take_measurements.h"						// Manages interactions with the sensors (default is temp for charging)
 #include "MyPersistentData.h"						// Where my persistent storage files are kept
+#include "Room_Occupancy.h"							// Aggregates node data to get net room occupancy
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(14);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="17.20";
+char currentPointRelease[6] ="17.30";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -362,11 +367,15 @@ void publishWebhook(uint8_t nodeNumber) {
 	if (nodeNumber == 0) {												// Webhook for the Gateway					
 		Log.info("Publishing for Gateway");
 		takeMeasurements();												// Loads the current values for the Gateway
-
+		// Gateway reporting
+		// The first webhook could be sent once a day or so it would give the health of the gateway
 		snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d, \"alerts\": %d, \"msg\":%d, \"timestamp\":%lu000}",\
 		Particle.deviceID().c_str(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
 		current.get_internalTempC(), sysStatus.get_resetCount(), sysStatus.get_alertCodeGateway(), sysStatus.get_messageCount(), endTimePeriod);
 		PublishQueuePosix::instance().publish("Ubidots-LoRA-Gateway-v1", data, PRIVATE | WITH_ACK);
+		// Then, we could have a report on the nodes and their battery levels - once a day
+		// Finally, at a frequency no less than 1 minute and no more than 1 hour (during open hours), a Room occupancy webhhok
+		// Would look like this (space1net: Room_Occupancy.getRoomNet(1), space1gross: Room_Occupancy.getRoomGross(1), .... 
 	}
 	else {
 	Log.info("Publishing for nodeNumber is %i of sensorType of %s", nodeNumber, (nodeNumber == 0) ? "Gateway" : (current.get_sensorType() <= 9) ? "Visitation Counter" : (current.get_sensorType() <= 19) ? "Occupancy Counter" : (current.get_sensorType() <= 29) ? "Sensor" : "Unknown");
@@ -380,11 +389,17 @@ void publishWebhook(uint8_t nodeNumber) {
 			} break;
 
 			case 10 ... 19: {												// Occupancy
+			
 				snprintf(data, sizeof(data), "{\"uniqueid\":\"%lu\", \"gross\":%u, \"net\":%i, \"space\":%d, \"placement\":%d, \"multi\":%d, \"zoneMode\":%d, \"sensortype\":%d, \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\":%d, \"node\":%d, \"rssi\":%d, \"snr\":%d,\"hops\":%d,\"timestamp\":%lu000}",\
 				current.get_uniqueID(), (current.get_payload1() << 8 | current.get_payload2()), (int16_t)(current.get_payload3() << 8 | current.get_payload4()), current.get_payload5(), current.get_payload6(), current.get_payload7(), current.get_payload8(), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
 				current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_hops(), endTimePeriod);
 				Log.info("Data is %s", data);
-				PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v1", data, PRIVATE | WITH_ACK);
+				// Don't send the webhook - just publish if connected
+				if (Particle.connected()) {
+					PublishQueuePosix::instance().publish("Node Data", data, PRIVATE);
+				}
+				Room_Occupancy::instance().setRoomCounts();		// This will update the Room Occupancy Array
+				// PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v1", data, PRIVATE | WITH_ACK);
 			} break;
 
 			case 20 ... 29: {												// Sensor
