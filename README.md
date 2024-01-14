@@ -48,15 +48,19 @@ The Alert Codes and their actions are key to this process:
 * Part of the configuration process, the counts from the node are assigned to a "space" (could be a room, entrance, field, court) stored in the node Join payload so we know where to send data / counts / occupancy on the back end. Their mounting variables (placement, multi, etc.) are also set from the node Join payload. 
     * Node Join payload contains a payload of 4 bytes compressed into 1 byte. Data in the payload varies by sensorType. See chart for "Join Payload" at the bottom of this README for details.
 
-**Alert Code 2 - Change the frequency of responses**
+**Alert Code 2 - Time not Synced (CURRENTLY AN INTERNAL CODE FOR THE NODE)**
 * No Alert Context
-* This alert code tells the node that it TODO:: finish Alert 2
+* If the time is not synced on a node, the node rejoins with Alert 2
 
-**[Alert Codes 3]**
-* Sets the value of the current net count to the value sent in the alert context on the data acknowledgement
+**Alert Code 3 - Power cycle the node (CURRENTLY AN INTERNAL CODE FOR THE NODE)**
+* No Alert Context
+* Currently only used internally on a node when something goes wrong
+* Power cycles the device to recover from any errors that occur internally on a node.
 
-
-**[Alert Codes 4?]**
+**Alert Code 4 - Reinitialize the modem (CURRENTLY AN INTERNAL CODE FOR THE NODE)**
+* No Alert Context
+* Currently only used internally on a node when something goes wrong
+* Used when the node has retried sending enough that it is time to reinitilize the modem
 
 **Alert Code 5 - Resets ALL data of a node**
 * No Alert Context
@@ -104,6 +108,10 @@ The Alert Codes and their actions are key to this process:
 * No Alert Context
 * Currently does not check for sensorType before sending the alert and alertContext
 * Initiates recalibration for a sensor. Often used after setting different sensor configuration values or a new zoneMode.
+
+**Alert Code 12 - Gateway override to occupancyNet value of a node.**
+* Alert Context - occupancyNet(int16_t)
+* Sets the value of the current net count to the value sent in the alert context on the data acknowledgement.
 
 ## Particle Function Commands 
 

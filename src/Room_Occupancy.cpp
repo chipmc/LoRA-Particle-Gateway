@@ -45,7 +45,7 @@ bool setRoomCounts() {  // This is set for the current node - need to generalize
     if (currentNet < 0) {                             // This is a problem - can't have negative people in the room     
       currentNet = 0;                                 // Set the room net to zero
       Log.info("Received a negative occupancy - resetting");
-      current.set_alertCodeNode(3);
+      current.set_alertCodeNode(12);
       current.set_payload3(0);                        // Node tried to go negative - reset - false response should trigger message back to node
       current.set_payload4(0);                        // Resets current net to zero - alert will send the low byte as the alert context
       roomCountArray[current.get_payload5()-1][1] = 0; // Set the room net value
@@ -58,7 +58,7 @@ bool setRoomCounts() {  // This is set for the current node - need to generalize
     if (roomCountArray[current.get_payload5()-1][1] + currentNet < 0) {   // Just like above, test for less than zero
       currentNet = -1 * roomCountArray[current.get_payload5()-1][1];      // Written for clarity
       Log.info("Received a negative occupancy - resetting");
-      current.set_alertCodeNode(3);
+      current.set_alertCodeNode(12);
       current.set_payload3(highByte(currentNet));                         // Node tried to go negative - reset - false response should trigger message back to node
       current.set_payload4(lowByte(currentNet));                          // Resets current net to zero - alert will send the low byte as the alert context
       roomCountArray[current.get_payload5()-1][1] = 0;                    // Set the room net value to zero
