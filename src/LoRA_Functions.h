@@ -298,16 +298,16 @@ public:
     uint16_t setNodeToken(uint8_t nodeNumber);
 
     /**
-     * @brief Loads the current payload values with the values from the node
+     * @brief Loads the current "Join Payload" values with the values from the node into the currentData struct.
      * @return true if successful, false if not
     */
-    bool getPayload(uint8_t nodeNumber);
+    bool getJoinPayload(uint8_t nodeNumber);
 
     /**
-    * @brief Changes the payload values for a given node
+    * @brief Changes the "Join Payload" values for a given node to be equal to the values in payload1-payload4 of the currentData struct.
     * @return true if successful, false if not
     */
-    bool setPayload(uint8_t nodeNumber);
+    bool setJoinPayload(uint8_t nodeNumber);
 
     /**
      * @brief Compresses currentData's payload1 - payload4 based on a sensor type and returns it

@@ -357,7 +357,7 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	if (LoRA_Functions::uniqueIDExistsInDatabase(current.get_uniqueID())) {		// Check to make sure the node's uniqueID is in the database
 		uint8_t nodeNumber = LoRA_Functions::instance().getNodeNumberForUniqueID(current.get_uniqueID());
 		buf[13] = LoRA_Functions::getType(nodeNumber);							// Make sure type is up to date
-		LoRA_Functions::getPayload(nodeNumber);										// Get the payload values from the nodeID database
+		LoRA_Functions::getJoinPayload(nodeNumber);										// Get the payload values from the nodeID database
 		buf[19] = current.get_payload1();					
 		buf[20] = current.get_payload2();
 		buf[21] = current.get_payload3();
@@ -572,7 +572,7 @@ byte LoRA_Functions::getNodeNumberForUniqueID(uint32_t uniqueID) {
 	return 0;
 }
 
-bool LoRA_Functions::getPayload(uint8_t nodeNumber) {
+bool LoRA_Functions::getJoinPayload(uint8_t nodeNumber) {
 	bool result;
 	if (nodeNumber == 0 || nodeNumber == 255) return false;
 	uint8_t sensorType = LoRA_Functions::getType(nodeNumber);
@@ -585,7 +585,7 @@ bool LoRA_Functions::getPayload(uint8_t nodeNumber) {
 
 	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
 	if(nodeObjectContainer == NULL) {
-		Log.info("From getPayload function Node number not found so returning false");
+		Log.info("From getJoinPayload function Node number not found so returning false");
 		return false;
 	} 
 	// Else we will load the current values from the node
@@ -598,7 +598,7 @@ bool LoRA_Functions::getPayload(uint8_t nodeNumber) {
 	return result;
 }
 
-bool LoRA_Functions::setPayload(uint8_t nodeNumber) {
+bool LoRA_Functions::setJoinPayload(uint8_t nodeNumber) {
 	bool result;
 	if (nodeNumber == 0 || nodeNumber == 255) return false;
 	uint8_t sensorType = LoRA_Functions::getType(nodeNumber);
