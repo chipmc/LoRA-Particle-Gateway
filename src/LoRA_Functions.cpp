@@ -73,7 +73,7 @@ bool LoRA_Functions::setup(bool gatewayID) {
 		Log.info("LoRA Radio initialized as a gateway (address %d) with a deviceID of %s", GATEWAY_ADDRESS, System.deviceID().c_str());
 	}
 	else if (sysStatus.get_nodeNumber() > 0 && sysStatus.get_nodeNumber() <= 255) {
-		manager.setThisAddress(sysStatus.get_nodeNumber());// Node - use the Node address in valid range from memory
+		manager.setThisAddress(sysStatus.get_nodeNumber());	// Node - use the Node address in valid range from memory
 		Log.info("LoRA Radio initialized as node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
 	}
 	else {																						// Else, we will set as an unconfigured node

@@ -16,7 +16,7 @@
 
 #define roomCounts Room_Occupancy::instance()
 
-extern uint16_t roomCountArray[10][2];  /** (Alex) TODO:: Is this meant limited to 10 Spaces? #Spaces 1-64 **/
+extern uint16_t roomCountArray[64][2];
 // Stores values in a simple array
 // No need to store as it is built from node counts
 // roomCounts[space][gross, net]

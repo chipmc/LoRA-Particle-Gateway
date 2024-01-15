@@ -59,6 +59,7 @@
 			// - Nodes send updates to the gateway that captures the net and gross for each room in an array
 // v17.40  	Setting Room Occupancy after receiving a Data Report from the Node. Space range now 1-64, but stored as 0-63 (for 6 bits). TODO:: comments added with questions/clarifications
 // v17.50  	Breaking Change - Node v11.4 or later - Changed alertContext to uint16_t to prevent occupancyNet correction edge cases. Expanded Particle_Function bounds that used old uint8_t as the bounds.
+// v18 		Integrated Ubidots-LoRA-Occupancy-v2 Particle integration, which sends node battery information and space values to the UpdateGatewayNodesAndSpaces UbiFunction.
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -71,9 +72,10 @@
 // Application Files
 #include "LoRA_Functions.h"							// Where we store all the information on our LoRA implementation - application specific not a general library
 #include "device_pinout.h"							// Define pinouts and initialize them
-#include "Particle_Functions.h"							// Particle specific functions
+#include "Particle_Functions.h"						// Particle specific functions
 #include "take_measurements.h"						// Manages interactions with the sensors (default is temp for charging)
 #include "MyPersistentData.h"						// Where my persistent storage files are kept
+#include "Room_Occupancy.h"							// Aggregates node data to get net room occupancy for Occupancy Nodes
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(14);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
@@ -373,22 +375,6 @@ void publishWebhook(uint8_t nodeNumber) {
 		Particle.deviceID().c_str(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
 		current.get_internalTempC(), sysStatus.get_resetCount(), sysStatus.get_alertCodeGateway(), sysStatus.get_messageCount(), endTimePeriod);
 		PublishQueuePosix::instance().publish("Ubidots-LoRA-Gateway-v1", data, PRIVATE | WITH_ACK);
-		// Then, we could have a report on the nodes and their battery levels - once a day
-		
-		/*** (Alex) TODO:: Read Me! - Do we plan on having both the Nodes and the Spaces be Ubidots Devices? Trying to think of ways we would put the battery on the SCADA diagram. 
-		 							  Here's a thought: we could loop right here and have 1 ubidots variable for each node currently in the JSON? We could use the UniqueID
-									  as the variable name. Would this create a new ubidots variable if it doesn't exist? Or does this complicate things?
-									  Thinking it might be more centralized for the customer and easier to manage/create if the nodes were ubidots variables instead of Devices. ***/
-
-		// Finally, at a frequency no less than 1 minute and no more than 1 hour (during open hours), a Room occupancy webhook
-		// Would look like this (space1net: Room_Occupancy.getRoomNet(1), space1gross: Room_Occupancy.getRoomGross(1), .... 
-
-		/*** (Alex) TODO:: Read Me! - Perhaps we could parse the 'Space' array and utilize variables the same way as the Node array I described above? In that case, we would create
-		  							  variables using the index of the 1st dimension (plus 1) as the space (Ex. variables: "space%dNet", spaces[spaceIndex + 1][1] "space%dGross", spaces[spaceIndex + 1][0]). 
-									  To populate the SCADA we would need either unique variables or devices for each space is my thought. If they were all variables on the gateway, I
-									  imagine that would also be easier to maintain/create than a bunch of devices and would allow the SCADA to be created from the one Ubidots device. 
-									  If you are concerned about Dots, we could pass a JSON like the one you defined above to a Ubifunction, passing the gateway ID with it. Let me know your thoughts. 
-									  To summarize, the GATEWAY could have 1 Ubidots variable for each Node (containing health), and 2 Ubidots variables for each Space (containing counts) ***/
 	}
 	else {
 	Log.info("Publishing for nodeNumber is %i of sensorType of %s", nodeNumber, (nodeNumber == 0) ? "Gateway" : (current.get_sensorType() <= 9) ? "Visitation Counter" : (current.get_sensorType() <= 19) ? "Occupancy Counter" : (current.get_sensorType() <= 29) ? "Sensor" : "Unknown");
@@ -411,15 +397,16 @@ void publishWebhook(uint8_t nodeNumber) {
 				if (Particle.connected()) {
 					PublishQueuePosix::instance().publish("Node Data", data, PRIVATE);
 				}
-				/*** (Alex) TODO:: Read Me! - I figure having an generalization for "processing data from the report" in the 'decipher data report' would be a better strategy, 
-				  							  take a look at LoRA_Functions::decipherDataReportGateway() ane let me know what you think. ***/
-				// Room_Occupancy::instance().setRoomCounts();		// This will update the Room Occupancy Array (Commented out in review, v17.40 (Alex))
-				// PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v1", data, PRIVATE | WITH_ACK);
+				/*** TODO:: (Alex) Review this if you have time ***/
+				// Compose and send the node and space information to the UpdateGatewayNodesAndSpaces ubiFunction
+				snprintf(data, sizeof(data), "{\"nodeUniqueID\":\"%lu\",\"battery\":%d,\"space\":%d,\"spaceNet\":%d,\"spaceGross\":%d}",\
+				current.get_uniqueID(), current.get_stateOfCharge(), current.get_payload5() + 1, Room_Occupancy::instance().getRoomNet(current.get_payload5()), Room_Occupancy::instance().getRoomGross(current.get_payload5()));
+				PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v2", data, PRIVATE | WITH_ACK);
 			} break;
 
 			case 20 ... 29: {												// Sensor
 				snprintf(data, sizeof(data), "{\"uniqueid\":\"%lu\", \"soilvwc\":%u, \"soiltemp\":%u, \"space\":%d, \"placement\":%d, \"sensortype\":%d, \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d,  \"snr\":%d, \"hops\":%d,\"timestamp\":%lu000}",\
-				current.get_uniqueID(), (current.get_payload1() << 8 | current.get_payload2()), (current.get_payload3() << 8 | current.get_payload4()), current.get_payload5(), current.get_payload6(),current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
+				current.get_uniqueID(), (current.get_payload1() << 8 | current.get_payload2()), (current.get_payload3() << 8 | current.get_payload4()), current.get_payload5() + 1, current.get_payload6(),current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
 				current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_hops(), endTimePeriod);
 				Log.info("Data is %s", data);
 				PublishQueuePosix::instance().publish("Ubidots-LoRA-Sensor-v1", data, PRIVATE | WITH_ACK);
