@@ -38,10 +38,10 @@ buf[27] Re-Transmission Delay               // This byte is dedicated to RHRelia
     buf[5 - 8] Time.now()                   // Set the time 
     buf[9 - 10] Seconds to next Report      // The gateway tells the node how many seconds until next transmission window - up to 18 hours
     buf[11] alertCodeNode                   // This lets the Gateway trigger an alert on the node - typically a join request
-    buf[12] alertContextNode                // This lets the Gateway send context with an alert code if needed
-    buf[13] sensorType                      // Let's the Gateway reset the sensor if needed 
-    buf[14] Re-Tries                        // This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
-    buf[15] Re-Transmission Delay           // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
+    buf[12-13] alertContextNode                // This lets the Gateway send context with an alert code if needed
+    buf[14] sensorType                      // Let's the Gateway reset the sensor if needed 
+    buf[15] Re-Tries                        // This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
+    buf[16] Re-Transmission Delay           // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
 */
 
 // Format of a join request - From the Node to the Gateway
@@ -210,6 +210,7 @@ public:
      * @returns sensor type
      */
     byte getType(int nodeNumber);
+    
     /**
      * @brief change the sensor type for a given node number
      * 
@@ -241,7 +242,7 @@ public:
      * @param nodeNumber 
      * @return byte 
      */
-    byte getAlertContext(int nodeNumber);
+    uint16_t getAlertContext(int nodeNumber);
 
     /**
      * @brief Changes the alert value that is pending for the next report from the node

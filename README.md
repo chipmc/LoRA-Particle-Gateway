@@ -169,11 +169,11 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 
 **Set Floor Interference Buffer for an Occupancy Node**
 * {"cmd":[{"node":*node uniqueID here*, "var":"150","fn":"interferenceBuffer"}]} - Sets the interferenceBuffer for the node with the given uniqueID by sending Alert Code 9 with Alert Context == var
-    * var must be 0-255 (1 byte)
+    * var must be 0-2000
 
 **Set Number of Calibration Loops for an Occupancy Node**
 * {"cmd":[{"node":*node uniqueID here*, "var":"50","fn":"occupancyCalibrationLoops"}]} - Sets the occupancyCalibrationLoops for the node with the given uniqueID by sending Alert Code 10 with Alert Context == var
-    * var must be 0-255 (1 byte)
+    * var must be 0-1000
 
 **Recalibrare an Occupancy Node**
 * {"cmd":[{"node":*node uniqueID here*, "var":"true","fn":"recalibrate"}]} - Triggers a recalibration of the TOF Sensor on the node with the given uniqueID by sending Alert Code 11 

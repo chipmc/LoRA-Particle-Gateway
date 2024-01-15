@@ -58,7 +58,7 @@
 			// - Instead of publishing node webhooks - just publish to the console - perhaps that is a special "verbose mode"
 			// - Nodes send updates to the gateway that captures the net and gross for each room in an array
 // v17.40  	Setting Room Occupancy after receiving a Data Report from the Node. Space range now 1-64, but stored as 0-63 (for 6 bits). TODO:: comments added with questions/clarifications
-
+// v17.50  	Breaking Change - Node v11.4 or later - Changed alertContext to uint16_t to prevent occupancyNet correction edge cases. Expanded Particle_Function bounds that used old uint8_t as the bounds.
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -77,7 +77,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(14);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="17.40";
+char currentPointRelease[6] ="17.50";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging

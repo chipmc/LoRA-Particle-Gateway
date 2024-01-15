@@ -279,10 +279,14 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 
 	Log.info("In the data message ack composition, alert code for node %d is %d", current.get_nodeNumber(), current.get_alertCodeNode());
 	buf[11] = current.get_alertCodeNode();	    // Send alert code to the node
-	buf[12] = LoRA_Functions::instance().getAlertContext(current.get_nodeNumber());	 // Set the alert context if any
-	buf[13] = current.get_sensorType();			// Set the sensor type - this is the sensor type reported by the node
-	buf[14] = 0;
-	buf[15] = 0;								// Will be over-written if needed
+
+	uint16_t alertContext = LoRA_Functions::instance().getAlertContext(current.get_nodeNumber()); // Set the alert context if any
+	buf[12] = highByte(alertContext);
+	buf[13] = lowByte(alertContext);
+
+	buf[14] = current.get_sensorType();			// Set the sensor type - this is the sensor type reported by the node
+	buf[15] = 0;
+	buf[16] = 0;								// Will be over-written if needed
 
 	current.flush(true);							// Save values reported by the nodes
 	digitalWrite(BLUE_LED,HIGH);			       	// Sending data
@@ -682,7 +686,7 @@ byte LoRA_Functions::getAlertCode(int nodeNumber) {
 	return pendingAlert;
 }
 
-byte LoRA_Functions::getAlertContext(int nodeNumber) {
+uint16_t LoRA_Functions::getAlertContext(int nodeNumber) {
 	if (nodeNumber == 0 || nodeNumber == 255) return 255;					// Not a configured node
 
 	// This function returns the pending alert context for the node - if there is one

@@ -340,13 +340,13 @@ int Particle_Functions::jsonFunctionParser(String command) {
       // Test - {"cmd":[{"node":3312487035, "var":"150","fn":"interferenceBuffer"}]}
       if(nodeNumber != 0) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
-        if ((tempValue >= 0 ) && (tempValue <= 255)) {                   
+        if ((tempValue >= 0 ) && (tempValue <= 2000)) {                   
           snprintf(messaging,sizeof(messaging),"Setting interferenceBuffer to %d for node %d", tempValue, nodeNumber);
           LoRA_Functions::instance().setAlertCode(nodeNumber,9);
           LoRA_Functions::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its floor interference buffer by setting an alert code and sending the value as context 
         }
         else {
-          snprintf(messaging,sizeof(messaging),"Floor Interference Buffer must be 0-255mm");
+          snprintf(messaging,sizeof(messaging),"Floor Interference Buffer must be 0-2000mm");
           success = false;                                                   // Make sure it falls in a valid range or send a "fail" result
         }
       } else {
@@ -360,13 +360,13 @@ int Particle_Functions::jsonFunctionParser(String command) {
       // Test - {"cmd":[{"node":3312487035, "var":"50","fn":"occupancyCalibrationLoops"}]}
       if(nodeNumber != 0) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
-        if ((tempValue >= 0 ) && (tempValue <= 255)) {                   
+        if ((tempValue >= 0 ) && (tempValue <= 1000)) {                   
           snprintf(messaging,sizeof(messaging),"Setting occupancyCalibrationLoops to %d for node %d", tempValue, nodeNumber);
           LoRA_Functions::instance().setAlertCode(nodeNumber,10);
           LoRA_Functions::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its floor interference buffer by setting an alert code and sending the value as context 
         }
         else {
-          snprintf(messaging,sizeof(messaging),"the number of calibration loops must be 0-255");
+          snprintf(messaging,sizeof(messaging),"the number of calibration loops must be 0-1000");
           success = false;                                                   // Make sure it falls in a valid range or send a "fail" result
         }
       } else {
