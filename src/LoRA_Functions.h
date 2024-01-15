@@ -310,7 +310,7 @@ public:
     bool setJoinPayload(uint8_t nodeNumber);
 
     /**
-     * @brief Compresses currentData's payload1 - payload4 based on a sensor type and returns it
+     * @brief Compresses currentData's payload1 - payload4 (Join Payload) based on a sensor type, returns it
      *
      * @details This function is a higher-level compression function that utilizes the 
      * JSON database and compressData functions to compress the payload based on
@@ -318,7 +318,7 @@ public:
      * 
      * @param sensorType the sensor type of the node who's payload we are decompressing
      */
-    uint8_t getCompressedPayload(uint8_t sensorType);
+    uint8_t getCompressedJoinPayload(uint8_t sensorType);
 
     /**
      * @brief Decompresses the compressed payload and hydrates the currentData object for a payload based on a sensor type
@@ -331,23 +331,23 @@ public:
      * @param compressedPayload the payload variables compressed to 1 byte
      * @return true if successful, false if not
      */
-    bool hydratePayload(uint8_t sensorType, uint8_t compressedPayload);
+    bool hydrateJoinPayload(uint8_t sensorType, uint8_t compressedPayload);
 
     /**
-     * @brief Parses a compressed payload and sets the payload1 - payload4 variables with those values.
+     * @brief Parses a compressed payload and sets the payload1 - payload4 variables (Join Payload) with those values.
      *
      * @details Takes a compressed payload and 4 uint8_t variables. Decompresses the payload into its
      * components based on a given device type
      * 
      * @param sensorType the sensor type of the node who's payload we are decompressing
-     * @param compressedPayload the payload variables compressed to 1 byte
+     * @param compressedJoinPayload the payload variables compressed to 1 byte
      * @param payload1 payload1 to set
      * @param payload2 payload2 to set
      * @param payload3 payload3 to set
      * @param payload4 payload4 to set
      * @return true if successful, false if not
      */
-    bool parsePayloadValues(uint8_t sensorType, uint8_t compressedPayload, uint8_t& payload1, uint8_t& payload2, uint8_t& payload3, uint8_t& payload4);
+    bool parseJoinPayloadValues(uint8_t sensorType, uint8_t compressedJoinPayload, uint8_t& payload1, uint8_t& payload2, uint8_t& payload3, uint8_t& payload4);
 
     /**
      * @brief Compresses up to four pieces of data into a single byte.

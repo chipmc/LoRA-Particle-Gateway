@@ -1,4 +1,5 @@
 #include "LoRA_Functions.h"
+#include "Room_Occupancy.h"							// Aggregates node data to get net room occupancy for Occupancy Nodes
 
 // Singleton instantiation - from template
 LoRA_Functions *LoRA_Functions::_instance;
@@ -114,7 +115,7 @@ void LoRA_Functions::sleepLoRaRadio() {
 	driver.sleep();                             	// Here is where we will power down the LoRA radio module
 }
 
-bool  LoRA_Functions::initializeRadio() {  			// Set up the Radio Module
+bool LoRA_Functions::initializeRadio() {  			// Set up the Radio Module
 	digitalWrite(RFM95_RST,LOW);					// Reset the radio module before setup
 	delay(10);
 	digitalWrite(RFM95_RST,HIGH);
@@ -224,11 +225,27 @@ bool LoRA_Functions::decipherDataReportGateway() {			// Receives the data report
 	current.set_stateOfCharge(buf[19]);
 	current.set_batteryState(buf[20]);
 	current.set_resetCount(buf[21]);
-	current.set_RSSI(buf[22] << 8 | buf[23]);				// These values are from the node based on the last successful data report
+	current.set_RSSI(buf[22] << 8 | buf[23]);		// These values are from the node based on the last successful data report
 	current.set_SNR(buf[24] << 8 | buf[25]);
 	current.set_retryCount(buf[26]);
 	current.set_retransmissionDelay(buf[27]);
-	
+
+	switch (current.get_sensorType()) {	   // Generalize based on sensor type - switch 
+        case 1 ... 9: {    									// Counter
+			// Process data from node report here if needed
+        } break;
+        case 10 ... 19: {   								// Occupancy
+			Room_Occupancy::instance().setRoomCounts();  	// After deciphering all data from the Data Report, set the room counts using the current struct - Room_Occupancy class
+        } break;
+        case 20 ... 29: {   								// Sensor
+            // Process data from node report here if needed
+        } break;
+        default: {          		
+            Log.info("Unknown sensor type reported decipherDataReportGateway %d", current.get_sensorType());
+            if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type", PRIVATE);
+            return 0;
+        } break;
+    }	
 	// Log.info("Data recieved from the report: sensorType %d, temp %d, battery %d, batteryState %d, resets %d, message count %d, RSSI %d, SNR %d", current.get_sensorType(), current.get_internalTempC(), current.get_stateOfCharge(), current.get_batteryState(), current.get_resetCount(), sysStatus.get_messageCount(), current.get_RSSI(), current.get_SNR());
 
 	lora_state = DATA_ACK;		// Prepare to respond
@@ -592,7 +609,7 @@ bool LoRA_Functions::getJoinPayload(uint8_t nodeNumber) {
 	jp.getValueByKey(nodeObjectContainer, "p", compressedPayloadInt);
 	compressedPayload = static_cast<uint8_t>(compressedPayloadInt);
 
-	result = LoRA_Functions::hydratePayload(sensorType, compressedPayload);
+	result = LoRA_Functions::hydrateJoinPayload(sensorType, compressedPayload);
 
 	if(result) Log.info("Loaded payload values of %d, %d, %d, %d", current.get_payload1(), current.get_payload2(), current.get_payload3(), current.get_payload4());
 	return result;
@@ -619,12 +636,12 @@ bool LoRA_Functions::setJoinPayload(uint8_t nodeNumber) {
 	jp.getValueByKey(nodeObjectContainer, "p", compressedPayloadInt);
 	compressedPayload = static_cast<uint8_t>(compressedPayloadInt);			// set compressedPayload as the compressed JSON payload variables
 
-	result = LoRA_Functions::parsePayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
+	result = LoRA_Functions::parseJoinPayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
 	if (!result) 
 	Log.info("Changing payload values from %d, %d, %d, %d", payload1, payload2, payload3, payload4);
 
-	compressedPayload = LoRA_Functions::getCompressedPayload(sensorType);	// set compressedPayload as the compressed currentData payload variables
-	result = LoRA_Functions::parsePayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
+	compressedPayload = LoRA_Functions::getCompressedJoinPayload(sensorType);	// set compressedPayload as the compressed currentData payload variables
+	result = LoRA_Functions::parseJoinPayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
 	Log.info("Changed payload values to %d, %d, %d, %d", payload1, payload2, payload3, payload4);
 
 	const JsonParserGeneratorRK::jsmntok_t *value;
@@ -769,7 +786,7 @@ void LoRA_Functions::printNodeData(bool publish) {
 		jp.getValueByKey(nodeObjectContainer, "pend", pendingAlertCode);
 		jp.getValueByKey(nodeObjectContainer, "cont", pendingAlertContext);
 		
-		LoRA_Functions::parsePayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
+		LoRA_Functions::parseJoinPayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
 
 		snprintf(data, sizeof(data), "Node %d, uniqueID %d, type %d payload (%d/%d/%d/%d) with pending alert %d and alert context %d", nodeNumber, uniqueID, payload1, payload2, payload3, payload4, sensorType, pendingAlertCode, pendingAlertContext);
 		Log.info(data);
@@ -799,7 +816,7 @@ uint16_t LoRA_Functions::setNodeToken(uint8_t nodeNumber) {
 	return token;
 }
 
-uint8_t LoRA_Functions::getCompressedPayload(uint8_t sensorType) {
+uint8_t LoRA_Functions::getCompressedJoinPayload(uint8_t sensorType) {
     uint8_t data[4] = {0};
     uint8_t bitSizes[4] = {0};
 
@@ -817,7 +834,7 @@ uint8_t LoRA_Functions::getCompressedPayload(uint8_t sensorType) {
             bitSizes[1] = 1; // placement (1 bit)
         } break;
         default: {          		
-            Log.info("Unknown sensor type in getCompressedPayload %d", sensorType);
+            Log.info("Unknown sensor type in getCompressedJoinPayload %d", sensorType);
             if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type", PRIVATE);
             return 0;
         } break;
@@ -831,7 +848,7 @@ uint8_t LoRA_Functions::getCompressedPayload(uint8_t sensorType) {
     return compressData(data, bitSizes);
 }
 
-bool LoRA_Functions::hydratePayload(uint8_t sensorType, uint8_t compressedPayload) {
+bool LoRA_Functions::hydrateJoinPayload(uint8_t sensorType, uint8_t compressedPayload) {
     uint8_t data[4] = {0};
     uint8_t bitSizes[4] = {0};
 
@@ -849,7 +866,7 @@ bool LoRA_Functions::hydratePayload(uint8_t sensorType, uint8_t compressedPayloa
             bitSizes[1] = 1; // placement (1 bit)
         } break;
         default: {
-            Log.info("Unknown sensor type in hydratePayload %d", sensorType);
+            Log.info("Unknown sensor type in hydrateJoinPayload %d", sensorType);
             if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type", PRIVATE);
             return false;
         } break;
@@ -865,7 +882,7 @@ bool LoRA_Functions::hydratePayload(uint8_t sensorType, uint8_t compressedPayloa
     return true;
 }
 
-bool LoRA_Functions::parsePayloadValues(uint8_t sensorType, uint8_t compressedPayload, uint8_t& payload1, uint8_t& payload2, uint8_t& payload3, uint8_t& payload4) {
+bool LoRA_Functions::parseJoinPayloadValues(uint8_t sensorType, uint8_t compressedPayload, uint8_t& payload1, uint8_t& payload2, uint8_t& payload3, uint8_t& payload4) {
     uint8_t data[4] = {0};
     uint8_t bitSizes[4] = {0};
 
@@ -883,7 +900,7 @@ bool LoRA_Functions::parsePayloadValues(uint8_t sensorType, uint8_t compressedPa
             bitSizes[1] = 1; // placement (1 bit)
         } break;
         default: {
-            Log.info("Unknown sensor type in parsePayloadValues %d", sensorType);
+            Log.info("Unknown sensor type in parseJoinPayloadValues %d", sensorType);
             if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type", PRIVATE);
             return false;
         } break;

@@ -264,8 +264,8 @@ int Particle_Functions::jsonFunctionParser(String command) {
               uint8_t space = static_cast<uint8_t>(spaceInt);
               if(nodeNumber != 0) {
                 if(LoRA_Functions::instance().getJoinPayload(nodeNumber)) {
-                  if(space < 64) {
-                    current.set_payload1(space);
+                  if(space >= 1 && space <= 64) {                            // People don't like a space to be zero so they start at one
+                    current.set_payload1(space - 1);                              // Store it as a 6 bit anyway though (This allows us to index space as 0-63 in the app, while displaying space + 1 to Ubidots/Particle)
                     if(placementStr != "null"){                              // null is sent here when blank on ubidots widget - ignoring reduces punishment of user error
                       placement = placementStr == "true" ? 1 : 0;
                       current.set_payload2(placement);
@@ -278,7 +278,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
                     LoRA_Functions::instance().setJoinPayload(nodeNumber);
                     LoRA_Functions::instance().setAlertCode(nodeNumber, 1);    // trigger a rejoin alert code               
                   } else {
-                    snprintf(messaging,sizeof(messaging), "Error in mountConfig. \"Space\" must be less than 64.");
+                    snprintf(messaging,sizeof(messaging), "Error in mountConfig. \"Space\" must be between 1 and 64.");
                     success = false;
                   }
                 } else {
