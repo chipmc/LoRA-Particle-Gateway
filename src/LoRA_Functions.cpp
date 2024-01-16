@@ -230,22 +230,6 @@ bool LoRA_Functions::decipherDataReportGateway() {			// Receives the data report
 	current.set_retryCount(buf[26]);
 	current.set_retransmissionDelay(buf[27]);
 
-	switch (current.get_sensorType()) {	   // Generalize based on sensor type - switch 
-        case 1 ... 9: {    									// Counter
-			// Process data from node report here if needed
-        } break;
-        case 10 ... 19: {   								// Occupancy
-			Room_Occupancy::instance().setRoomCounts();  	// After deciphering all data from the Data Report, set the room counts using the current struct - Room_Occupancy class
-        } break;
-        case 20 ... 29: {   								// Sensor
-            // Process data from node report here if needed
-        } break;
-        default: {          		
-            Log.info("Unknown sensor type reported decipherDataReportGateway %d", current.get_sensorType());
-            if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type", PRIVATE);
-            return 0;
-        } break;
-    }	
 	// Log.info("Data recieved from the report: sensorType %d, temp %d, battery %d, batteryState %d, resets %d, message count %d, RSSI %d, SNR %d", current.get_sensorType(), current.get_internalTempC(), current.get_stateOfCharge(), current.get_batteryState(), current.get_resetCount(), sysStatus.get_messageCount(), current.get_RSSI(), current.get_SNR());
 
 	lora_state = DATA_ACK;		// Prepare to respond
@@ -839,7 +823,7 @@ uint8_t LoRA_Functions::getCompressedJoinPayload(uint8_t sensorType) {
         } break;
         default: {          		
             Log.info("Unknown sensor type in getCompressedJoinPayload %d", sensorType);
-            if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type", PRIVATE);
+            if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type in getCompressedJoinPayload", PRIVATE);
             return 0;
         } break;
     }
@@ -871,7 +855,7 @@ bool LoRA_Functions::hydrateJoinPayload(uint8_t sensorType, uint8_t compressedPa
         } break;
         default: {
             Log.info("Unknown sensor type in hydrateJoinPayload %d", sensorType);
-            if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type", PRIVATE);
+            if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type in hydrateJoinPayload", PRIVATE);
             return false;
         } break;
     }
@@ -905,7 +889,7 @@ bool LoRA_Functions::parseJoinPayloadValues(uint8_t sensorType, uint8_t compress
         } break;
         default: {
             Log.info("Unknown sensor type in parseJoinPayloadValues %d", sensorType);
-            if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type", PRIVATE);
+            if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type in parseJoinPayloadValues", PRIVATE);
             return false;
         } break;
     }

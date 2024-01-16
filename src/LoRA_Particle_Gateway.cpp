@@ -398,6 +398,7 @@ void publishWebhook(uint8_t nodeNumber) {
 					PublishQueuePosix::instance().publish("Node Data", data, PRIVATE);
 				}
 				/*** TODO:: (Alex) Review this if you have time ***/
+				Room_Occupancy::instance().setRoomCounts();
 				// Compose and send the node and space information to the UpdateGatewayNodesAndSpaces ubiFunction
 				snprintf(data, sizeof(data), "{\"nodeUniqueID\":\"%lu\",\"battery\":%d,\"space\":%d,\"spaceNet\":%d,\"spaceGross\":%d}",\
 				current.get_uniqueID(), current.get_stateOfCharge(), current.get_payload5() + 1, Room_Occupancy::instance().getRoomNet(current.get_payload5()), Room_Occupancy::instance().getRoomGross(current.get_payload5()));
@@ -413,8 +414,8 @@ void publishWebhook(uint8_t nodeNumber) {
 			} break;
 
 			default: {														// Unknown
-				Log.info("Unknown sensor type %d", current.get_sensorType());
-				if (Particle.connected()) Particle.publish("Alert","Unknown sensor type", PRIVATE);
+				Log.info("Unknown sensor type in gateway publish %d", current.get_sensorType());
+				if (Particle.connected()) Particle.publish("Alert","Unknown sensor type in gateway publish", PRIVATE);
 			} break;
 		}
 	}
