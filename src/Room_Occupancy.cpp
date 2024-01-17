@@ -28,7 +28,7 @@ void Room_Occupancy::loop() {
 
 void Room_Occupancy::resetEverything() {
   Log.info("Resetting the Room Occupancy Array");
-  for (uint16_t i=0; i < 10; i++) {
+  for (uint16_t i=0; i < 64; i++) {
     roomCountArray[i][0] = roomCountArray[i][1] = 0;
   }
 }
@@ -58,7 +58,7 @@ bool Room_Occupancy::setRoomCounts() {  // This is set for the current node
     roomCountArray[current.get_payload5()][0] = currentGross;           // Set the room gross value - always the case so outside conditional
   }
   else {                                                                  // Little more complex - This is a multi sensor room current net counts can be zero
-    if (roomCountArray[current.get_payload5()-1][1] + currentNet < 0) {   // Just like above, test for less than zero
+    if (roomCountArray[current.get_payload5()][1] + currentNet < 0) {   // Just like above, test for less than zero
       currentNet = -1 * roomCountArray[current.get_payload5()][1];        // Written for clarity
       Log.info("Received a negative occupancy - resetting");
       LoRA_Functions::instance().setAlertCode(12, current.get_nodeNumber());         /*** Queue up an alert code and alert context (instead of setting current right here) ***/

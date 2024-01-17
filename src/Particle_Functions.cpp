@@ -5,6 +5,7 @@
 #include "Particle_Functions.h"
 #include "PublishQueuePosixRK.h"
 #include "LoRA_Functions.h"
+#include "Room_Occupancy.h"
 #include "JsonParserGeneratorRK.h"
 
 char openTimeStr[8] = " ";
@@ -385,6 +386,20 @@ int Particle_Functions::jsonFunctionParser(String command) {
         }
       } else {
         snprintf(messaging,sizeof(messaging),"No node exists in the database with that uniqueID");
+        success = false; 
+      }
+    }
+
+    // Resets the Room Occupancy numbers
+    else if (function == "resetRoomOccupancy") {
+      // Test - {"cmd":[{"node":3312487035, "var":"true","fn":"recalibrate"}]}
+      if(nodeNumber == 0) {
+        if (variable == "true") {                   
+          snprintf(messaging,sizeof(messaging),"Resetting Room Occupancy on gateway");
+          Room_Occupancy::instance().resetEverything();
+        }
+      } else {
+        snprintf(messaging,sizeof(messaging),"Can only reset occupancy for Gateway (node 0)");
         success = false; 
       }
     }

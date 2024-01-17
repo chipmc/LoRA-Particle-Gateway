@@ -175,8 +175,12 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 * {"cmd":[{"node":*node uniqueID here*, "var":"50","fn":"occupancyCalibrationLoops"}]} - Sets the occupancyCalibrationLoops for the node with the given uniqueID by sending Alert Code 10 with Alert Context == var
     * var must be 0-1000
 
-**Recalibrare an Occupancy Node**
+**Recalibrate an Occupancy Node**
 * {"cmd":[{"node":*node uniqueID here*, "var":"true","fn":"recalibrate"}]} - Triggers a recalibration of the TOF Sensor on the node with the given uniqueID by sending Alert Code 11 
+    * var must *only* be "true"
+
+**Reset all Room Occupancy**
+* {"cmd":[{"node":0, "var":"true","fn":"resetRoomOccupancy"}]} - Resets the Room Occupancy numbers to 0. 
     * var must *only* be "true"
 
 ## Payload Assignments for Data Report by Sensor Type
