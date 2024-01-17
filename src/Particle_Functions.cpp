@@ -148,7 +148,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
 
     // Stay Connected
     else if (function == "stay") {
-      // Format - function - rpt, node - 0, variables - true or false
+      // Format - function - stay, node - 0, variables - true or false
       // Test - {"cmd":[{"node":0,"var":"true" or "false","fn":"stay"}]}
       if (variable == "true") {
         snprintf(messaging,sizeof(messaging),"Going to keep Gateway on Particle and LoRA networks");

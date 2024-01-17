@@ -89,7 +89,7 @@ bool LoRA_Functions::setup(bool gatewayID) {
 	if (jp.parse()) Log.info("Parsed Successfully");
 	else {
 		nodeDatabase.resetNodeIDs();
-		Log.info("Parsing error resetting nodeID database");
+		Log.info("Parsing error");
 	}
 	return true;
 }
@@ -427,7 +427,7 @@ uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, uint32_t uniqueID) {
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
 	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
 
-	for (int i=0; i<10; i++) {												// Iterate through the array looking for a match
+	for (int i=0; i<100; i++) {												// Iterate through the array looking for a match
 		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
 		if(nodeObjectContainer == NULL) {
 			Log.info("findNodeNumber ran out of entries at i = %d",i);
@@ -747,7 +747,7 @@ bool LoRA_Functions::setAlertContext(int nodeNumber, int newAlertContext) {
 
 void LoRA_Functions::printNodeData(bool publish) {
 	int nodeNumber;
-	int uniqueID;
+	uint32_t uniqueID;
 	int sensorType;
 	uint8_t  payload1;
 	uint8_t  payload2;
@@ -762,7 +762,7 @@ void LoRA_Functions::printNodeData(bool publish) {
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
 	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
 
-	for (int i=0; i<10; i++) {												// Iterate through the array looking for a match
+	for (int i=0; i<100; i++) {												// Iterate through the array looking for a match
 		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
 		if(nodeObjectContainer == NULL) {
 			break;								// Ran out of entries 
@@ -776,14 +776,14 @@ void LoRA_Functions::printNodeData(bool publish) {
 		
 		LoRA_Functions::parseJoinPayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
 
-		snprintf(data, sizeof(data), "Node %d, uniqueID %d, type %d payload (%d/%d/%d/%d) with pending alert %d and alert context %d", nodeNumber, uniqueID, payload1, payload2, payload3, payload4, sensorType, pendingAlertCode, pendingAlertContext);
+		snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d payload (%d/%d/%d/%d) with pending alert %d and alert context %d", nodeNumber, uniqueID, sensorType, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext);
 		Log.info(data);
 		if (Particle.connected() && publish) {
 			Particle.publish("nodeData", data, PRIVATE);
 			delay(1000);
 		}
 	}
-	// Log.info(nodeDatabase.get_nodeIDJson());  // See the raw JSON string
+	Log.info(nodeDatabase.get_nodeIDJson());  // See the raw JSON string
 }
 
 bool LoRA_Functions::checkForValidToken(uint8_t nodeNumber, uint16_t token) {
