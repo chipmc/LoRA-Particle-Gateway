@@ -144,6 +144,14 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 * {"cmd":[{"node":0,"var":"6","fn":"open"}]} - Changes the closing hour of the Gateway
     * var can be any value 13-24
 
+**Break Start Hour**
+* {"cmd":[{"node":0,"var":"2","fn":"break"}]} - Changes the break start hour for the Gateway - set to 24 to denote having no break
+    * var can be any value 0-24, set to 24 to denote having no break
+
+**Break Length Minutes**
+* {"cmd":[{"node":0,"var":"30","fn":"breakLengthMinutes"}]} - Changes the length (in minutes) for the 'break' on the Gateway
+    * var can be any value 0-240
+
 **Power Cycle**
 * {"cmd":[{"node":0,"var":"1","fn":"pwr"}]} - Forces a power cycle for the Gateway
     * var can *only* be 1 
@@ -179,8 +187,8 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 * {"cmd":[{"node":*node uniqueID here*, "var":"true","fn":"recalibrate"}]} - Triggers a recalibration of the TOF Sensor on the node with the given uniqueID by sending Alert Code 11 
     * var must *only* be "true"
 
-**Reset all Room Occupancy**
-* {"cmd":[{"node":0, "var":"true","fn":"resetRoomOccupancy"}]} - Resets the Room Occupancy numbers to 0. 
+**Reset all Room Gross Occupancy**
+* {"cmd":[{"node":0, "var":"true","fn":"resetRoomGross"}]} - Resets the Room Occupancy Gross numbers to 0. 
     * var must *only* be "true"
 
 ## Payload Assignments for Data Report by Sensor Type

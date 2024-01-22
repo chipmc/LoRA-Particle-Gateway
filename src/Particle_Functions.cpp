@@ -189,7 +189,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
 
     // Sets Closing hour
     else if (function == "close") {
-      // Format - function - close, node - 0, variables - 13-24 open hour
+      // Format - function - close, node - 0, variables - 13-24 closing hour
       // Test - {"cmd":[{"node":0, "var":"21","fn":"close"}]}
       int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
       if ((tempValue >= 13 ) && (tempValue <= 24)) {
@@ -199,6 +199,36 @@ int Particle_Functions::jsonFunctionParser(String command) {
       else {
         snprintf(messaging,sizeof(messaging),"Close hour - must be 13-24");
         success = false;                                                       // Make sure it falls in a valid range or send a "fail" result
+      }
+    }
+
+    // Sets break time (hour)
+    else if (function == "break") {
+      // Format - function - open, node - 0, variables - 0-23 break start hour (set to 24 to dedenote having no break)
+      // Test - {"cmd":[{"node":0, "var":"2","fn":"break"}]}
+      int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+      if ((tempValue >= 0) && (tempValue <= 24)) {
+        snprintf(messaging,sizeof(messaging),"Setting break start hour to %d:00", tempValue);
+        sysStatus.set_breakTime(tempValue);
+      }
+      else {
+        snprintf(messaging,sizeof(messaging),"Break start hour - must be 0-24");
+        success = false;                                               // Make sure it falls in a valid range or send a "fail" result
+      }
+    }
+
+    // Sets break length in minutes
+    else if (function == "breakLengthMinutes") {
+      // Format - function - close, node - 0, variables - 0-60 break length (in minutes)
+      // Test - {"cmd":[{"node":0, "var":"21","fn":"breakLengthMinutes"}]}
+      int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+      if ((tempValue >= 0 ) && (tempValue <= 240)) {
+        snprintf(messaging,sizeof(messaging),"Setting break length to %d minutes", tempValue);
+        sysStatus.set_breakLengthMinutes(tempValue);
+      }
+      else {
+        snprintf(messaging,sizeof(messaging),"Break length (minutes) - must be 0-240");
+        success = false;                                               // Make sure it falls in a valid range or send a "fail" result
       }
     }
 
@@ -391,15 +421,15 @@ int Particle_Functions::jsonFunctionParser(String command) {
     }
 
     // Resets the Room Occupancy numbers
-    else if (function == "resetRoomOccupancy") {
+    else if (function == "resetRoomGross") {
       // Test - {"cmd":[{"node":3312487035, "var":"true","fn":"recalibrate"}]}
       if(nodeNumber == 0) {
         if (variable == "true") {                   
-          snprintf(messaging,sizeof(messaging),"Resetting Room Occupancy on gateway");
-          Room_Occupancy::instance().resetEverything();
+          snprintf(messaging,sizeof(messaging),"Resetting Room gross counts on gateway");
+          Room_Occupancy::instance().resetRoomGross();
         }
       } else {
-        snprintf(messaging,sizeof(messaging),"Can only reset occupancy for Gateway (node 0)");
+        snprintf(messaging,sizeof(messaging),"Can only reset gross counts for Gateway (node 0)");
         success = false; 
       }
     }

@@ -90,6 +90,8 @@ void sysStatusData::initialize() {
     sysStatus.set_alertTimestampGateway(0);
     sysStatus.set_openTime(6);
     sysStatus.set_closeTime(22);
+    sysStatus.set_breakTime(14);   // set to 2pm by default
+    sysStatus.set_breakLengthMinutes(30);   // set to 30 minutes by default
 
     // If you manually update fields here, be sure to update the hash
     updateHash();
@@ -213,6 +215,22 @@ uint8_t sysStatusData::get_closeTime() const {
 
 void sysStatusData::set_closeTime(uint8_t value) {
     setValue<uint8_t>(offsetof(SysData, closeTime), value);
+}
+
+uint8_t sysStatusData::get_breakTime() const {
+    return getValue<uint8_t>(offsetof(SysData, breakTime));
+}
+
+void sysStatusData::set_breakTime(uint8_t value) {
+    setValue<uint8_t>(offsetof(SysData, breakTime), value);
+}
+
+uint8_t sysStatusData::get_breakLengthMinutes() const {
+    return getValue<uint8_t>(offsetof(SysData, breakLengthMinutes));
+}
+
+void sysStatusData::set_breakLengthMinutes(uint8_t value) {
+    setValue<uint8_t>(offsetof(SysData, breakLengthMinutes), value);
 }
 
 uint8_t sysStatusData::get_tokenCore() const {

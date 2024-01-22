@@ -406,6 +406,7 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 		{node:(int)nodeNumber},
 		{uID: (uint32_t)uniqueID},
 		{type: (int)sensorType},
+		{occu}: (int)occupancyNet}
 		{p: (int)compressedPayload},
 		{pend: (int)pendingAlerts},
 		{cont: (int)pendingAlertContext}
@@ -450,7 +451,8 @@ uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, uint32_t uniqueID) {
 		mod.startObject();
 		mod.insertKeyValue("node", nodeNumber);
 		mod.insertKeyValue("uID", uniqueID);
-		mod.insertKeyValue("type", (int)current.get_sensorType());			// This is the sensor type reported by the node		
+		mod.insertKeyValue("type", (int)current.get_sensorType());			// This is the sensor type reported by the node
+		mod.insertKeyValue("occ", (int)0);			
 		mod.insertKeyValue("p",(int)0);
 		mod.insertKeyValue("pend",(int)0);
 		mod.insertKeyValue("cont",(int)0);
@@ -745,10 +747,21 @@ bool LoRA_Functions::setAlertContext(int nodeNumber, int newAlertContext) {
 	return true;
 }
 
+bool LoRA_Functions::setOccupancyNet(int nodeNumber) {
+	//TODO:: implement
+	return true;
+}
+
+uint16_t LoRA_Functions::getOccupancyNetBySpace(int space) {
+	//TODO:: implement
+	return 0;
+}
+
 void LoRA_Functions::printNodeData(bool publish) {
 	int nodeNumber;
 	uint32_t uniqueID;
 	int sensorType;
+	int occupancyNet;
 	uint8_t  payload1;
 	uint8_t  payload2;
 	uint8_t  payload3;
@@ -756,7 +769,7 @@ void LoRA_Functions::printNodeData(bool publish) {
 	int compressedPayload;
 	int pendingAlertCode;
 	int pendingAlertContext;
-	char data[256];
+	char data[512];
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
@@ -770,13 +783,14 @@ void LoRA_Functions::printNodeData(bool publish) {
 		jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);
 		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);
 		jp.getValueByKey(nodeObjectContainer, "type", sensorType);
+		jp.getValueByKey(nodeObjectContainer, "occ", occupancyNet);
 		jp.getValueByKey(nodeObjectContainer, "p", compressedPayload);
 		jp.getValueByKey(nodeObjectContainer, "pend", pendingAlertCode);
 		jp.getValueByKey(nodeObjectContainer, "cont", pendingAlertContext);
 		
 		LoRA_Functions::parseJoinPayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
 
-		snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d payload (%d/%d/%d/%d) with pending alert %d and alert context %d", nodeNumber, uniqueID, sensorType, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext);
+		snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, occupancyNet %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d", nodeNumber, uniqueID, sensorType, occupancyNet, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext);
 		Log.info(data);
 		if (Particle.connected() && publish) {
 			Particle.publish("nodeData", data, PRIVATE);

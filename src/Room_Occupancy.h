@@ -16,7 +16,7 @@
 
 #define roomCounts Room_Occupancy::instance()
 
-extern uint16_t roomCountArray[64][2];
+extern uint16_t roomGrossArray[64];
 // Stores values in a simple array
 // No need to store as it is built from node counts
 // roomCounts[space][gross, net]
@@ -56,14 +56,14 @@ public:
     /**
      * @brief Reset all the room counts - done each day at midnight
     */
-    void resetEverything();
+    void resetRoomGross();
 
     /**
-     * @brief Updates the value of the room counts
+     * @brief Updates the value of the room's gross occupancy value using the currentData struct
      * 
-     * Returns zero if count is valid - corrected value if not
+     * @return true if the node is configured, false if not
     */
-    bool setRoomCounts();
+    bool setRoomGross();
 
     /**
      * @brief This function returns the current net room count

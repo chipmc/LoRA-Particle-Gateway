@@ -94,6 +94,8 @@ public:
 		time_t alertTimestampGateway;              		  // When was the last alert
 		uint8_t openTime;                                 // Open time 24 hours
 		uint8_t closeTime;                                // Close time 24 hours
+		uint8_t breakTime;                                // Break time 24 hours, set this to 24 if no break time is needed for this gateway.
+		uint8_t breakLengthMinutes;                       // Break length 1-60 minutes.
 		uint8_t tokenCore;								  // This is the random part of the daily token
 	};
 	SysData sysData;
@@ -166,6 +168,12 @@ public:
 
 	uint8_t get_closeTime() const;
 	void set_closeTime(uint8_t value);
+
+	uint8_t get_breakTime() const;
+	void set_breakTime(uint8_t value);
+
+	uint8_t get_breakLengthMinutes() const;
+	void set_breakLengthMinutes(uint8_t value);
 
 	uint8_t get_tokenCore() const;
 	void set_tokenCore(uint8_t value);
@@ -496,7 +504,7 @@ public:
 		// Your fields go here. Once you've added a field you cannot add fields
 		// (except at the end), insert fields, remove fields, change size of a field.
 		// Doing so will cause the data to be corrupted!
-		char nodeIDJson[1024];                             // JSON string that stores the nodeID data
+		char nodeIDJson[3072];                             // JSON string that stores the nodeID data
 	};
 	NodeData nodeData;
 

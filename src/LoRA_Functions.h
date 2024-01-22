@@ -255,6 +255,23 @@ public:
     bool setAlertCode(int nodeNumber, int newAlertCode);
 
     /**
+     * @brief Changes the occupancyNet value for a node
+     * 
+     * @param nodeNumber
+     * @return true
+     * @return false
+     */
+    bool setOccupancyNet(int nodeNumber);
+
+    /**
+     * @brief Parses the JSON database to return the sum of the occupancyNet values for all nodes in a space
+     * 
+     * @param space
+     * @return occupancyNet total for the space
+     */
+    uint16_t getOccupancyNetBySpace(int space);
+
+    /**
      * @brief Changes the alert context that is pending for the next report from the node
      * 
      * @param nodeNumber 
