@@ -2,7 +2,7 @@
 #include "MB85RC256V-FRAM-RK.h"
 #include "StorageHelperRK.h"
 #include "MyPersistentData.h"
-
+#include <stack>
 
 MB85RC64 fram(Wire, 0);
 // We use the 64kbit part so we have 8k bytes of storage
@@ -554,5 +554,32 @@ String nodeIDData::get_nodeIDJson() const {
 }
 
 bool nodeIDData::set_nodeIDJson(const char *str) {
-	return setValueString(offsetof(NodeData, nodeIDJson), sizeof(NodeData::nodeIDJson), str);
+    char* cleanedJSON = new char[strlen(str) + 1];
+    strcpy(cleanedJSON, str);
+    this->cleanJSON(cleanedJSON);
+    bool result = setValueString(offsetof(NodeData, nodeIDJson), strlen(cleanedJSON) + 1, cleanedJSON);
+    delete[] cleanedJSON;
+    return result;
+}
+
+void nodeIDData::cleanJSON(char* jsonString) {
+    char* writePtr = jsonString;
+    std::stack<char> braceStack;
+
+    for (char* readPtr = jsonString; *readPtr != '\0'; ++readPtr) {
+        if (*readPtr == '{') {
+            braceStack.push(*readPtr);
+        } else if (*readPtr == '}') {
+            if (!braceStack.empty()) {
+                braceStack.pop();
+                *writePtr++ = *readPtr;
+            }
+        }
+
+        if (!braceStack.empty()) {
+            *writePtr++ = *readPtr;
+        }
+    }
+
+    *writePtr = '\0';
 }

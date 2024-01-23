@@ -470,10 +470,8 @@ uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, uint32_t uniqueID) {
 		case 1 ... 9: {    						// Counter
 		} break;
 		case 10 ... 19: {   					// Occupancy
-			int occupancyNet;
-			int occupancyGross;
-			mod.insertKeyValue("pend",(int)0);
-			mod.insertKeyValue("cont",(int)0);
+			mod.insertKeyValue("occN",(int)0);		// add occupancyNet
+			mod.insertKeyValue("occG",(int)0);		// add occupancyGross
 		} break;
 		case 20 ... 29: {   					// Sensor
 		} break;
@@ -553,6 +551,10 @@ byte LoRA_Functions::getType(int nodeNumber) {
 bool LoRA_Functions::setType(int nodeNumber, int newType) {
 	if (nodeNumber == 0 || nodeNumber == 255) return false;
 	int type;
+	uint32_t uniqueID;
+	int compressedPayload;
+	int pendingAlert;
+	int pendingAlertContext;
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
@@ -561,39 +563,75 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
 	if(nodeObjectContainer == NULL) return false;								// Ran out of entries 
 
-	// Remove and Update type specific JSON variables
-	switch (newType) {
-		case 1 ... 9: {    						// Counter
-			// TODO:: remove occupancyNet
-			// TODO:: remove occupancyGross
-		} break;
-		case 10 ... 19: {   					// Occupancy
-			// TODO:: add occupancyNet 
-			// TODO:: add occupancyGross
-		} break;
-		case 20 ... 29: {   					// Sensor
-			// TODO:: remove occupancyNet
-			// TODO:: remove occupancyGross
-		} break;
-		default: {          		
-			Log.info("Unable to update to new sensorType in setType: %d", newType);
-			if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type in setType", PRIVATE);
-		} break;
-	}
+	Log.info("Before changing sensor type:");
+	this->printNodeData(false);
 
+	JsonModifier mod(jp);
+
+	jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);
 	jp.getValueByKey(nodeObjectContainer, "type", type);
+	jp.getValueByKey(nodeObjectContainer, "p", compressedPayload);
+	jp.getValueByKey(nodeObjectContainer, "pend", pendingAlert);
+	jp.getValueByKey(nodeObjectContainer, "cont", pendingAlertContext);
 
 	Log.info("Changing sensor type from %d to %d", type, newType);
 
-	const JsonParserGeneratorRK::jsmntok_t *value;
-	jp.getValueTokenByKey(nodeObjectContainer, "type", value);
-
-	JsonModifier mod(jp);
-	mod.startModify(value);
-		mod.insertValue((int)newType);		
-	mod.finish();
+	// Remove and Update entry with new type and type specific JSON variables
+	switch (newType) {
+		case 1 ... 9: {    						// Counter
+			mod.removeArrayIndex(nodesArrayContainer, nodeNumber-1);	// remove the JSON as it was
+			mod.startAppend(nodesArrayContainer);						// insert it back, but with the type specific variables for counter
+				mod.startObject();
+					mod.insertKeyValue("node", nodeNumber);
+					mod.insertKeyValue("uID", uniqueID);
+					mod.insertKeyValue("type", newType);					
+					mod.insertKeyValue("p", compressedPayload);
+					mod.insertKeyValue("pend",pendingAlert);
+					mod.insertKeyValue("cont",pendingAlertContext);
+					// Add type specific variables here if needed
+				mod.finishObjectOrArray();
+			mod.finish();
+		} break;
+		case 10 ... 19: {   					// Occupancy
+			mod.removeArrayIndex(nodesArrayContainer, nodeNumber-1);	// remove the JSON as it was
+			mod.startAppend(jp.getOuterArray());						// insert it back, but with the type specific variables for counter
+				mod.startObject();
+					mod.insertKeyValue("node", nodeNumber);
+					mod.insertKeyValue("uID", uniqueID);
+					mod.insertKeyValue("type", newType);					
+					mod.insertKeyValue("p", compressedPayload);
+					mod.insertKeyValue("pend",pendingAlert);
+					mod.insertKeyValue("cont",pendingAlertContext);
+					mod.insertKeyValue("occN",(int)0);
+					mod.insertKeyValue("occG",(int)0);
+				mod.finishObjectOrArray();
+			mod.finish();
+		} break;
+		case 20 ... 29: {   					// Sensor
+			mod.removeArrayIndex(nodesArrayContainer, nodeNumber-1);	// remove the JSON as it was
+			mod.startAppend(jp.getOuterArray());						// insert it back, but with the type specific variables for counter
+				mod.startObject();
+					mod.insertKeyValue("node", nodeNumber);
+					mod.insertKeyValue("uID", uniqueID);
+					mod.insertKeyValue("type", newType);					
+					mod.insertKeyValue("p", compressedPayload);
+					mod.insertKeyValue("pend",pendingAlert);
+					mod.insertKeyValue("cont",pendingAlertContext);
+					// Add type specific variables here if needed
+				mod.finishObjectOrArray();
+			mod.finish();
+		} break;
+		default: {          		
+			Log.info("Unable to update to new sensorType in setType: %d", newType);
+			if (Particle.connected()) Particle.publish("Alert", "Unable to update to new sensorType in setType", PRIVATE);
+		} break;
+	}
 
 	nodeDatabase.set_nodeIDJson(jp.getBuffer());									// This should backup the nodeID database - now updated to persistent storage
+	
+	Log.info("After changing sensor type:");
+	this->printNodeData(false);
+
 	return true;
 }
 

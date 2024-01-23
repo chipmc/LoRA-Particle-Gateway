@@ -534,6 +534,13 @@ public:
 
 	String get_nodeIDJson() const;
 	bool set_nodeIDJson(const char *str);
+
+	/**
+	 *  Removes any unformatted text from a JSON string
+	 * 
+	 *  @param jsonString the string to be cleaned
+	 */
+	void cleanJSON(char* jsonString);
 	
 
 	//Members here are internal only and therefore protected
