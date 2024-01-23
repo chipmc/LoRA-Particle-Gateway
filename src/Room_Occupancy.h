@@ -56,14 +56,7 @@ public:
     /**
      * @brief Reset all the room counts - done each day at midnight
     */
-    void resetRoomGross();
-
-    /**
-     * @brief Updates the value of the room's gross occupancy value using the currentData struct
-     * 
-     * @return true if the node is configured, false if not
-    */
-    bool setRoomGross();
+    void resetRoomCounts();
 
     /**
      * @brief This function returns the current net room count

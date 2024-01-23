@@ -399,8 +399,6 @@ void publishWebhook(uint8_t nodeNumber) {
 				if (Particle.connected()) {
 					PublishQueuePosix::instance().publish("Node Data", data, PRIVATE);
 				}
-				/*** TODO:: (Alex) Review this if you have time ***/
-				Room_Occupancy::instance().setRoomGross();
 				// Compose and send the node and space information to the UpdateGatewayNodesAndSpaces ubiFunction
 				snprintf(data, sizeof(data), "{\"nodeUniqueID\":\"%lu\",\"battery\":%d,\"space\":%d,\"spaceNet\":%d,\"spaceGross\":%d}",\
 				current.get_uniqueID(), current.get_stateOfCharge(), current.get_payload5() + 1, Room_Occupancy::instance().getRoomNet(current.get_payload5()), Room_Occupancy::instance().getRoomGross(current.get_payload5()));

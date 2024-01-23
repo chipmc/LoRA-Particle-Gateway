@@ -421,12 +421,12 @@ int Particle_Functions::jsonFunctionParser(String command) {
     }
 
     // Resets the Room Occupancy numbers
-    else if (function == "resetRoomGross") {
+    else if (function == "resetRoomCounts") {
       // Test - {"cmd":[{"node":3312487035, "var":"true","fn":"recalibrate"}]}
       if(nodeNumber == 0) {
         if (variable == "true") {                   
           snprintf(messaging,sizeof(messaging),"Resetting Room gross counts on gateway");
-          Room_Occupancy::instance().resetRoomGross();
+          Room_Occupancy::instance().resetRoomCounts();
         }
       } else {
         snprintf(messaging,sizeof(messaging),"Can only reset gross counts for Gateway (node 0)");

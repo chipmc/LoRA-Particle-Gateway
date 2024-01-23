@@ -397,7 +397,7 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 }
 
 // ************************************************************************
-// *****             Node Management  Functions                       *****
+// **                     Node Management Functions                      **
 // ************************************************************************
 
 /* NodeID JSON structure
@@ -406,10 +406,17 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 		{node:(int)nodeNumber},
 		{uID: (uint32_t)uniqueID},
 		{type: (int)sensorType},
-		{occu}: (int)occupancyNet}
 		{p: (int)compressedPayload},
 		{pend: (int)pendingAlerts},
 		{cont: (int)pendingAlertContext}
+
+	***** Type specific JSON variables *****
+
+	For types 10 - 19 only (Occupancy Counters)
+
+		{occN}: (int)occupancyNet}, 
+		{occG}: (int)occupancyGross},
+
 	},
 	....]
 }
@@ -423,6 +430,7 @@ uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, uint32_t uniqueID) {
 	int index=1;															// Variables to hold values for the function
 	int nodeDeviceNumber;
 	uint32_t nodeDeviceID;
+	int sensorType = (int)current.get_sensorType();
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
@@ -445,17 +453,36 @@ uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, uint32_t uniqueID) {
 	nodeNumber = index;
 	JsonModifier mod(jp);
 
-	Log.info("New node will be assigned node number %d, nodeID of %lu ",nodeNumber, uniqueID);
+	Log.info("New node will be assigned node number %d, nodeID of %lu ", nodeNumber, uniqueID);
 
+	// Create node database entry
 	mod.startAppend(jp.getOuterArray());
 		mod.startObject();
 		mod.insertKeyValue("node", nodeNumber);
 		mod.insertKeyValue("uID", uniqueID);
-		mod.insertKeyValue("type", (int)current.get_sensorType());			// This is the sensor type reported by the node
-		mod.insertKeyValue("occ", (int)0);			
+		mod.insertKeyValue("type", sensorType);			// This is the sensor type reported by the node			
 		mod.insertKeyValue("p",(int)0);
 		mod.insertKeyValue("pend",(int)0);
 		mod.insertKeyValue("cont",(int)0);
+
+	// Add type specific JSON variables
+	switch (sensorType) {
+		case 1 ... 9: {    						// Counter
+		} break;
+		case 10 ... 19: {   					// Occupancy
+			int occupancyNet;
+			int occupancyGross;
+			mod.insertKeyValue("pend",(int)0);
+			mod.insertKeyValue("cont",(int)0);
+		} break;
+		case 20 ... 29: {   					// Sensor
+		} break;
+		default: {          		
+			Log.info("Unknown sensor type in printNodeData %d", sensorType);
+			if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type in printNodeData", PRIVATE);
+		} break;
+	}
+	
 		mod.finishObjectOrArray();
 	mod.finish();
 
@@ -534,22 +561,39 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
 	if(nodeObjectContainer == NULL) return false;								// Ran out of entries 
 
+	// Remove and Update type specific JSON variables
+	switch (newType) {
+		case 1 ... 9: {    						// Counter
+			// TODO:: remove occupancyNet
+			// TODO:: remove occupancyGross
+		} break;
+		case 10 ... 19: {   					// Occupancy
+			// TODO:: add occupancyNet 
+			// TODO:: add occupancyGross
+		} break;
+		case 20 ... 29: {   					// Sensor
+			// TODO:: remove occupancyNet
+			// TODO:: remove occupancyGross
+		} break;
+		default: {          		
+			Log.info("Unable to update to new sensorType in setType: %d", newType);
+			if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type in setType", PRIVATE);
+		} break;
+	}
+
 	jp.getValueByKey(nodeObjectContainer, "type", type);
 
 	Log.info("Changing sensor type from %d to %d", type, newType);
 
 	const JsonParserGeneratorRK::jsmntok_t *value;
-
 	jp.getValueTokenByKey(nodeObjectContainer, "type", value);
 
 	JsonModifier mod(jp);
-
 	mod.startModify(value);
-	mod.insertValue((int)newType);
+		mod.insertValue((int)newType);		
 	mod.finish();
 
 	nodeDatabase.set_nodeIDJson(jp.getBuffer());									// This should backup the nodeID database - now updated to persistent storage
-
 	return true;
 }
 
@@ -747,21 +791,10 @@ bool LoRA_Functions::setAlertContext(int nodeNumber, int newAlertContext) {
 	return true;
 }
 
-bool LoRA_Functions::setOccupancyNet(int nodeNumber) {
-	//TODO:: implement
-	return true;
-}
-
-uint16_t LoRA_Functions::getOccupancyNetBySpace(int space) {
-	//TODO:: implement
-	return 0;
-}
-
 void LoRA_Functions::printNodeData(bool publish) {
 	int nodeNumber;
 	uint32_t uniqueID;
 	int sensorType;
-	int occupancyNet;
 	uint8_t  payload1;
 	uint8_t  payload2;
 	uint8_t  payload3;
@@ -783,14 +816,33 @@ void LoRA_Functions::printNodeData(bool publish) {
 		jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);
 		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);
 		jp.getValueByKey(nodeObjectContainer, "type", sensorType);
-		jp.getValueByKey(nodeObjectContainer, "occ", occupancyNet);
 		jp.getValueByKey(nodeObjectContainer, "p", compressedPayload);
 		jp.getValueByKey(nodeObjectContainer, "pend", pendingAlertCode);
 		jp.getValueByKey(nodeObjectContainer, "cont", pendingAlertContext);
-		
+
 		LoRA_Functions::parseJoinPayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
 
-		snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, occupancyNet %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d", nodeNumber, uniqueID, sensorType, occupancyNet, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext);
+		// Type specific JSON variables
+		switch (sensorType) {
+			case 1 ... 9: {    						// Counter
+				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d", nodeNumber, uniqueID, sensorType, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext);
+			} break;
+			case 10 ... 19: {   					// Occupancy
+				int occupancyNet;
+				int occupancyGross;
+				jp.getValueByKey(nodeObjectContainer, "occN", occupancyNet);
+				jp.getValueByKey(nodeObjectContainer, "occG", occupancyGross);
+				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, occupancyNet %d, occupancyGross %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d", nodeNumber, uniqueID, sensorType, occupancyNet, occupancyGross, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext);
+			} break;
+			case 20 ... 29: {   					// Sensor
+				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d", nodeNumber, uniqueID, sensorType, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext);
+			} break;
+			default: {          		
+				Log.info("Unknown sensor type in printNodeData %d", sensorType);
+				if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type in printNodeData", PRIVATE);
+			} break;
+    	}
+
 		Log.info(data);
 		if (Particle.connected() && publish) {
 			Particle.publish("nodeData", data, PRIVATE);
@@ -817,6 +869,88 @@ uint16_t LoRA_Functions::setNodeToken(uint8_t nodeNumber) {
 	Log.info("Setting token for node %d to %d", nodeNumber, token);
 	return token;
 }
+
+
+
+/**********************************************************************
+ **           Occupancy Specific Node Management Functions           **
+ **********************************************************************/
+
+
+bool LoRA_Functions::setOccupancyNet(int nodeNumber, int sensorType, int newOccupancyNet) {
+	if (nodeNumber == 0 || nodeNumber == 255) return false;
+	if (sensorType < 10 || sensorType > 19) return false; 					// Return false if node is not an occupancy counter
+	int occupancyNet;
+
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
+	if(nodeObjectContainer == NULL) return false;								// Ran out of entries 
+
+	jp.getValueByKey(nodeObjectContainer, "occN", occupancyNet);
+
+	Log.info("Updating occupancy value from %d to %d", occupancyNet, newOccupancyNet);
+
+	const JsonParserGeneratorRK::jsmntok_t *value;
+
+	jp.getValueTokenByKey(nodeObjectContainer, "occN", value);
+
+	JsonModifier mod(jp);
+
+	mod.startModify(value);
+	mod.insertValue((int)newOccupancyNet);
+	mod.finish();
+
+	nodeDatabase.set_nodeIDJson(jp.getBuffer());									// This should backup the nodeID database - now updated to persistent storage
+
+	return true;
+}
+
+bool LoRA_Functions::setOccupancyGross(int nodeNumber, int sensorType, int newOccupancyGross) {
+	if (nodeNumber == 0 || nodeNumber == 255) return false;
+	if (sensorType < 10 || sensorType > 19) return false; 					// Return false if node is not an occupancy counter
+
+	int occupancyGross;
+
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
+	if(nodeObjectContainer == NULL) return false;								// Ran out of entries 
+
+	jp.getValueByKey(nodeObjectContainer, "occG", occupancyGross);
+
+	Log.info("Updating occupancy value from %d to %d", occupancyGross, newOccupancyGross);
+
+	const JsonParserGeneratorRK::jsmntok_t *value;
+
+	jp.getValueTokenByKey(nodeObjectContainer, "occG", value);
+
+	JsonModifier mod(jp);
+
+	mod.startModify(value);
+	mod.insertValue((int)newOccupancyGross);
+	mod.finish();
+
+	nodeDatabase.set_nodeIDJson(jp.getBuffer());									// This should backup the nodeID database - now updated to persistent storage
+
+	return true;
+}
+
+uint16_t LoRA_Functions::getOccupancyNetBySpace(int space) {
+	//TODO:: implements
+	return 0;
+}
+
+
+
+/**********************************************************************
+ **                         Data Compression                         **
+ **********************************************************************/
+
 
 uint8_t LoRA_Functions::getCompressedJoinPayload(uint8_t sensorType) {
     uint8_t data[4] = {0};
