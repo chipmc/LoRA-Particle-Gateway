@@ -457,6 +457,14 @@ void currentStatusData::set_openHours(uint8_t value) {
     setValue<uint8_t>(offsetof(CurrentData, openHours), value);
 }
 
+byte currentStatusData::get_onBreak() const {
+    return getValue<byte>(offsetof(CurrentData, openHours));
+}
+
+void currentStatusData::set_onBreak(byte value) {
+    setValue<byte>(offsetof(CurrentData, openHours), value);
+}
+
 uint8_t currentStatusData::get_hops() const {
     return getValue<uint8_t>(offsetof(CurrentData, hops));
 }

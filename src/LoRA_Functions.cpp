@@ -243,6 +243,26 @@ bool LoRA_Functions::decipherDataReportGateway() {			// Receives the data report
 bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to a data message 
 	char messageString[128];
 
+	if(current.get_onBreak()){ // if we are on break, respond based on sensor type
+		switch (current.get_sensorType()) {
+			case 1 ... 9: {    						// Counter
+			} break;
+			case 10 ... 19: {   					// Occupancy
+				if((current.get_payload3() <<8 | current.get_payload4()) != 0) { // if occupancyNet isn't zero
+					this->instance().setAlertCode(current.get_nodeNumber(), 12);         /*** Queue up an alert code with alert context ***/
+					this->instance().setAlertContext(current.get_nodeNumber(), 0);       /*** These will be set to current in the Data Acknowledgement message ***/
+					Log.info("On break, responding with alert code 12 and alert context 0. (resetting net count for device to 0)");
+				}
+			} break;
+			case 20 ... 29: {   					// Sensor
+			} break;
+			default: {          		
+				Log.info("Unknown sensor type in acknowledgeDataReportGateway %d", current.get_sensorType());
+				if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type in acknowledgeDataReportGateway", PRIVATE);
+			} break;
+		}
+	}
+
 	// buf[0] - buf[1] is magic number - processed above
 	// buf[2] is nodeNumber - processed above
 	buf[3] = highByte(current.get_token());			// Token - May have changed in the listening function above
@@ -380,7 +400,7 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	buf[24] = 0;
 
 	byte nodeAddress = (current.get_tempNodeNumber() == 0) ? current.get_nodeNumber() : current.get_tempNodeNumber();  // get the return address right
-					
+
 	digitalWrite(BLUE_LED,HIGH);			        				// Sending data
 
 	Log.info("Sending response to %d with free memory = %li", nodeAddress, System.freeMemory());

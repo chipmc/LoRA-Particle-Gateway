@@ -304,6 +304,7 @@ public:
 		int16_t SNR;									  // Latest LoRA Signal to Noise Ratio from the Node
 		uint8_t alertCodeNode;                            // Alert code from node
 		uint8_t openHours; 								  // Will set to true or false based on time of dat
+		byte onBreak; 								  	  // Equal to 1 if the device is on "break", which resets all node counts
 		uint8_t	hops;									  // How many hops did the message take to get to the gateway
 		uint8_t retryCount;								  // How many retries did the message take to get to the gateway
 		uint8_t retransmissionDelay;					  // How extra time did retransmissinos add to the time it took the message to get to the gateway
@@ -398,6 +399,9 @@ public:
 
 	uint8_t get_openHours() const;
 	void set_openHours(uint8_t value);
+
+	byte get_onBreak() const;
+	void set_onBreak(byte value);
 
 	uint8_t get_hops() const;
 	void set_hops(uint8_t value);

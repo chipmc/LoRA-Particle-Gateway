@@ -193,7 +193,7 @@ void loop() {
 
 		case LoRA_STATE: {														// Enter this state every reporting period and stay here for 5 minutes
 			static system_tick_t startLoRAWindow = 0;
-			static byte connectionWindow = 0;
+			static byte connectionWindow = 0;				
 
 			if (state != oldState) {
 				if (oldState != REPORTING_STATE) startLoRAWindow = millis();    // Mark when we enter this state - for timeouts - but multiple messages won't keep us here forever
@@ -201,6 +201,18 @@ void loop() {
 				conv.withCurrentTime().convert();								// Get the time and convert to Local
 				if (conv.getLocalTimeHMS().hour >= sysStatus.get_openTime() && conv.getLocalTimeHMS().hour <= sysStatus.get_closeTime()) current.set_openHours(true);
 				else current.set_openHours(false);
+				
+				uint8_t breakLengthHours = (sysStatus.get_breakLengthMinutes() / 60); // break length can be up to 240 minutes, so figure out how many hours the break is
+				
+				if(sysStatus.get_breakTime() != 24){	// Ignore break functionality entirely if it is set to be 24. This means no break is needed for this gateway
+					if(conv.getLocalTimeHMS().hour >= sysStatus.get_breakTime() /* if the hour is after breakTime */ 
+					&& conv.getLocalTimeHMS().hour <= (sysStatus.get_breakTime() + breakLengthHours)/* and the hour is before the hour the break is over (if breakLengthMinutes >= 60) */ 
+					&& conv.getLocalTimeHMS().minute < (sysStatus.get_breakLengthMinutes() - (breakLengthHours*60)))/* and the minute is before the minute the break is over */{
+						current.set_onBreak(1);		// we are on break.
+					} else current.set_onBreak(0);	    // Otherwise, we are not on break
+					
+					Log.info("Break Starts at %d with length of %d minutes. Current hour = %d, minute = %d On Break? %s", sysStatus.get_breakTime(), sysStatus.get_breakLengthMinutes(), conv.getLocalTimeHMS().hour, conv.getLocalTimeHMS().minute, current.get_onBreak() ? "Yes" : "No");
+				}
 
 				if (sysStatus.get_connectivityMode() == 0) connectionWindow = DEFAULT_LORA_WINDOW;
 				else connectionWindow = STAY_CONNECTED;
