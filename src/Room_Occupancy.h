@@ -16,11 +16,6 @@
 
 #define roomCounts Room_Occupancy::instance()
 
-extern uint16_t roomGrossArray[64];
-// Stores values in a simple array
-// No need to store as it is built from node counts
-// roomCounts[space][gross, net]
-
 /**
  * This class is a singleton; you do not create one as a global, on the stack, or with new.
  * 
@@ -55,8 +50,10 @@ public:
 
     /**
      * @brief Reset all the room counts - done each day at midnight
+     * 
+     * @return true if successful
     */
-    void resetRoomCounts();
+    bool resetRoomCounts();
 
     /**
      * @brief This function returns the current net room count

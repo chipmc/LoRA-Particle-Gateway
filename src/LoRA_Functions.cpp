@@ -430,7 +430,7 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 		{node:(int)nodeNumber},
 		{uID: (uint32_t)uniqueID},
 		{type: (int)sensorType},
-		{p: (int)compressedPayload},
+		{p: (int)compressedJoinPayload},
 		{pend: (int)pendingAlerts},
 		{cont: (int)pendingAlertContext}
 
@@ -576,7 +576,7 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 	if (nodeNumber == 0 || nodeNumber == 255) return false;
 	int type;
 	uint32_t uniqueID;
-	int compressedPayload;
+	int compressedJoinPayload;
 	int pendingAlert;
 	int pendingAlertContext;
 
@@ -594,7 +594,7 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 
 	jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);
 	jp.getValueByKey(nodeObjectContainer, "type", type);
-	jp.getValueByKey(nodeObjectContainer, "p", compressedPayload);
+	jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);
 	jp.getValueByKey(nodeObjectContainer, "pend", pendingAlert);
 	jp.getValueByKey(nodeObjectContainer, "cont", pendingAlertContext);
 
@@ -609,7 +609,7 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 					mod.insertKeyValue("node", nodeNumber);
 					mod.insertKeyValue("uID", uniqueID);
 					mod.insertKeyValue("type", newType);					
-					mod.insertKeyValue("p", compressedPayload);
+					mod.insertKeyValue("p", compressedJoinPayload);
 					mod.insertKeyValue("pend",pendingAlert);
 					mod.insertKeyValue("cont",pendingAlertContext);
 					// Add type specific variables here if needed
@@ -623,7 +623,7 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 					mod.insertKeyValue("node", nodeNumber);
 					mod.insertKeyValue("uID", uniqueID);
 					mod.insertKeyValue("type", newType);					
-					mod.insertKeyValue("p", compressedPayload);
+					mod.insertKeyValue("p", compressedJoinPayload);
 					mod.insertKeyValue("pend",pendingAlert);
 					mod.insertKeyValue("cont",pendingAlertContext);
 					mod.insertKeyValue("occN",(int)0);
@@ -638,7 +638,7 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 					mod.insertKeyValue("node", nodeNumber);
 					mod.insertKeyValue("uID", uniqueID);
 					mod.insertKeyValue("type", newType);					
-					mod.insertKeyValue("p", compressedPayload);
+					mod.insertKeyValue("p", compressedJoinPayload);
 					mod.insertKeyValue("pend",pendingAlert);
 					mod.insertKeyValue("cont",pendingAlertContext);
 					// Add type specific variables here if needed
@@ -689,8 +689,8 @@ bool LoRA_Functions::getJoinPayload(uint8_t nodeNumber) {
 	bool result;
 	if (nodeNumber == 0 || nodeNumber == 255) return false;
 	uint8_t sensorType = this->instance().getType(nodeNumber);
-	int compressedPayloadInt;
-	uint8_t compressedPayload;
+	int compressedJoinPayloadInt;
+	uint8_t compressedJoinPayload;
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
@@ -702,10 +702,10 @@ bool LoRA_Functions::getJoinPayload(uint8_t nodeNumber) {
 		return false;
 	} 
 	// Else we will load the current values from the node
-	jp.getValueByKey(nodeObjectContainer, "p", compressedPayloadInt);
-	compressedPayload = static_cast<uint8_t>(compressedPayloadInt);
+	jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayloadInt);
+	compressedJoinPayload = static_cast<uint8_t>(compressedJoinPayloadInt);
 
-	result = this->instance().hydrateJoinPayload(sensorType, compressedPayload);
+	result = this->instance().hydrateJoinPayload(sensorType, compressedJoinPayload);
 
 	if(result) Log.info("Loaded payload values of %d, %d, %d, %d", current.get_payload1(), current.get_payload2(), current.get_payload3(), current.get_payload4());
 	return result;
@@ -719,8 +719,8 @@ bool LoRA_Functions::setJoinPayload(uint8_t nodeNumber) {
 	uint8_t  payload2;
 	uint8_t  payload3;
 	uint8_t  payload4;
-	int compressedPayloadInt;
-	uint8_t compressedPayload;
+	int compressedJoinPayloadInt;
+	uint8_t compressedJoinPayload;
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
@@ -729,15 +729,15 @@ bool LoRA_Functions::setJoinPayload(uint8_t nodeNumber) {
 	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
 	if(nodeObjectContainer == NULL) return false;							// Ran out of entries
 
-	jp.getValueByKey(nodeObjectContainer, "p", compressedPayloadInt);
-	compressedPayload = static_cast<uint8_t>(compressedPayloadInt);			// set compressedPayload as the compressed JSON payload variables
+	jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayloadInt);
+	compressedJoinPayload = static_cast<uint8_t>(compressedJoinPayloadInt);			// set compressedJoinPayload as the compressed JSON payload variables
 
-	result = this->instance().parseJoinPayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
+	result = this->instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4);
 	if (!result) 
 	Log.info("Changing payload values from %d, %d, %d, %d", payload1, payload2, payload3, payload4);
 
-	compressedPayload = this->instance().getCompressedJoinPayload(sensorType);	// set compressedPayload as the compressed currentData payload variables
-	result = this->instance().parseJoinPayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
+	compressedJoinPayload = this->instance().getCompressedJoinPayload(sensorType);	// set compressedJoinPayload as the compressed currentData payload variables
+	result = this->instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4);
 	Log.info("Changed payload values to %d, %d, %d, %d", payload1, payload2, payload3, payload4);
 
 	const JsonParserGeneratorRK::jsmntok_t *value;
@@ -745,7 +745,7 @@ bool LoRA_Functions::setJoinPayload(uint8_t nodeNumber) {
 	jp.getValueTokenByKey(nodeObjectContainer, "p", value);
 	JsonModifier mod(jp);
 	mod.startModify(value);
-	mod.insertValue((int)compressedPayload);
+	mod.insertValue((int)compressedJoinPayload);
 	mod.finish();
 
 	nodeDatabase.set_nodeIDJson(jp.getBuffer());							// This should backup the nodeID database - now updated to persistent storage
@@ -861,7 +861,7 @@ void LoRA_Functions::printNodeData(bool publish) {
 	uint8_t  payload2;
 	uint8_t  payload3;
 	uint8_t  payload4;
-	int compressedPayload;
+	int compressedJoinPayload;
 	int pendingAlertCode;
 	int pendingAlertContext;
 	char data[512];
@@ -878,11 +878,11 @@ void LoRA_Functions::printNodeData(bool publish) {
 		jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);
 		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);
 		jp.getValueByKey(nodeObjectContainer, "type", sensorType);
-		jp.getValueByKey(nodeObjectContainer, "p", compressedPayload);
+		jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);
 		jp.getValueByKey(nodeObjectContainer, "pend", pendingAlertCode);
 		jp.getValueByKey(nodeObjectContainer, "cont", pendingAlertContext);
 
-		this->instance().parseJoinPayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
+		this->instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4);
 
 		// Type specific JSON variables
 		switch (sensorType) {
@@ -1003,10 +1003,142 @@ bool LoRA_Functions::setOccupancyGross(int nodeNumber, int sensorType, int newOc
 }
 
 uint16_t LoRA_Functions::getOccupancyNetBySpace(int space) {
-	//TODO:: implements
-	return 0;
+	char message[256];
+	int occupancyNet;
+	int occupancyNetTotal = 0;
+	uint32_t uniqueID;
+	int sensorType;
+	int nodeNumber;
+	uint8_t payload1;
+	uint8_t payload2;
+	uint8_t payload3;
+	uint8_t payload4;
+	int compressedJoinPayload;
+	byte multiEntranceFlag = 0;
+	bool result = 0;
+	
+	Log.info("Searching JSON database for nodes with space == %d", space);
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	for (int i=0; i<100; i++) {												// Iterate through the array looking for a match
+		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
+		if(nodeObjectContainer == NULL) {
+			break;															// Ran out of entries, break
+		} 
+		jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
+		jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);  			// Get the uniqueID
+		jp.getValueByKey(nodeObjectContainer, "type", sensorType);  		// Get the sensorType
+		this->instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
+		if (payload1 == space) {
+			if(sensorType < 10 || sensorType > 19){		// ignore nodes that are not occupancy sensors and throw an alert	
+				snprintf(message, sizeof(message), "Node in space %d has sensorType %d. uID: %lu", space, sensorType, uniqueID);
+				Log.info(message);
+				if (Particle.connected()) Particle.publish("Alert", message, PRIVATE);
+				continue;
+			}
+			jp.getValueByKey(nodeObjectContainer, "occN", occupancyNet);	// Node is in the passed-in space!
+			occupancyNetTotal += occupancyNet;										// add the occupancyNet to the total for the space
+			if(payload3 == 1){ // Flag this space as multiEntrance if a node is multi entrance
+				multiEntranceFlag = 1;
+			}
+			if(multiEntranceFlag && payload3 == 0){ // Throw an alert if one of the nodes in this space is not multiEntrance (they should all be) 
+				snprintf(message, sizeof(message), "Node in space %d is not set to multiEntrance. uID: %lu", space, uniqueID);
+				Log.info(message);
+				if (Particle.connected()) Particle.publish("Alert", message, PRIVATE);
+			}
+		}	
+	}
+	if(occupancyNetTotal < 0) {	// if the total net occupancy is less than 0, set all nodes in the space to 0
+		snprintf(message, sizeof(message), "Space %d has a negative value. Resetting all node counts to 0.", space);
+		Log.info(message);
+		if (Particle.connected()) Particle.publish("Alert", message, PRIVATE);
+		for (int i=0; i<100; i++) {												// Iterate through the array looking for a match
+			nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
+			if(nodeObjectContainer == NULL) {
+				break;															// Ran out of entries, break
+			} 
+			jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
+			jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);  		// Get the sensorType
+			jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);  			// Get the uniqueID
+			this->instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
+			if (payload1 == space) {
+				result = this->instance().setAlertCode(nodeNumber, 12);         /*** Queue up an alert code with alert context ***/
+				result = this->instance().setAlertContext(nodeNumber, 0);  		/*** These will be set to current in the Data Acknowledgement message ***/
+				if (!result){	// if we failed to set the alert for this node, throw an Alert to particle
+					snprintf(message, sizeof(message), "Node not reset due to failure in setAlertCode or setAlertContext. uID: %lu", uniqueID);
+					Log.info(message);
+					if (Particle.connected()) Particle.publish("Alert", message, PRIVATE);
+				}
+			}	
+		}
+	}
+	return occupancyNetTotal;
 }
 
+uint16_t LoRA_Functions::getOccupancyGrossBySpace(int space) {
+	int occupancyGross;
+	int occupancyGrossTotal = 0;
+	int sensorType;
+	uint8_t payload1;
+	uint8_t payload2;
+	uint8_t payload3;
+	uint8_t payload4;
+	int compressedJoinPayload;
+	
+	Log.info("searching array for nodes with space = %d", space);
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	for (int i=0; i<100; i++) {												// Iterate through the array looking for a match
+		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
+		if(nodeObjectContainer == NULL) {
+			break;															// Ran out of entries, break
+		} 
+		jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
+		jp.getValueByKey(nodeObjectContainer, "type", sensorType);  // Get the compressedJoinPayload
+		if (sensorType >= 10 && sensorType <= 19){	// Ignore nodes that are not occupancy nodes
+		this->instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
+			if (payload1 == space) {
+				jp.getValueByKey(nodeObjectContainer, "occG", occupancyGross);	// Node is in the passed-in space!
+				occupancyGrossTotal += occupancyGross;							// add the occupancyGross to the total for the space
+			}
+		}
+	}
+	return occupancyGrossTotal;
+}
+
+bool LoRA_Functions::resetOccupancyCounts(){
+	int nodeNumber;
+	uint32_t uniqueID;
+	char message[256];
+	bool result;
+
+	Log.info("Resetting occupancy counts");
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	for (int i=0; i<100; i++) {												// Iterate through the array looking for a match
+		result = true;
+		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
+		if(nodeObjectContainer == NULL) {
+			break;															// Ran out of entries - no match found
+		} 
+		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);  		// Get the compressedJoinPayload
+		jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);  			// Get the compressedJoinPayload
+		result = this->instance().setAlertCode(nodeNumber, 12);         /*** Queue up an alert code with alert context ***/
+		result = this->instance().setAlertContext(nodeNumber, 0);  		/*** These will be set to current in the Data Acknowledgement message ***/
+		if (!result){	// if we failed to set the alert for this node, throw an Alert to particle
+			snprintf(message, sizeof(message), "Node not reset due to failure in setAlertCode or setAlertContext. uID: %lu", uniqueID);
+			Log.info(message);
+			if (Particle.connected()) Particle.publish("Alert", message, PRIVATE);
+		}
+	}
+	return true;
+}
 
 
 /**********************************************************************
@@ -1046,7 +1178,7 @@ uint8_t LoRA_Functions::getCompressedJoinPayload(uint8_t sensorType) {
     return compressData(data, bitSizes);
 }
 
-bool LoRA_Functions::hydrateJoinPayload(uint8_t sensorType, uint8_t compressedPayload) {
+bool LoRA_Functions::hydrateJoinPayload(uint8_t sensorType, uint8_t compressedJoinPayload) {
     uint8_t data[4] = {0};
     uint8_t bitSizes[4] = {0};
 
@@ -1070,7 +1202,7 @@ bool LoRA_Functions::hydrateJoinPayload(uint8_t sensorType, uint8_t compressedPa
         } break;
     }
 
-    decompressData(compressedPayload, data, bitSizes);
+    decompressData(compressedJoinPayload, data, bitSizes);
 
     current.set_payload1(data[0]);
     current.set_payload2(data[1]);
@@ -1080,7 +1212,7 @@ bool LoRA_Functions::hydrateJoinPayload(uint8_t sensorType, uint8_t compressedPa
     return true;
 }
 
-bool LoRA_Functions::parseJoinPayloadValues(uint8_t sensorType, uint8_t compressedPayload, uint8_t& payload1, uint8_t& payload2, uint8_t& payload3, uint8_t& payload4) {
+bool LoRA_Functions::parseJoinPayloadValues(uint8_t sensorType, uint8_t compressedJoinPayload, uint8_t& payload1, uint8_t& payload2, uint8_t& payload3, uint8_t& payload4) {
     uint8_t data[4] = {0};
     uint8_t bitSizes[4] = {0};
 
@@ -1104,7 +1236,7 @@ bool LoRA_Functions::parseJoinPayloadValues(uint8_t sensorType, uint8_t compress
         } break;
     }
 
-    decompressData(compressedPayload, data, bitSizes);
+    decompressData(compressedJoinPayload, data, bitSizes);
 
     payload1 = data[0];
     payload2 = data[1];

@@ -283,6 +283,21 @@ public:
     uint16_t getOccupancyNetBySpace(int space);
 
     /**
+     * @brief Parses the JSON database to return the sum of the occupancyGross values for all nodes in a space
+     * 
+     * @param space
+     * @return occupancyGross total for the space
+     */
+    uint16_t getOccupancyGrossBySpace(int space);
+
+    /**
+     * @brief Parses the JSON database to set the occupancyNet and occupancyGross values for all nodes in a space to 0
+     * 
+     * @return true if successful, false if not
+     */
+    bool resetOccupancyCounts();
+
+    /**
      * @brief Changes the alert context that is pending for the next report from the node
      * 
      * @param nodeNumber 

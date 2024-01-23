@@ -26,11 +26,8 @@ void Room_Occupancy::loop() {
   // Put your code to run during the application thread loop here
 }
 
-void Room_Occupancy::resetRoomCounts() {
-  Log.info("Resetting the Room Occupancy Array");
-  for (uint16_t i=0; i < 64; i++) {
-    roomGrossArray[i] = 0;
-  }
+bool Room_Occupancy::resetRoomCounts() {
+    return LoRA_Functions::instance().resetOccupancyCounts();                                                       
 }
 
 // bool Room_Occupancy::setRoomGross() {  // This is set for the current node       
@@ -78,5 +75,5 @@ int16_t Room_Occupancy::getRoomNet(int space) {
 }
 
 int16_t Room_Occupancy::getRoomGross(int space) {
-  return LoRA_Functions::instance().getOccupancyNetBySpace(space);                                                                 
+  return LoRA_Functions::instance().getOccupancyGrossBySpace(space);                                                                 
 }
