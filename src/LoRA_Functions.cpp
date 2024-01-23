@@ -66,7 +66,7 @@ uint8_t buf[RH_MESH_MAX_MESSAGE_LEN];               // Related to max message si
 
 bool LoRA_Functions::setup(bool gatewayID) {
     // Set up the Radio Module
-	LoRA_Functions::initializeRadio();
+	this->instance().initializeRadio();
 
 	if (gatewayID == true) {
 		sysStatus.set_nodeNumber(GATEWAY_ADDRESS);							// Gateway - Manager is initialized by default with GATEWAY_ADDRESS - make sure it is stored in FRAM
@@ -171,9 +171,9 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 		Log.info("Node %d with uniqueID %lu a %s message with RSSI/SNR of %d / %d in %d hops", current.get_nodeNumber(), current.get_uniqueID(), loraStateNames[lora_state], rf95.lastRssi(), rf95.lastSNR(), current.get_hops());
 
 		// Next we need to test the nodeNumber / deviceID to make sure this node is properly configured
-		if (!(current.get_nodeNumber() < 255 && LoRA_Functions::checkForValidToken(current.get_nodeNumber(), current.get_token()))) {  // This not is a valid node number and token combo
+		if (!(current.get_nodeNumber() < 255 && this->instance().checkForValidToken(current.get_nodeNumber(), current.get_token()))) {  // This not is a valid node number and token combo
 
-			if (LoRA_Functions::nodeConfigured(current.get_nodeNumber(), current.get_uniqueID())) {	// This will return true if the node is configured
+			if (this->instance().nodeConfigured(current.get_nodeNumber(), current.get_uniqueID())) {	// This will return true if the node is configured
 				Log.info("Node %d is configured but the token is invalid - resetting token", current.get_nodeNumber());
 				current.set_token(setNodeToken(current.get_nodeNumber()));	// This is a valid node number but the token is not valid - reset the token
 			}
@@ -185,8 +185,8 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 			}
 		}
 
-		if (lora_state == DATA_RPT) {if(!LoRA_Functions::instance().decipherDataReportGateway()) return false;}
-		else if (lora_state == JOIN_REQ) {if(!LoRA_Functions::instance().decipherJoinRequestGateway()) return false;}
+		if (lora_state == DATA_RPT) {if(!this->instance().decipherDataReportGateway()) return false;}
+		else if (lora_state == JOIN_REQ) {if(!this->instance().decipherJoinRequestGateway()) return false;}
 		else {Log.info("Invalid message flag, returning"); return false;}
 
 		// At this point the message is valid and has been deciphered - now we need to send a response - if there is a change in freuqency, it is applied here
@@ -196,11 +196,11 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 			Log.info("We are updating the publish frequency to %i minutes", sysStatus.get_frequencyMinutes());
 		}
 		// The response will be specific to the message type
-		if (lora_state == DATA_ACK) { if(LoRA_Functions::instance().acknowledgeDataReportGateway()) return true;}
-		else if (lora_state == JOIN_ACK) { if(LoRA_Functions::instance().acknowledgeJoinRequestGateway()) return true;}
+		if (lora_state == DATA_ACK) { if(this->instance().acknowledgeDataReportGateway()) return true;}
+		else if (lora_state == JOIN_ACK) { if(this->instance().acknowledgeJoinRequestGateway()) return true;}
 		else {Log.info("Invalid message flag"); return false;}
 	}
-	else LoRA_Functions::clearBuffer();
+	else this->instance().clearBuffer();
 	return false;
 
 }
@@ -231,6 +231,10 @@ bool LoRA_Functions::decipherDataReportGateway() {			// Receives the data report
 	current.set_retransmissionDelay(buf[27]);
 
 	// Log.info("Data recieved from the report: sensorType %d, temp %d, battery %d, batteryState %d, resets %d, message count %d, RSSI %d, SNR %d", current.get_sensorType(), current.get_internalTempC(), current.get_stateOfCharge(), current.get_batteryState(), current.get_resetCount(), sysStatus.get_messageCount(), current.get_RSSI(), current.get_SNR());
+	
+	// update occupancy data in JSON if needed. Nothing happens if the sensorType is not one for occupancy
+	this->instance().setOccupancyGross(current.get_nodeNumber(), current.get_sensorType(), current.get_payload1() <<8 | current.get_payload2());
+	this->instance().setOccupancyNet(current.get_nodeNumber(), current.get_sensorType(), current.get_payload3() <<8 | current.get_payload4());
 
 	lora_state = DATA_ACK;		// Prepare to respond
 	return true;
@@ -259,12 +263,12 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 		current.set_alertCodeNode(1);
 	}
 	// If the node is configured, we will check for an alert code in the nodeID database
-	else current.set_alertCodeNode(LoRA_Functions::getAlertCode(current.get_nodeNumber()));		// Get the alert code from the nodeID database if one is not already set
+	else current.set_alertCodeNode(this->instance().getAlertCode(current.get_nodeNumber()));		// Get the alert code from the nodeID database if one is not already set
 
 	Log.info("In the data message ack composition, alert code for node %d is %d", current.get_nodeNumber(), current.get_alertCodeNode());
 	buf[11] = current.get_alertCodeNode();	    // Send alert code to the node
 
-	uint16_t alertContext = LoRA_Functions::instance().getAlertContext(current.get_nodeNumber()); // Set the alert context if any
+	uint16_t alertContext = this->instance().getAlertContext(current.get_nodeNumber()); // Set the alert context if any
 	buf[12] = highByte(alertContext);
 	buf[13] = lowByte(alertContext);
 
@@ -284,8 +288,8 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 		Log.info(messageString);
 		if (Particle.connected()) Particle.publish("status", messageString,PRIVATE);
 		sysStatus.set_messageCount(sysStatus.get_messageCount() + 1); // Increment the message count
-		LoRA_Functions::instance().setAlertCode(current.get_nodeNumber(), 0); // Clear pending alert, as you just sent it  
-		LoRA_Functions::instance().setAlertContext(current.get_nodeNumber(), 0); // Clear pending alert context, as you just sent it  
+		this->instance().setAlertCode(current.get_nodeNumber(), 0); // Clear pending alert, as you just sent it  
+		this->instance().setAlertContext(current.get_nodeNumber(), 0); // Clear pending alert context, as you just sent it  
 
 		return true;
 	}
@@ -321,9 +325,9 @@ bool LoRA_Functions::decipherJoinRequestGateway() {			// Ths only question here 
 		Log.info("Node %d is a virgin node, assigning uniqueID of %lu", current.get_nodeNumber(), current.get_uniqueID());
 	}
 
-	current.set_nodeNumber(LoRA_Functions::findNodeNumber(current.get_nodeNumber(), current.get_uniqueID()));	// This will return the nodeNumber for the nodeID passed to the function
+	current.set_nodeNumber(this->instance().findNodeNumber(current.get_nodeNumber(), current.get_uniqueID()));	// This will return the nodeNumber for the nodeID passed to the function
 
-	if (!LoRA_Functions::checkForValidToken(current.get_nodeNumber(), current.get_token())) {
+	if (!this->instance().checkForValidToken(current.get_nodeNumber(), current.get_token())) {
 		current.set_token(sysStatus.get_tokenCore() * Time.day() + current.get_nodeNumber());	// This is the token for the node - it is a function of the core token and the day of the month
 	}
 
@@ -359,10 +363,10 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	buf[17] = current.get_uniqueID();
 	buf[18] = current.get_nodeNumber();
 
-	if (LoRA_Functions::uniqueIDExistsInDatabase(current.get_uniqueID())) {		// Check to make sure the node's uniqueID is in the database
-		uint8_t nodeNumber = LoRA_Functions::instance().getNodeNumberForUniqueID(current.get_uniqueID());
-		buf[13] = LoRA_Functions::getType(nodeNumber);							// Make sure type is up to date
-		LoRA_Functions::getJoinPayload(nodeNumber);										// Get the payload values from the nodeID database
+	if (this->instance().uniqueIDExistsInDatabase(current.get_uniqueID())) {		// Check to make sure the node's uniqueID is in the database
+		uint8_t nodeNumber = this->instance().getNodeNumberForUniqueID(current.get_uniqueID());
+		buf[13] = this->instance().getType(nodeNumber);							// Make sure type is up to date
+		this->instance().getJoinPayload(nodeNumber);										// Get the payload values from the nodeID database
 		buf[19] = current.get_payload1();					
 		buf[20] = current.get_payload2();
 		buf[21] = current.get_payload3();
@@ -564,7 +568,7 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 	if(nodeObjectContainer == NULL) return false;								// Ran out of entries 
 
 	Log.info("Before changing sensor type:");
-	this->printNodeData(false);
+	this->instance().printNodeData(false);
 
 	JsonModifier mod(jp);
 
@@ -630,7 +634,7 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 	nodeDatabase.set_nodeIDJson(jp.getBuffer());									// This should backup the nodeID database - now updated to persistent storage
 	
 	Log.info("After changing sensor type:");
-	this->printNodeData(false);
+	this->instance().printNodeData(false);
 
 	return true;
 }
@@ -664,7 +668,7 @@ byte LoRA_Functions::getNodeNumberForUniqueID(uint32_t uniqueID) {
 bool LoRA_Functions::getJoinPayload(uint8_t nodeNumber) {
 	bool result;
 	if (nodeNumber == 0 || nodeNumber == 255) return false;
-	uint8_t sensorType = LoRA_Functions::getType(nodeNumber);
+	uint8_t sensorType = this->instance().getType(nodeNumber);
 	int compressedPayloadInt;
 	uint8_t compressedPayload;
 
@@ -681,7 +685,7 @@ bool LoRA_Functions::getJoinPayload(uint8_t nodeNumber) {
 	jp.getValueByKey(nodeObjectContainer, "p", compressedPayloadInt);
 	compressedPayload = static_cast<uint8_t>(compressedPayloadInt);
 
-	result = LoRA_Functions::hydrateJoinPayload(sensorType, compressedPayload);
+	result = this->instance().hydrateJoinPayload(sensorType, compressedPayload);
 
 	if(result) Log.info("Loaded payload values of %d, %d, %d, %d", current.get_payload1(), current.get_payload2(), current.get_payload3(), current.get_payload4());
 	return result;
@@ -690,7 +694,7 @@ bool LoRA_Functions::getJoinPayload(uint8_t nodeNumber) {
 bool LoRA_Functions::setJoinPayload(uint8_t nodeNumber) {
 	bool result;
 	if (nodeNumber == 0 || nodeNumber == 255) return false;
-	uint8_t sensorType = LoRA_Functions::getType(nodeNumber);
+	uint8_t sensorType = this->instance().getType(nodeNumber);
 	uint8_t  payload1;
 	uint8_t  payload2;
 	uint8_t  payload3;
@@ -708,12 +712,12 @@ bool LoRA_Functions::setJoinPayload(uint8_t nodeNumber) {
 	jp.getValueByKey(nodeObjectContainer, "p", compressedPayloadInt);
 	compressedPayload = static_cast<uint8_t>(compressedPayloadInt);			// set compressedPayload as the compressed JSON payload variables
 
-	result = LoRA_Functions::parseJoinPayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
+	result = this->instance().parseJoinPayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
 	if (!result) 
 	Log.info("Changing payload values from %d, %d, %d, %d", payload1, payload2, payload3, payload4);
 
-	compressedPayload = LoRA_Functions::getCompressedJoinPayload(sensorType);	// set compressedPayload as the compressed currentData payload variables
-	result = LoRA_Functions::parseJoinPayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
+	compressedPayload = this->instance().getCompressedJoinPayload(sensorType);	// set compressedPayload as the compressed currentData payload variables
+	result = this->instance().parseJoinPayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
 	Log.info("Changed payload values to %d, %d, %d, %d", payload1, payload2, payload3, payload4);
 
 	const JsonParserGeneratorRK::jsmntok_t *value;
@@ -858,7 +862,7 @@ void LoRA_Functions::printNodeData(bool publish) {
 		jp.getValueByKey(nodeObjectContainer, "pend", pendingAlertCode);
 		jp.getValueByKey(nodeObjectContainer, "cont", pendingAlertContext);
 
-		LoRA_Functions::parseJoinPayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
+		this->instance().parseJoinPayloadValues(sensorType, compressedPayload, payload1, payload2, payload3, payload4);
 
 		// Type specific JSON variables
 		switch (sensorType) {
