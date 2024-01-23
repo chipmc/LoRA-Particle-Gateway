@@ -564,20 +564,21 @@ bool nodeIDData::set_nodeIDJson(const char *str) {
 
 void nodeIDData::cleanJSON(char* jsonString) {
     char* writePtr = jsonString;
-    std::stack<char> braceStack;
+    bool insideArray = false;
 
     for (char* readPtr = jsonString; *readPtr != '\0'; ++readPtr) {
-        if (*readPtr == '{') {
-            braceStack.push(*readPtr);
-        } else if (*readPtr == '}') {
-            if (!braceStack.empty()) {
-                braceStack.pop();
-                *writePtr++ = *readPtr;
-            }
+        if (*readPtr == '[') {
+            insideArray = true;
+        } else if (*readPtr == ']') {
+            insideArray = false;
         }
 
-        if (!braceStack.empty()) {
-            *writePtr++ = *readPtr;
+        *writePtr++ = *readPtr;
+    }
+
+    if (insideArray) {
+        if (writePtr - jsonString >= 2) {
+            *(writePtr - 2) = ']';
         }
     }
 
