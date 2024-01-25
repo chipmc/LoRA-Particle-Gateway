@@ -563,13 +563,11 @@ String nodeIDData::get_nodeIDJson() const {
 	return result;
 }
 
-bool nodeIDData::set_nodeIDJson(const char *str) {
-    bool result = setValueString(offsetof(NodeData, nodeIDJson), sizeof(NodeData::nodeIDJson), str);
+bool nodeIDData::set_nodeIDJson(const char* str) {
 
-    if (result && Particle.connected()) {
+    if (Particle.connected()) {
         const size_t maxChunkSize = 622; // max report size
-        const char* jsonString = nodeDatabase.get_nodeIDJson();
-        size_t messageLength = strlen(jsonString);
+        size_t messageLength = strlen(str);
 
         size_t offset = 0;
         while (offset < messageLength) {
@@ -578,23 +576,51 @@ bool nodeIDData::set_nodeIDJson(const char *str) {
 
             // Create a buffer for the current chunk
             char chunk[maxChunkSize + 1]; // +1 for null terminator
-            snprintf(chunk, sizeof(chunk), "%.*s", static_cast<int>(chunkSize), jsonString + offset);
+            snprintf(chunk, sizeof(chunk), "%.*s", static_cast<int>(chunkSize), str + offset);
 
             // Publish the current chunk
-            Particle.publish("node database", chunk, PRIVATE);
+            Particle.publish("Node Database before set:", chunk, PRIVATE);
 
             // Move to the next chunk
             offset += chunkSize;
         }
     }
 
+    // // Clean the JSON
+    // char cleanedJson[3072];
+    // strcpy(cleanedJson, str);
+    // cleanJSON(cleanedJson);
+
+    // Set the cleaned JSON value
+    bool result = setValueString(offsetof(NodeData, nodeIDJson), sizeof(NodeData::nodeIDJson), str);
+
+    if (result && Particle.connected()) {
+        const size_t maxChunkSize = 622; // max report size
+        size_t messageLength = strlen(str);
+
+        size_t offset = 0;
+        while (offset < messageLength) {
+            // Calculate chunk size for the current iteration
+            size_t chunkSize = std::min(maxChunkSize, messageLength - offset);
+
+            // Create a buffer for the current chunk
+            char chunk[maxChunkSize + 1]; // +1 for null terminator
+            snprintf(chunk, sizeof(chunk), "%.*s", static_cast<int>(chunkSize), str + offset);
+
+            // Publish the current chunk
+            Particle.publish("Node Database after set:", chunk, PRIVATE);
+
+            // Move to the next chunk
+            offset += chunkSize;
+        }
+    }
 
     return result;
 }
 
-
 void nodeIDData::cleanJSON(char* jsonString) {
-    char cleanedJson[3072]; // Assuming a maximum length for the cleaned JSON
+    char cleanedJson[3072];
+    char withoutDoubleCommas[3072];
 
     int i, j;
     bool inArray = false;
@@ -627,6 +653,10 @@ void nodeIDData::cleanJSON(char* jsonString) {
             }
 
             if (jsonString[i] == '}') {
+                if(jsonString[i - 1] == ',') {
+                    cleanedJson[j - 2] = '}';
+                    j--;
+                }
                 cleanedJson[j] = ',';
                 j++;
                 inJson = false;
@@ -634,15 +664,29 @@ void nodeIDData::cleanJSON(char* jsonString) {
         }
     }
 
-    // Remove the trailing comma after the last object
-    if (j > 0 && cleanedJson[j - 1] == ',') {
+    // Remove all trailing commas after the last object
+    while (j > 0 && cleanedJson[j - 1] == ',') {
         j--;
     }
 
-    cleanedJson[j - 1] = ']';
-    cleanedJson[j] = '}';
-    cleanedJson[j + 1] = '\0';
+    cleanedJson[j] = ']';
+    cleanedJson[j + 1] = '}';
+    cleanedJson[j + 2] = '\0';
+    
+    // Loop through and remove any double commas
+    for (i = 0, j = 0; cleanedJson[i] != '\0'; i++) {
+        if (cleanedJson[i] == ',' && cleanedJson[i + 1] == ',') {
+            // Skip the second comma
+            continue;
+        }
+
+        withoutDoubleCommas[j] = cleanedJson[i];
+        j++;
+    }
+
+    // Null-terminate the withoutDoubleCommas array
+    withoutDoubleCommas[j] = '\0';
 
     // Copy the cleaned JSON back to the original string
-    strcpy(jsonString, cleanedJson);
+    strcpy(jsonString, withoutDoubleCommas);
 }

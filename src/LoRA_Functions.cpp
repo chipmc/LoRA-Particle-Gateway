@@ -22,7 +22,7 @@ LoRA_Functions::~LoRA_Functions() {
 // ******** JSON Object - Scoped to LoRA_Functions Class        ***********
 // ************************************************************************
 // JSON for node data
-JsonParserStatic<1024, 550> jp;						// Make this global - reduce possibility of fragmentation
+JsonParserStatic<3072, 550> jp;						// Make this global - reduce possibility of fragmentation
 // So, here is how we arrived at this number:
 // 1.  We need to store 50 nodes - each node is 6 bytes (nodeNumber, uniqueID, sensorType, payload, pendingAlerts) - 300 bytes
 // 2.  We have one token for each object - 50 tokens and two tokens for each key value pair (50 * 5 * 2) - 500 tokens for a total of 550 tokens
@@ -587,9 +587,6 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
 	if(nodeObjectContainer == NULL) return false;								// Ran out of entries 
 
-	Log.info("Before changing sensor type:");
-	this->instance().printNodeData(true);
-
 	JsonModifier mod(jp);
 
 	jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);
@@ -604,7 +601,7 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 	switch (newType) {
 		case 1 ... 9: {    						// Counter
 			mod.removeArrayIndex(nodesArrayContainer, nodeNumber-1);	// remove the JSON as it was
-			mod.startAppend(nodesArrayContainer);						// insert it back, but with the type specific variables for counter
+			mod.startAppend(jp.getOuterArray());						// insert it back, but with the type specific variables for counter
 				mod.startObject();
 					mod.insertKeyValue("node", nodeNumber);
 					mod.insertKeyValue("uID", uniqueID);
@@ -617,6 +614,7 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 			mod.finish();
 		} break;
 		case 10 ... 19: {   					// Occupancy
+			Log.info("Removing array index");
 			mod.removeArrayIndex(nodesArrayContainer, nodeNumber-1);	// remove the JSON as it was
 			mod.startAppend(jp.getOuterArray());						// insert it back, but with the type specific variables for counter
 				mod.startObject();
@@ -630,6 +628,8 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 					mod.insertKeyValue("occG",(int)0);
 				mod.finishObjectOrArray();
 			mod.finish();
+			Log.info("append complete");
+
 		} break;
 		case 20 ... 29: {   					// Sensor
 			mod.removeArrayIndex(nodesArrayContainer, nodeNumber-1);	// remove the JSON as it was
@@ -653,7 +653,6 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 
 	nodeDatabase.set_nodeIDJson(jp.getBuffer());									// This should backup the nodeID database - now updated to persistent storage
 	
-	Log.info("After changing sensor type:");
 	this->instance().printNodeData(true);
 
 	return true;
