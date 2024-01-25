@@ -3,6 +3,8 @@
 #include "StorageHelperRK.h"
 #include "MyPersistentData.h"
 #include <stack>
+#include <cstring>
+
 
 MB85RC64 fram(Wire, 0);
 // We use the 64kbit part so we have 8k bytes of storage
@@ -562,33 +564,85 @@ String nodeIDData::get_nodeIDJson() const {
 }
 
 bool nodeIDData::set_nodeIDJson(const char *str) {
-    char* cleanedJSON = new char[strlen(str) + 1];
-    strcpy(cleanedJSON, str);
-    this->cleanJSON(cleanedJSON);
-    bool result = setValueString(offsetof(NodeData, nodeIDJson), strlen(cleanedJSON) + 1, cleanedJSON);
-    delete[] cleanedJSON;
+    bool result = setValueString(offsetof(NodeData, nodeIDJson), sizeof(NodeData::nodeIDJson), str);
+
+    if (result && Particle.connected()) {
+        const size_t maxChunkSize = 622; // max report size
+        const char* jsonString = nodeDatabase.get_nodeIDJson();
+        size_t messageLength = strlen(jsonString);
+
+        size_t offset = 0;
+        while (offset < messageLength) {
+            // Calculate chunk size for the current iteration
+            size_t chunkSize = std::min(maxChunkSize, messageLength - offset);
+
+            // Create a buffer for the current chunk
+            char chunk[maxChunkSize + 1]; // +1 for null terminator
+            snprintf(chunk, sizeof(chunk), "%.*s", static_cast<int>(chunkSize), jsonString + offset);
+
+            // Publish the current chunk
+            Particle.publish("node database", chunk, PRIVATE);
+
+            // Move to the next chunk
+            offset += chunkSize;
+        }
+    }
+
+
     return result;
 }
 
+
 void nodeIDData::cleanJSON(char* jsonString) {
-    char* writePtr = jsonString;
-    bool insideArray = false;
+    char cleanedJson[3072]; // Assuming a maximum length for the cleaned JSON
 
-    for (char* readPtr = jsonString; *readPtr != '\0'; ++readPtr) {
-        if (*readPtr == '[') {
-            insideArray = true;
-        } else if (*readPtr == ']') {
-            insideArray = false;
+    int i, j;
+    bool inArray = false;
+    bool inJson = false;
+
+    for (i = 0, j = 0; jsonString[i] != '\0'; i++) {
+
+        if (jsonString[i] == '[') {
+            inArray = true;
+            cleanedJson[j] = jsonString[i];
+            j++;
         }
 
-        *writePtr++ = *readPtr;
-    }
+        if (!inArray) {
+            cleanedJson[j] = jsonString[i];
+            j++;
+        } else {
 
-    if (insideArray) {
-        if (writePtr - jsonString >= 2) {
-            *(writePtr - 2) = ']';
+            if (jsonString[i] == '{') {
+                if (inJson) {
+                    cleanedJson[j] = ',';
+                    j++;
+                }
+                inJson = true;
+            }
+
+            if (inJson) {
+                cleanedJson[j] = jsonString[i];
+                j++;
+            }
+
+            if (jsonString[i] == '}') {
+                cleanedJson[j] = ',';
+                j++;
+                inJson = false;
+            }
         }
     }
 
-    *writePtr = '\0';
+    // Remove the trailing comma after the last object
+    if (j > 0 && cleanedJson[j - 1] == ',') {
+        j--;
+    }
+
+    cleanedJson[j - 1] = ']';
+    cleanedJson[j] = '}';
+    cleanedJson[j + 1] = '\0';
+
+    // Copy the cleaned JSON back to the original string
+    strcpy(jsonString, cleanedJson);
 }

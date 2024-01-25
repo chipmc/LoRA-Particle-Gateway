@@ -588,7 +588,7 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 	if(nodeObjectContainer == NULL) return false;								// Ran out of entries 
 
 	Log.info("Before changing sensor type:");
-	this->instance().printNodeData(false);
+	this->instance().printNodeData(true);
 
 	JsonModifier mod(jp);
 
@@ -654,7 +654,7 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 	nodeDatabase.set_nodeIDJson(jp.getBuffer());									// This should backup the nodeID database - now updated to persistent storage
 	
 	Log.info("After changing sensor type:");
-	this->instance().printNodeData(false);
+	this->instance().printNodeData(true);
 
 	return true;
 }
@@ -864,7 +864,7 @@ void LoRA_Functions::printNodeData(bool publish) {
 	int compressedJoinPayload;
 	int pendingAlertCode;
 	int pendingAlertContext;
-	char data[512];
+	char data[622];  // max size
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
