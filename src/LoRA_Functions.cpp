@@ -1072,6 +1072,7 @@ uint16_t LoRA_Functions::getOccupancyNetBySpace(int space) {
 				}
 			}	
 		}
+		return 0; // and return 0 for this report.
 	}
 	return occupancyNetTotal;
 }
