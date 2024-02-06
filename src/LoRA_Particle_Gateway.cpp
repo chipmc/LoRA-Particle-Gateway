@@ -61,6 +61,7 @@
 // v17.50  	Breaking Change - Node v11.4 or later - Changed alertContext to uint16_t to prevent occupancyNet correction edge cases. Expanded Particle_Function bounds that used old uint8_t as the bounds.
 // v18 		Integrated Ubidots-LoRA-Occupancy-v2 Particle integration, which sends node battery information and space values to the UpdateGatewayNodesAndSpaces UbiFunction.
 // v19 		Added 'break time' to SysStatus, which now tells the nodes to reset to 0 at a certain time. Increased NodeID string size to 3072 characters. Fixed major bug in Room_Occupancy.cpp. 
+// v19.1 	removed type-based JSON in favor of 'jsonData1' and 'jsonData2' which have been added as additional persistent storage based on sensor type.
 
 
 #define DEFAULT_LORA_WINDOW 5
@@ -81,7 +82,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(19);								// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="19";
+char currentPointRelease[6] ="19.1";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging

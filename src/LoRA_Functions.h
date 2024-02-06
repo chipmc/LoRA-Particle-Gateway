@@ -255,24 +255,26 @@ public:
     bool setAlertCode(int nodeNumber, int newAlertCode);
 
     /**
-     * @brief Changes the occupancyNet value for a node with an occupancy sensorType
+     * @brief Changes the jsonData1 value for a node 
      * 
      * @param nodeNumber
-     * @param newOccupancyNet
+     * @param sensorType
+     * @param newJsonData1
      * @return true
-     * @return false if the nodeNumber suggests an unconfigured node or sensorType is not occupancy
+     * @return false if the nodeNumber suggests an unconfigured node or sensorType is not known
      */
-    bool setOccupancyNet(int nodeNumber, int sensorType, int newOccupancyNet);
+    bool setJsonData1(int nodeNumber, int sensorType, int newJsonData1);
 
     /**
-     * @brief Changes the occupancyGross value for a node with an occupancy sensorType
+     * @brief Changes the jsonData2 value for a node
      * 
      * @param nodeNumber
-     * @param newOccupancyGross
+     * @param sensorType
+     * @param newJsonData2
      * @return true
-     * @return false if the nodeNumber suggests an unconfigured node or sensorType is not occupancy
+     * @return false if the nodeNumber suggests an unconfigured node or sensorType is not known
      */
-    bool setOccupancyGross(int nodeNumber, int sensorType, int newOccupancyNet);
+    bool setJsonData2(int nodeNumber, int sensorType, int newJsonData2);
 
     /**
      * @brief Parses the JSON database to return the sum of the occupancyNet values for all nodes in a space

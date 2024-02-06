@@ -565,32 +565,6 @@ String nodeIDData::get_nodeIDJson() const {
 
 bool nodeIDData::set_nodeIDJson(const char* str) {
 
-    if (Particle.connected()) {
-        const size_t maxChunkSize = 622; // max report size
-        size_t messageLength = strlen(str);
-
-        size_t offset = 0;
-        while (offset < messageLength) {
-            // Calculate chunk size for the current iteration
-            size_t chunkSize = std::min(maxChunkSize, messageLength - offset);
-
-            // Create a buffer for the current chunk
-            char chunk[maxChunkSize + 1]; // +1 for null terminator
-            snprintf(chunk, sizeof(chunk), "%.*s", static_cast<int>(chunkSize), str + offset);
-
-            // Publish the current chunk
-            Particle.publish("Node Database before set:", chunk, PRIVATE);
-
-            // Move to the next chunk
-            offset += chunkSize;
-        }
-    }
-
-    // // Clean the JSON
-    // char cleanedJson[3072];
-    // strcpy(cleanedJson, str);
-    // cleanJSON(cleanedJson);
-
     // Set the cleaned JSON value
     bool result = setValueString(offsetof(NodeData, nodeIDJson), sizeof(NodeData::nodeIDJson), str);
 
@@ -608,7 +582,7 @@ bool nodeIDData::set_nodeIDJson(const char* str) {
             snprintf(chunk, sizeof(chunk), "%.*s", static_cast<int>(chunkSize), str + offset);
 
             // Publish the current chunk
-            Particle.publish("Node Database after set:", chunk, PRIVATE);
+            Particle.publish("Node Database Updated:", chunk, PRIVATE);
 
             // Move to the next chunk
             offset += chunkSize;
@@ -616,77 +590,4 @@ bool nodeIDData::set_nodeIDJson(const char* str) {
     }
 
     return result;
-}
-
-void nodeIDData::cleanJSON(char* jsonString) {
-    char cleanedJson[3072];
-    char withoutDoubleCommas[3072];
-
-    int i, j;
-    bool inArray = false;
-    bool inJson = false;
-
-    for (i = 0, j = 0; jsonString[i] != '\0'; i++) {
-
-        if (jsonString[i] == '[') {
-            inArray = true;
-            cleanedJson[j] = jsonString[i];
-            j++;
-        }
-
-        if (!inArray) {
-            cleanedJson[j] = jsonString[i];
-            j++;
-        } else {
-
-            if (jsonString[i] == '{') {
-                if (inJson) {
-                    cleanedJson[j] = ',';
-                    j++;
-                }
-                inJson = true;
-            }
-
-            if (inJson) {
-                cleanedJson[j] = jsonString[i];
-                j++;
-            }
-
-            if (jsonString[i] == '}') {
-                if(jsonString[i - 1] == ',') {
-                    cleanedJson[j - 2] = '}';
-                    j--;
-                }
-                cleanedJson[j] = ',';
-                j++;
-                inJson = false;
-            }
-        }
-    }
-
-    // Remove all trailing commas after the last object
-    while (j > 0 && cleanedJson[j - 1] == ',') {
-        j--;
-    }
-
-    cleanedJson[j] = ']';
-    cleanedJson[j + 1] = '}';
-    cleanedJson[j + 2] = '\0';
-    
-    // Loop through and remove any double commas
-    for (i = 0, j = 0; cleanedJson[i] != '\0'; i++) {
-        if (cleanedJson[i] == ',' && cleanedJson[i + 1] == ',') {
-            // Skip the second comma
-            continue;
-        }
-
-        withoutDoubleCommas[j] = cleanedJson[i];
-        j++;
-    }
-
-    // Null-terminate the withoutDoubleCommas array
-    withoutDoubleCommas[j] = '\0';
-
-    // Copy the cleaned JSON back to the original string
-    strcpy(jsonString, withoutDoubleCommas);
 }

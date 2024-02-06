@@ -206,3 +206,11 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 | Counter | 2-Way (1 bit) | TBD | TBD | TBD |
 | Occupancy | Space (6 bits) | Placement (1 bit) | Multi (1 bit) | TBD |
 | Sensor | Space (6 bits)  | Placement (1 bit) | TBD | TBD |
+
+## Additional Data stored in JSON database by Sensor Type
+
+| Type  | JsonData1 (jd1)   | JsonData2(jd2)   |
+| ---------- | ----------- | ----------- |
+| Counter | TBD | TBD |
+| Occupancy | OccupancyNet | OccupancyGross | 
+| Sensor | TBD | TBD |
