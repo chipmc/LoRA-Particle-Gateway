@@ -84,7 +84,7 @@ buf[15]  Re-Transmission Delay              // This byte is dedicated to RHRelia
 #include <RHEncryptedDriver.h>
 #include <RHMesh.h>
 #include <Speck.h>
-#include <base64RK.h>
+#include "Base64RK.h"
 #include "device_pinout.h"
 #include "MyPersistentData.h"
 #include "JsonParserGeneratorRK.h"

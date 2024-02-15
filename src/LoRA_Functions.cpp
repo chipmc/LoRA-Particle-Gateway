@@ -396,7 +396,7 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	}
 	else {
 		if (Particle.connected()) Particle.publish("Alert", "findNodeNumber failed to add the node to the database.", PRIVATE);
-	};			// Else, we will send an alert because the uniqueID should have been set in decipherJoinPayload when findNodeNumber was called
+	}			// Else, we will send an alert because the uniqueID should have been set in decipherJoinPayload when findNodeNumber was called
 
 	buf[23] = 0;											// buf[23] and buf[24] are reserved for future use
 	buf[24] = 0;
