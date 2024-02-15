@@ -565,29 +565,6 @@ String nodeIDData::get_nodeIDJson() const {
 
 bool nodeIDData::set_nodeIDJson(const char* str) {
 
-    // Set the cleaned JSON value
     bool result = setValueString(offsetof(NodeData, nodeIDJson), sizeof(NodeData::nodeIDJson), str);
-
-    if (result && Particle.connected()) {
-        const size_t maxChunkSize = 622; // max report size
-        size_t messageLength = strlen(str);
-
-        size_t offset = 0;
-        while (offset < messageLength) {
-            // Calculate chunk size for the current iteration
-            size_t chunkSize = std::min(maxChunkSize, messageLength - offset);
-
-            // Create a buffer for the current chunk
-            char chunk[maxChunkSize + 1]; // +1 for null terminator
-            snprintf(chunk, sizeof(chunk), "%.*s", static_cast<int>(chunkSize), str + offset);
-
-            // Publish the current chunk
-            Particle.publish("Node Database Updated:", chunk, PRIVATE);
-
-            // Move to the next chunk
-            offset += chunkSize;
-        }
-    }
-
     return result;
 }

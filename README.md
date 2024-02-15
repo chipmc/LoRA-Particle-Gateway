@@ -211,6 +211,6 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 
 | Type  | JsonData1 (jd1)   | JsonData2(jd2)   |
 | ---------- | ----------- | ----------- |
-| Counter | TBD | TBD |
+| TBD | TBD | TBD |
 | Occupancy | OccupancyNet | OccupancyGross | 
-| Sensor | TBD | TBD |
+| TBD | TBD | TBD |

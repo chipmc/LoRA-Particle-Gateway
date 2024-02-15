@@ -62,6 +62,7 @@
 // v18 		Integrated Ubidots-LoRA-Occupancy-v2 Particle integration, which sends node battery information and space values to the UpdateGatewayNodesAndSpaces UbiFunction.
 // v19 		Added 'break time' to SysStatus, which now tells the nodes to reset to 0 at a certain time. Increased NodeID string size to 3072 characters. Fixed major bug in Room_Occupancy.cpp. 
 // v19.1 	removed type-based JSON in favor of 'jsonData1' and 'jsonData2' which have been added as additional persistent storage based on sensor type.
+// v19.2 	Added alerts to troubleshoot infinite joins caused by JSON database errors. Join requests now set the nodes' configuration settings (from the join payload) when the node database is empty and the node joins the network.
 
 
 #define DEFAULT_LORA_WINDOW 5
@@ -82,7 +83,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(19);								// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="19.1";
+char currentPointRelease[6] ="19.2";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging

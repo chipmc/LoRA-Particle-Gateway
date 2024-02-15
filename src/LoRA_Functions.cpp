@@ -54,7 +54,7 @@ RHMesh manager(driver, GATEWAY_ADDRESS);
 
 
 // Mesh has much greater memory requirements, and you may need to limit the
-// max message length to prevent wierd crashes
+// max message length to prevent weird crashes
 #ifndef RH_MAX_MESSAGE_LEN
 #define RH_MAX_MESSAGE_LEN 255
 #endif
@@ -394,7 +394,9 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 		Log.info("Node %d join request will update sensorType to %d", current.get_tempNodeNumber(), (int)buf[13]);
 		Log.info("Node %d join request will update with payload [%d, %d, %d, %d]", current.get_tempNodeNumber(), current.get_payload1(), current.get_payload2(), current.get_payload3(), current.get_payload4());
 	}
-	else buf[19] = buf[20] = buf[21] = buf[22] = 0;			// Else, we will send 0's for the payload
+	else {
+		if (Particle.connected()) Particle.publish("Alert", "findNodeNumber failed to add the node to the database.", PRIVATE);
+	};			// Else, we will send an alert because the uniqueID should have been set in decipherJoinPayload when findNodeNumber was called
 
 	buf[23] = 0;											// buf[23] and buf[24] are reserved for future use
 	buf[24] = 0;
@@ -408,7 +410,7 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	if (manager.sendtoWait(buf, 25, nodeAddress, JOIN_ACK) == RH_ROUTER_ERROR_NONE) {
 		current.set_tempNodeNumber(0);								// Temp no longer needed
 		digitalWrite(BLUE_LED,LOW);
-		snprintf(messageString,sizeof(messageString),"Node %d joined with sensorType %s, alert %d and RSSI / SNR of %d / %d", nodeAddress, (buf[10] ==0)? "car":"person",current.get_alertCodeNode(), current.get_RSSI(), current.get_SNR());
+		snprintf(messageString,sizeof(messageString),"Node %d joined. New nodeNumber %d, sensorType %s, alert %d and RSSI / SNR of %d / %d", nodeAddress, current.get_nodeNumber(), (buf[10] ==0)? "car":"person",current.get_alertCodeNode(), current.get_RSSI(), current.get_SNR());
 		Log.info(messageString);
 		if (Particle.connected()) Particle.publish("status", messageString,PRIVATE);
 		return true;
@@ -495,7 +497,14 @@ uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, uint32_t uniqueID) {
 		mod.finishObjectOrArray();
 	mod.finish();
 
-	nodeDatabase.set_nodeIDJson(jp.getBuffer());									// This should backup the nodeID database - now updated to persistent storage
+	// Set the configuration settings from the join payload into the new database entry
+	LoRA_Functions::instance().setJoinPayload(nodeNumber);
+
+	bool result = nodeDatabase.set_nodeIDJson(jp.getBuffer());									// This should backup the nodeID database - now updated to persistent storage
+
+	if (!result) {
+		if (Particle.connected()) Particle.publish("Alert", "set_nodeIDJson failed to add a node to the database!!", PRIVATE);
+	}
 
 	return index;
 }
@@ -644,10 +653,10 @@ bool LoRA_Functions::setJoinPayload(uint8_t nodeNumber) {
 	bool result;
 	if (nodeNumber == 0 || nodeNumber == 255) return false;
 	uint8_t sensorType = LoRA_Functions::instance().getType(nodeNumber);
-	uint8_t  payload1;
-	uint8_t  payload2;
-	uint8_t  payload3;
-	uint8_t  payload4;
+	uint8_t payload1;
+	uint8_t payload2;
+	uint8_t payload3;
+	uint8_t payload4;
 	int compressedJoinPayloadInt;
 	uint8_t compressedJoinPayload;
 
@@ -810,6 +819,7 @@ void LoRA_Functions::printNodeData(bool publish) {
 		jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);
 		jp.getValueByKey(nodeObjectContainer, "pend", pendingAlertCode);
 		jp.getValueByKey(nodeObjectContainer, "cont", pendingAlertContext);
+
 
 		LoRA_Functions::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4);
 
@@ -993,7 +1003,7 @@ uint16_t LoRA_Functions::getOccupancyNetBySpace(int space) {
 			LoRA_Functions::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
 			if (payload1 == space) {
 				result = LoRA_Functions::instance().setAlertCode(nodeNumber, 12);         /*** Queue up an alert code with alert context ***/
-				result = LoRA_Functions::instance().setAlertContext(nodeNumber, 0);  		/*** These will be set to current in the Data Acknowledgement message ***/
+				result = LoRA_Functions::instance().setAlertContext(nodeNumber, 0);       /*** These will be set to current in the Data Acknowledgement message ***/
 				if (!result){	// if we failed to set the alert for this node, throw an Alert to particle
 					snprintf(message, sizeof(message), "Node not reset due to failure in setAlertCode or setAlertContext. uID: %lu", uniqueID);
 					Log.info(message);
