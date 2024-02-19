@@ -27,7 +27,7 @@ void Room_Occupancy::loop() {
 }
 
 bool Room_Occupancy::resetRoomCounts() {
-    return LoRA_Functions::instance().resetOccupancyCounts();                                                       
+  return LoRA_Functions::instance().resetOccupancyCounts();                                                       
 }
 
 int16_t Room_Occupancy::getRoomNet(int space) {

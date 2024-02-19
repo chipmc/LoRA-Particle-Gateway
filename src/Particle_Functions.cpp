@@ -65,7 +65,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
 	jp.addString(command);
 	if (!jp.parse()) {
 		Log.info("Parsing failed - check syntax");
-    Particle.publish("cmd", "Parsing failed - check syntax",PRIVATE);
+    PublishQueuePosix::instance().publish("cmd", "Parsing failed - check syntax",PRIVATE);
 		char data[128];  
     snprintf(data, sizeof(data), "{\"commands\":%i,\"context\":\"%s,\"timestamp\":%lu000 }", -1, command.c_str(), Time.now());        // Send -1 (Syntax Error) to the 'commands' Synthetic Variable
     PublishQueuePosix::instance().publish("Ubidots_Command_Hook", data, PRIVATE);
@@ -104,7 +104,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
           snprintf(messaging,sizeof(messaging),"Resetting the gateway's node Data");
           nodeDatabase.resetNodeIDs();
           Log.info("Resetting the Gateway node so new database is in effect");
-          Particle.publish("Alert","Resetting Gateway",PRIVATE);
+          PublishQueuePosix::instance().publish("Alert","Resetting Gateway",PRIVATE);
           delay(2000);
           System.reset();
         }
@@ -443,7 +443,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
     
     if (!(strncmp(messaging," ",1) == 0)) {
       Log.info(messaging);
-      if (Particle.connected()) Particle.publish("cmd",messaging,PRIVATE);
+      if (Particle.connected()) PublishQueuePosix::instance().publish("cmd",messaging,PRIVATE);
     }
   }
 

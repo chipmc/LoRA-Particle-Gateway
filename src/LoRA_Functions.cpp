@@ -1,5 +1,6 @@
 #include "LoRA_Functions.h"
 #include "Room_Occupancy.h"							// Aggregates node data to get net room occupancy for Occupancy Nodes
+#include "PublishQueuePosixRK.h"
 
 // Singleton instantiation - from template
 LoRA_Functions *LoRA_Functions::_instance;
@@ -258,7 +259,7 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 			} break;
 			default: {          		
 				Log.info("Unknown sensor type in acknowledgeDataReportGateway %d", current.get_sensorType());
-				if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type in acknowledgeDataReportGateway", PRIVATE);
+				if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "Unknown sensor type in acknowledgeDataReportGateway", PRIVATE);
 			} break;
 		}
 	}
@@ -306,7 +307,7 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 
 		snprintf(messageString,sizeof(messageString),"Node %d data report %d acknowledged with alert %d, and RSSI / SNR of %d / %d", current.get_nodeNumber(), sysStatus.get_messageCount(), current.get_alertCodeNode(), current.get_RSSI(), current.get_SNR());
 		Log.info(messageString);
-		if (Particle.connected()) Particle.publish("status", messageString,PRIVATE);
+		if (Particle.connected()) PublishQueuePosix::instance().publish("status", messageString,PRIVATE);
 		sysStatus.set_messageCount(sysStatus.get_messageCount() + 1); // Increment the message count
 		LoRA_Functions::instance().setAlertCode(current.get_nodeNumber(), 0); // Clear pending alert, as you just sent it  
 		LoRA_Functions::instance().setAlertContext(current.get_nodeNumber(), 0); // Clear pending alert context, as you just sent it  
@@ -395,7 +396,7 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 		Log.info("Node %d join request will update with payload [%d, %d, %d, %d]", current.get_tempNodeNumber(), current.get_payload1(), current.get_payload2(), current.get_payload3(), current.get_payload4());
 	}
 	else {
-		if (Particle.connected()) Particle.publish("Alert", "findNodeNumber failed to add the node to the database.", PRIVATE);
+		if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "findNodeNumber failed to add the node to the database.", PRIVATE);
 	}			// Else, we will send an alert because the uniqueID should have been set in decipherJoinPayload when findNodeNumber was called
 
 	buf[23] = 0;											// buf[23] and buf[24] are reserved for future use
@@ -412,7 +413,7 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 		digitalWrite(BLUE_LED,LOW);
 		snprintf(messageString,sizeof(messageString),"Node %d joined. New nodeNumber %d, sensorType %s, alert %d and RSSI / SNR of %d / %d", nodeAddress, current.get_nodeNumber(), (buf[10] ==0)? "car":"person",current.get_alertCodeNode(), current.get_RSSI(), current.get_SNR());
 		Log.info(messageString);
-		if (Particle.connected()) Particle.publish("status", messageString,PRIVATE);
+		if (Particle.connected()) PublishQueuePosix::instance().publish("status", messageString,PRIVATE);
 		return true;
 	}
 	else {
@@ -503,7 +504,7 @@ uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, uint32_t uniqueID) {
 	bool result = nodeDatabase.set_nodeIDJson(jp.getBuffer());									// This should backup the nodeID database - now updated to persistent storage
 
 	if (!result) {
-		if (Particle.connected()) Particle.publish("Alert", "set_nodeIDJson failed to add a node to the database!!", PRIVATE);
+		if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "set_nodeIDJson failed to add a node to the database!!", PRIVATE);
 	}
 
 	return index;
@@ -571,14 +572,22 @@ byte LoRA_Functions::getType(int nodeNumber) {
 bool LoRA_Functions::setType(int nodeNumber, int newType) {
 	if (nodeNumber == 0 || nodeNumber == 255) return false;
 	int type;
+	uint32_t uniqueID;
+
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
 	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
 
 	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
-	if(nodeObjectContainer == NULL) return false;								// Ran out of entries
+	if(nodeObjectContainer == NULL) { 
+		Log.info("Ran out of entries");
+		return false;								// Ran out of entries 
+	}
 
+	JsonModifier mod(jp);
+
+	jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);
 	jp.getValueByKey(nodeObjectContainer, "type", type);
 
 	Log.info("Changing sensor type from %d to %d", type, newType);
@@ -586,12 +595,29 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 	const JsonParserGeneratorRK::jsmntok_t *value;
 
 	jp.getValueTokenByKey(nodeObjectContainer, "type", value);
-
-	JsonModifier mod(jp);
-
 	mod.startModify(value);
-
 	mod.insertValue((int)newType);
+
+	jp.getValueTokenByKey(nodeObjectContainer, "p", value);
+	mod.startModify(value);
+	mod.insertValue((int)0);
+
+	jp.getValueTokenByKey(nodeObjectContainer, "p1", value);
+	mod.startModify(value);
+	mod.insertValue((int)0);
+
+	jp.getValueTokenByKey(nodeObjectContainer, "p2", value);
+	mod.startModify(value);
+	mod.insertValue((int)0);
+
+	jp.getValueTokenByKey(nodeObjectContainer, "pend", value);
+	mod.startModify(value);
+	mod.insertValue((int)0);
+
+	jp.getValueTokenByKey(nodeObjectContainer, "cont", value);
+	mod.startModify(value);
+	mod.insertValue((int)0);
+
 	mod.finish();
 
 	return true;
@@ -840,13 +866,13 @@ void LoRA_Functions::printNodeData(bool publish) {
 			} break;
 			default: {          		
 				Log.info("Unknown sensor type in printNodeData %d", sensorType);
-				if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type in printNodeData", PRIVATE);
+				if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "Unknown sensor type in printNodeData", PRIVATE);
 			} break;
     	}
 
 		Log.info(data);
 		if (Particle.connected() && publish) {
-			Particle.publish("nodeData", data, PRIVATE);
+			PublishQueuePosix::instance().publish("nodeData", data, PRIVATE);
 			delay(1000);
 		}
 	}
@@ -973,7 +999,7 @@ uint16_t LoRA_Functions::getOccupancyNetBySpace(int space) {
 			if(sensorType < 10 || sensorType > 19){		// ignore nodes that are not occupancy sensors and throw an alert	
 				snprintf(message, sizeof(message), "Node in space %d has sensorType %d. uID: %lu", space, sensorType, uniqueID);
 				Log.info(message);
-				if (Particle.connected()) Particle.publish("Alert", message, PRIVATE);
+				if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);
 				continue;
 			}
 			jp.getValueByKey(nodeObjectContainer, "jd1", occupancyNet);	// Node is in the passed-in space!
@@ -984,14 +1010,14 @@ uint16_t LoRA_Functions::getOccupancyNetBySpace(int space) {
 			if(multiEntranceFlag && payload3 == 0){ // Throw an alert if one of the nodes in this space is not multiEntrance (they should all be) 
 				snprintf(message, sizeof(message), "Node in space %d is not set to multiEntrance. uID: %lu", space, uniqueID);
 				Log.info(message);
-				if (Particle.connected()) Particle.publish("Alert", message, PRIVATE);
+				if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);
 			}
 		}	
 	}
 	if(occupancyNetTotal < 0) {	// if the total net occupancy is less than 0, set all nodes in the space to 0
 		snprintf(message, sizeof(message), "Space %d has a negative value. Resetting all node counts to 0.", space);
 		Log.info(message);
-		if (Particle.connected()) Particle.publish("Alert", message, PRIVATE);
+		if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);
 		for (int i=0; i<100; i++) {												// Iterate through the array looking for a match
 			nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
 			if(nodeObjectContainer == NULL) {
@@ -1007,7 +1033,7 @@ uint16_t LoRA_Functions::getOccupancyNetBySpace(int space) {
 				if (!result){	// if we failed to set the alert for this node, throw an Alert to particle
 					snprintf(message, sizeof(message), "Node not reset due to failure in setAlertCode or setAlertContext. uID: %lu", uniqueID);
 					Log.info(message);
-					if (Particle.connected()) Particle.publish("Alert", message, PRIVATE);
+					if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);
 				}
 			}	
 		}
@@ -1073,7 +1099,7 @@ bool LoRA_Functions::resetOccupancyCounts(){
 		if (!result){	// if we failed to set the alert for this node, throw an Alert to particle
 			snprintf(message, sizeof(message), "Node not reset due to failure in setAlertCode or setAlertContext. uID: %lu", uniqueID);
 			Log.info(message);
-			if (Particle.connected()) Particle.publish("Alert", message, PRIVATE);
+			if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);
 		}
 	}
 	return true;
@@ -1104,7 +1130,7 @@ uint8_t LoRA_Functions::getCompressedJoinPayload(uint8_t sensorType) {
         } break;
         default: {          		
             Log.info("Unknown sensor type in getCompressedJoinPayload %d", sensorType);
-            if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type in getCompressedJoinPayload", PRIVATE);
+            if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "Unknown sensor type in getCompressedJoinPayload", PRIVATE);
             return 0;
         } break;
     }
@@ -1136,7 +1162,7 @@ bool LoRA_Functions::hydrateJoinPayload(uint8_t sensorType, uint8_t compressedJo
         } break;
         default: {
             Log.info("Unknown sensor type in hydrateJoinPayload %d", sensorType);
-            if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type in hydrateJoinPayload", PRIVATE);
+            if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "Unknown sensor type in hydrateJoinPayload", PRIVATE);
             return false;
         } break;
     }
@@ -1170,7 +1196,7 @@ bool LoRA_Functions::parseJoinPayloadValues(uint8_t sensorType, uint8_t compress
         } break;
         default: {
             Log.info("Unknown sensor type in parseJoinPayloadValues %d", sensorType);
-            if (Particle.connected()) Particle.publish("Alert", "Unknown sensor type in parseJoinPayloadValues", PRIVATE);
+            if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "Unknown sensor type in parseJoinPayloadValues", PRIVATE);
             return false;
         } break;
     }

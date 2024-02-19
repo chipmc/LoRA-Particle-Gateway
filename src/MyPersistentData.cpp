@@ -2,6 +2,7 @@
 #include "MB85RC256V-FRAM-RK.h"
 #include "StorageHelperRK.h"
 #include "MyPersistentData.h"
+#include "PublishQueuePosixRK.h"
 #include <stack>
 #include <cstring>
 
@@ -582,7 +583,7 @@ bool nodeIDData::set_nodeIDJson(const char* str) {
             snprintf(chunk, sizeof(chunk), "%.*s", static_cast<int>(chunkSize), str + offset);
 
             // Publish the current chunk
-            Particle.publish("Node Database Updated:", chunk, PRIVATE);
+            PublishQueuePosix::instance().publish("Node Database Updated:", chunk, PRIVATE);
             
 
             // Move to the next chunk
