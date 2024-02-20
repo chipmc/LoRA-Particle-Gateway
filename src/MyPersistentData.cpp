@@ -461,11 +461,11 @@ void currentStatusData::set_openHours(uint8_t value) {
 }
 
 byte currentStatusData::get_onBreak() const {
-    return getValue<byte>(offsetof(CurrentData, openHours));
+    return getValue<byte>(offsetof(CurrentData, onBreak));
 }
 
 void currentStatusData::set_onBreak(byte value) {
-    setValue<byte>(offsetof(CurrentData, openHours), value);
+    setValue<byte>(offsetof(CurrentData, onBreak), value);
 }
 
 uint8_t currentStatusData::get_hops() const {
@@ -568,7 +568,8 @@ bool nodeIDData::set_nodeIDJson(const char* str) {
 
     // Set the cleaned JSON value
     bool result = setValueString(offsetof(NodeData, nodeIDJson), sizeof(NodeData::nodeIDJson), str);
-
+    
+    // Send chunks of the nodeDatabase string as Particle events for debugging
     if (result && Particle.connected()) {
         const size_t maxChunkSize = 622; // max report size
         size_t messageLength = strlen(str);
@@ -583,13 +584,15 @@ bool nodeIDData::set_nodeIDJson(const char* str) {
             snprintf(chunk, sizeof(chunk), "%.*s", static_cast<int>(chunkSize), str + offset);
 
             // Publish the current chunk
-            PublishQueuePosix::instance().publish("Node Database Updated:", chunk, PRIVATE);
+            PublishQueuePosix::instance().publish("Updated Database String:", chunk, PRIVATE);
             
-
             // Move to the next chunk
             offset += chunkSize;
         }
     }
+
+    // Save to disk
+    nodeDatabase.flush(true);
 
     return result;
 }

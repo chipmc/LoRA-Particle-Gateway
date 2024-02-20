@@ -65,6 +65,7 @@
 // v19.2 	Added alerts to troubleshoot infinite joins caused by JSON database errors. Join requests now set the nodes' configuration settings (from the join payload) when the node database is empty and the node joins the network.
 // v19.3 	Fixed declaration of Base64RK in LoRA_Functions.cpp that was preventing cloud compile and cloud flash
 // v19.4 	Changed all instances of Particle.publish() to PublishQueuePosix.instance().publish(). Properly cleared nodeDatabase values when calling setType
+// v20		New JSON fixes from JSON-Parser-Test integrated into the system. Conducted a lot of testing. Good results, and found/fixed a bug with current.openHours that caused loops of alert code 6.
 
 
 #define DEFAULT_LORA_WINDOW 5
@@ -84,8 +85,8 @@
 #include "Room_Occupancy.h"							// Aggregates node data to get net room occupancy for Occupancy Nodes
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
-PRODUCT_VERSION(19);								// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="19.4";
+PRODUCT_VERSION(20);								// For now, we are putting nodes and gateways in the same product group - need to deconflict #
+char currentPointRelease[6] ="20.0";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
