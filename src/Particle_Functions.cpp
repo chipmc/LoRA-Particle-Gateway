@@ -413,6 +413,9 @@ int Particle_Functions::jsonFunctionParser(String command) {
         if (variable == "true") {                   
           snprintf(messaging,sizeof(messaging),"Initiating recalibration for node %d", nodeNumber);
           LoRA_Functions::instance().setAlertCode(nodeNumber,11);
+        } else {
+          snprintf(messaging,sizeof(messaging),"Incorrect value for var. Must be \"true\"");
+          success = false; 
         }
       } else {
         snprintf(messaging,sizeof(messaging),"No node exists in the database with that uniqueID");

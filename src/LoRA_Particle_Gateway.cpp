@@ -66,7 +66,7 @@
 // v19.3 	Fixed declaration of Base64RK in LoRA_Functions.cpp that was preventing cloud compile and cloud flash
 // v19.4 	Changed all instances of Particle.publish() to PublishQueuePosix.instance().publish(). Properly cleared nodeDatabase values when calling setType
 // v20		New JSON fixes from JSON-Parser-Test integrated into the system. Conducted a lot of testing. Good results, and found/fixed a bug with current.openHours that caused loops of alert code 6.
-
+// v20.1	Added the getJsonString helper function to eliminate problems with the JSON->String->memory piece.
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60

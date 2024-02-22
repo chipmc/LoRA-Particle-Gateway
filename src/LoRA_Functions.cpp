@@ -65,6 +65,9 @@ RHMesh manager(driver, GATEWAY_ADDRESS);
 // #define RH_MESH_MAX_MESSAGE_LEN 50
 uint8_t buf[RH_MESH_MAX_MESSAGE_LEN];               // Related to max message size - RadioHead example note: dont put this on the stack:
 
+// Returns the JSON as const char* by parsing and copying the content of the outer token of the JSONParser.
+const char* getJsonString(JsonParser &jp);
+
 bool LoRA_Functions::setup(bool gatewayID) {
     // Set up the Radio Module
 	LoRA_Functions::instance().initializeRadio();
@@ -282,9 +285,12 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 	if (current.get_alertCodeNode() == 255) {
 		Log.info("Node %d is not configured so setting alert code to 1 - again!", current.get_nodeNumber());
 		current.set_alertCodeNode(1);
+	} else {
+		// If the node is configured, we will check for an alert code in the nodeID database
+		if(current.get_alertCodeNode() == 0 && LoRA_Functions::instance().getAlertCode(current.get_nodeNumber()) != 0){
+			current.set_alertCodeNode(LoRA_Functions::instance().getAlertCode(current.get_nodeNumber()));		// Get the alert code from the nodeID database if one is not already set
+		}
 	}
-	// If the node is configured, we will check for an alert code in the nodeID database
-	else current.set_alertCodeNode(LoRA_Functions::instance().getAlertCode(current.get_nodeNumber()));		// Get the alert code from the nodeID database if one is not already set
 
 	Log.info("In the data message ack composition, alert code for node %d is %d", current.get_nodeNumber(), current.get_alertCodeNode());
 	buf[11] = current.get_alertCodeNode();	    // Send alert code to the node
@@ -498,10 +504,10 @@ uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, uint32_t uniqueID) {
 		mod.finishObjectOrArray();
 	mod.finish();
 
+	bool result = nodeDatabase.set_nodeIDJson(getJsonString(jp));									// This should backup the nodeID database - now updated to persistent storage
+
 	// Set the configuration settings from the join payload into the new database entry
 	LoRA_Functions::instance().setJoinPayload(nodeNumber);
-
-	bool result = nodeDatabase.set_nodeIDJson(jp.getBuffer());									// This should backup the nodeID database - now updated to persistent storage
 
 	if (!result) {
 		if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "set_nodeIDJson failed to add a node to the database!!", PRIVATE);
@@ -690,7 +696,7 @@ bool LoRA_Functions::setJoinPayload(uint8_t nodeNumber) {
 	JsonModifier mod(jp);
 	mod.insertOrUpdateKeyValue(nodeObjectContainer, "p", (int)compressedJoinPayload);
 	
-	nodeDatabase.set_nodeIDJson(jp.getBuffer());						
+	nodeDatabase.set_nodeIDJson(getJsonString(jp));						
 
 	return result;
 }
@@ -760,7 +766,7 @@ bool LoRA_Functions::setAlertCode(int nodeNumber, int newAlert) {
 	JsonModifier mod(jp);
 	mod.insertOrUpdateKeyValue(nodeObjectContainer, "pend", (int)newAlert);
 	
-	nodeDatabase.set_nodeIDJson(jp.getBuffer());						
+	nodeDatabase.set_nodeIDJson(getJsonString(jp));						
 
 	return true;
 }
@@ -785,7 +791,7 @@ bool LoRA_Functions::setAlertContext(int nodeNumber, int newAlertContext) {
 	JsonModifier mod(jp);
 	mod.insertOrUpdateKeyValue(nodeObjectContainer, "cont", (int)newAlertContext);
 	
-	nodeDatabase.set_nodeIDJson(jp.getBuffer());						// This updates the JSON object but doe not commit to to persistent storage
+	nodeDatabase.set_nodeIDJson(getJsonString(jp));						// This updates the JSON object but doe not commit to to persistent storage
 
 	return true;
 }
@@ -892,7 +898,7 @@ bool LoRA_Functions::setJsonData1(int nodeNumber, int sensorType, int newJsonDat
 	JsonModifier mod(jp);
 	mod.insertOrUpdateKeyValue(nodeObjectContainer, "jd1", (int)newJsonData1);
 	
-	nodeDatabase.set_nodeIDJson(jp.getBuffer());						// This updates the JSON object but doe not commit to to persistent storage
+	nodeDatabase.set_nodeIDJson(getJsonString(jp));						// This updates the JSON object but doe not commit to to persistent storage
 
 	return true;
 }
@@ -924,7 +930,7 @@ bool LoRA_Functions::setJsonData2(int nodeNumber, int sensorType, int newJsonDat
 	JsonModifier mod(jp);
 	mod.insertOrUpdateKeyValue(nodeObjectContainer, "jd2", (int)newJsonData2);
 	
-	nodeDatabase.set_nodeIDJson(jp.getBuffer());						// This updates the JSON object but doe not commit to to persistent storage
+	nodeDatabase.set_nodeIDJson(getJsonString(jp));						// This updates the JSON object but doe not commit to to persistent storage
 
 	return true;
 }
@@ -933,6 +939,7 @@ bool LoRA_Functions::setJsonData2(int nodeNumber, int sensorType, int newJsonDat
 /**********************************************************************
  **           Occupancy Specific Node Management Functions           **
  **********************************************************************/
+
 
 uint16_t LoRA_Functions::getOccupancyNetBySpace(int space) {
 	char message[256];
@@ -1195,5 +1202,30 @@ void LoRA_Functions::decompressData(uint8_t compressedData, uint8_t data[], uint
     for (uint8_t i = 0; i < 4; ++i) {
         data[i] = (compressedData >> bitOffset) & ((1 << bitSizes[i]) - 1);
         bitOffset += bitSizes[i];
+    }
+}
+
+/**********************************************************************
+ **                         Helper Functions                         **
+ **********************************************************************/
+const char* getJsonString(JsonParser &jp) {
+    // The first token is the outer object - here we get the total size of the object
+    JsonParserGeneratorRK::jsmntok_t *tok = jp.getTokens();
+    
+    // Allocate memory for tempBuf dynamically
+    char *tempBuf = (char*)malloc(tok->end - tok->start + 1);
+
+    // Check if memory allocation was successful
+    if (tempBuf != nullptr) {
+        // Copy the content to tempBuf
+        memcpy(tempBuf, jp.getBuffer() + tok->start, tok->end - tok->start);
+        
+        // Null-terminate the string
+        tempBuf[tok->end - tok->start] = '\0';
+
+        // Return the dynamically allocated string
+        return tempBuf;
+    } else {
+        return "Memory allocation failure!!";
     }
 }
