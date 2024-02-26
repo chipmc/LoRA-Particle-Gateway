@@ -532,7 +532,7 @@ void nodeIDData::loop() {
 
 void nodeIDData::resetNodeIDs() {
     String blank = "{\"nodes\":[]}";
-    Log.info("Resettig NodeID config to: %s", blank.c_str());
+    Log.info("Resetting NodeID config to: %s", blank.c_str());
     nodeDatabase.set_nodeIDJson(blank);
     nodeDatabase.flush(true);
     Log.info("NodeID data is now %s", nodeDatabase.get_nodeIDJson().c_str());
@@ -569,30 +569,30 @@ bool nodeIDData::set_nodeIDJson(const char* str) {
     // Set the cleaned JSON value
     bool result = setValueString(offsetof(NodeData, nodeIDJson), sizeof(NodeData::nodeIDJson), str);
     
-    // Send chunks of the nodeDatabase string as Particle events for debugging
-    if (result && Particle.connected()) {
-        const size_t maxChunkSize = 622; // max report size
-        size_t messageLength = strlen(str);
+    // // Send chunks of the nodeDatabase string as Particle events for debugging
+    // if (result && Particle.connected()) {
+    //     const size_t maxChunkSize = 622; // max report size
+    //     size_t messageLength = strlen(str);
 
-        size_t offset = 0;
-        while (offset < messageLength) {
-            // Calculate chunk size for the current iteration
-            size_t chunkSize = std::min(maxChunkSize, messageLength - offset);
+    //     size_t offset = 0;
+    //     while (offset < messageLength) {
+    //         // Calculate chunk size for the current iteration
+    //         size_t chunkSize = std::min(maxChunkSize, messageLength - offset);
 
-            // Create a buffer for the current chunk
-            char chunk[maxChunkSize + 1]; // +1 for null terminator
-            snprintf(chunk, sizeof(chunk), "%.*s", static_cast<int>(chunkSize), str + offset);
+    //         // Create a buffer for the current chunk
+    //         char chunk[maxChunkSize + 1]; // +1 for null terminator
+    //         snprintf(chunk, sizeof(chunk), "%.*s", static_cast<int>(chunkSize), str + offset);
 
-            // Publish the current chunk
-            PublishQueuePosix::instance().publish("Updated Database String:", chunk, PRIVATE);
+    //         // Publish the current chunk
+    //         PublishQueuePosix::instance().publish("Updated Database String:", chunk, PRIVATE);
             
-            // Move to the next chunk
-            offset += chunkSize;
-        }
-    }
+    //         // Move to the next chunk
+    //         offset += chunkSize;
+    //     }
+    // }
 
     // Save to disk
-    nodeDatabase.flush(true);
+    nodeDatabase.flush(false);
 
     return result;
 }

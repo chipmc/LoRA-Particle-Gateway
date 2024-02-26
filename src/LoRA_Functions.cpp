@@ -65,8 +65,8 @@ RHMesh manager(driver, GATEWAY_ADDRESS);
 // #define RH_MESH_MAX_MESSAGE_LEN 50
 uint8_t buf[RH_MESH_MAX_MESSAGE_LEN];               // Related to max message size - RadioHead example note: dont put this on the stack:
 
-// Returns the JSON as const char* by parsing and copying the content of the outer token of the JSONParser.
-const char* getJsonString(JsonParser &jp);
+// Saces the JSON string to memory using our JsonParser.
+bool saveNodeDatabase(JsonParser &jp);
 
 bool LoRA_Functions::setup(bool gatewayID) {
     // Set up the Radio Module
@@ -282,14 +282,12 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 
 	// Next we have to determine if there is an alert code to send
 	// If the node is not configured, we will set an alert code of 1
-	if (current.get_alertCodeNode() == 255) {
+	if (current.get_alertCodeNode() == 255 || current.get_alertCodeNode() == 1) {
 		Log.info("Node %d is not configured so setting alert code to 1 - again!", current.get_nodeNumber());
 		current.set_alertCodeNode(1);
 	} else {
 		// If the node is configured, we will check for an alert code in the nodeID database
-		if(current.get_alertCodeNode() == 0 && LoRA_Functions::instance().getAlertCode(current.get_nodeNumber()) != 0){
-			current.set_alertCodeNode(LoRA_Functions::instance().getAlertCode(current.get_nodeNumber()));		// Get the alert code from the nodeID database if one is not already set
-		}
+		current.set_alertCodeNode(LoRA_Functions::instance().getAlertCode(current.get_nodeNumber()));		// Get the alert code from the nodeID database if one is not already set
 	}
 
 	Log.info("In the data message ack composition, alert code for node %d is %d", current.get_nodeNumber(), current.get_alertCodeNode());
@@ -504,7 +502,7 @@ uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, uint32_t uniqueID) {
 		mod.finishObjectOrArray();
 	mod.finish();
 
-	bool result = nodeDatabase.set_nodeIDJson(getJsonString(jp));									// This should backup the nodeID database - now updated to persistent storage
+	bool result = saveNodeDatabase(jp);									// This should backup the nodeID database - now updated to persistent storage
 
 	// Set the configuration settings from the join payload into the new database entry
 	LoRA_Functions::instance().setJoinPayload(nodeNumber);
@@ -696,7 +694,7 @@ bool LoRA_Functions::setJoinPayload(uint8_t nodeNumber) {
 	JsonModifier mod(jp);
 	mod.insertOrUpdateKeyValue(nodeObjectContainer, "p", (int)compressedJoinPayload);
 	
-	nodeDatabase.set_nodeIDJson(getJsonString(jp));						
+	saveNodeDatabase(jp);						
 
 	return result;
 }
@@ -766,7 +764,7 @@ bool LoRA_Functions::setAlertCode(int nodeNumber, int newAlert) {
 	JsonModifier mod(jp);
 	mod.insertOrUpdateKeyValue(nodeObjectContainer, "pend", (int)newAlert);
 	
-	nodeDatabase.set_nodeIDJson(getJsonString(jp));						
+	saveNodeDatabase(jp);						
 
 	return true;
 }
@@ -791,7 +789,7 @@ bool LoRA_Functions::setAlertContext(int nodeNumber, int newAlertContext) {
 	JsonModifier mod(jp);
 	mod.insertOrUpdateKeyValue(nodeObjectContainer, "cont", (int)newAlertContext);
 	
-	nodeDatabase.set_nodeIDJson(getJsonString(jp));						// This updates the JSON object but doe not commit to to persistent storage
+	saveNodeDatabase(jp);						// This updates the JSON object but doe not commit to to persistent storage
 
 	return true;
 }
@@ -898,7 +896,7 @@ bool LoRA_Functions::setJsonData1(int nodeNumber, int sensorType, int newJsonDat
 	JsonModifier mod(jp);
 	mod.insertOrUpdateKeyValue(nodeObjectContainer, "jd1", (int)newJsonData1);
 	
-	nodeDatabase.set_nodeIDJson(getJsonString(jp));						// This updates the JSON object but doe not commit to to persistent storage
+	saveNodeDatabase(jp);						// This updates the JSON object but doe not commit to to persistent storage
 
 	return true;
 }
@@ -930,7 +928,7 @@ bool LoRA_Functions::setJsonData2(int nodeNumber, int sensorType, int newJsonDat
 	JsonModifier mod(jp);
 	mod.insertOrUpdateKeyValue(nodeObjectContainer, "jd2", (int)newJsonData2);
 	
-	nodeDatabase.set_nodeIDJson(getJsonString(jp));						// This updates the JSON object but doe not commit to to persistent storage
+	saveNodeDatabase(jp);						// This updates the JSON object but doe not commit to to persistent storage
 
 	return true;
 }
@@ -1208,7 +1206,8 @@ void LoRA_Functions::decompressData(uint8_t compressedData, uint8_t data[], uint
 /**********************************************************************
  **                         Helper Functions                         **
  **********************************************************************/
-const char* getJsonString(JsonParser &jp) {
+
+bool saveNodeDatabase(JsonParser &jp) {
     // The first token is the outer object - here we get the total size of the object
     JsonParserGeneratorRK::jsmntok_t *tok = jp.getTokens();
     
@@ -1223,9 +1222,15 @@ const char* getJsonString(JsonParser &jp) {
         // Null-terminate the string
         tempBuf[tok->end - tok->start] = '\0';
 
-        // Return the dynamically allocated string
-        return tempBuf;
+        // Return the dynamically allocated string and save it
+
+		nodeDatabase.set_nodeIDJson(tempBuf);									// This should backup the nodeID database - now updated to persistent storage
+		nodeDatabase.flush(false);
+
+		free(tempBuf);															// Free the memory (good practice)
+        return true;
     } else {
         return "Memory allocation failure!!";
+		return false;
     }
 }
