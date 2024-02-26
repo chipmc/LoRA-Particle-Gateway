@@ -970,7 +970,7 @@ uint16_t LoRA_Functions::getOccupancyNetBySpace(int space) {
 		LoRA_Functions::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
 		if (payload1 == space) {
 			if(sensorType < 10 || sensorType > 19){		// ignore nodes that are not occupancy sensors and throw an alert	
-				snprintf(message, sizeof(message), "Node in space %d has wrong sensorType = %d. uID: %lu", space, sensorType, uniqueID);
+				snprintf(message, sizeof(message), "Node in space %d has wrong sensorType = %d. uID: %lu", space + 1, sensorType, uniqueID);
 				Log.info(message);
 				if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);
 				continue;
@@ -981,14 +981,14 @@ uint16_t LoRA_Functions::getOccupancyNetBySpace(int space) {
 				multiEntranceFlag = 1;
 			}
 			if(multiEntranceFlag && payload3 == 0){ // Throw an alert if one of the nodes in this space is not multiEntrance (they should all be) 
-				snprintf(message, sizeof(message), "Node in space %d is not set to multiEntrance. uID: %lu", space, uniqueID);
+				snprintf(message, sizeof(message), "Node in space %d is not set to multiEntrance. uID: %lu", space + 1, uniqueID);
 				Log.info(message);
 				if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);
 			}
 		}	
 	}
 	if(occupancyNetTotal < 0) {	// if the total net occupancy is less than 0, set all nodes in the space to 0
-		snprintf(message, sizeof(message), "Space %d has a negative value. Resetting all node counts to 0.", space);
+		snprintf(message, sizeof(message), "Space %d has a negative value. Resetting all node counts to 0.", space + 1);
 		Log.info(message);
 		if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);
 		for (int i = 0; i < 100; i++) {												// Iterate through the array looking for a match
