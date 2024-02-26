@@ -237,8 +237,8 @@ bool LoRA_Functions::decipherDataReportGateway() {			// Receives the data report
 	// Log.info("Data recieved from the report: sensorType %d, temp %d, battery %d, batteryState %d, resets %d, message count %d, RSSI %d, SNR %d", current.get_sensorType(), current.get_internalTempC(), current.get_stateOfCharge(), current.get_batteryState(), current.get_resetCount(), sysStatus.get_messageCount(), current.get_RSSI(), current.get_SNR());
 	
 	// update data in JSON if needed.
-	LoRA_Functions::instance().setJsonData1(current.get_nodeNumber(), current.get_sensorType(), current.get_payload3() <<8 | current.get_payload4());
-	LoRA_Functions::instance().setJsonData2(current.get_nodeNumber(), current.get_sensorType(), current.get_payload1() <<8 | current.get_payload2());
+	LoRA_Functions::instance().setJsonData1(current.get_nodeNumber(), current.get_sensorType(), static_cast<int16_t>(current.get_payload3() <<8 | current.get_payload4()));
+	LoRA_Functions::instance().setJsonData2(current.get_nodeNumber(), current.get_sensorType(), static_cast<int16_t>(current.get_payload1() <<8 | current.get_payload2()));
 
 	lora_state = DATA_ACK;		// Prepare to respond
 	return true;

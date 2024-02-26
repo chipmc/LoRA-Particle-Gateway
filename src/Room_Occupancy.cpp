@@ -30,10 +30,10 @@ bool Room_Occupancy::resetRoomCounts() {
   return LoRA_Functions::instance().resetOccupancyCounts();                                                       
 }
 
-int16_t Room_Occupancy::getRoomNet(int space) {
+int Room_Occupancy::getRoomNet(int space) {
   return LoRA_Functions::instance().getOccupancyNetBySpace(space);                                                       
 }
 
-int16_t Room_Occupancy::getRoomGross(int space) {
+int Room_Occupancy::getRoomGross(int space) {
   return LoRA_Functions::instance().getOccupancyGrossBySpace(space);                                                                 
 }

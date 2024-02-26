@@ -58,12 +58,12 @@ public:
     /**
      * @brief This function returns the current net room count
     */
-    int16_t getRoomNet(int space);
+    int getRoomNet(int space);
 
     /**
      * @brief This function returns the current gross room count
     */
-    int16_t getRoomGross(int space);
+    int getRoomGross(int space);
 
 
 protected:
