@@ -466,7 +466,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
           Room_Occupancy::instance().resetNetCounts();
         }
       } else {
-        snprintf(messaging,sizeof(messaging),"Can only reset gross counts for Gateway (node 0)");
+        snprintf(messaging,sizeof(messaging),"Can only reset counts for Gateway (node 0)");
         success = false; 
       }
     }
