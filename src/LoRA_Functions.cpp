@@ -875,7 +875,6 @@ uint16_t LoRA_Functions::getOccupancyGrossBySpace(int space) {
 
 bool LoRA_Functions::resetOccupancyNetCounts(){
 	int nodeNumber;
-	bool result = 0;
 
 	Log.info("Resetting occupancy net counts");
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
@@ -896,14 +895,6 @@ bool LoRA_Functions::resetOccupancyNetCounts(){
 bool LoRA_Functions::resetOccupancyCounts(){
 	int nodeNumber;
 	int sensorType;
-	uint32_t uniqueID;
-	char message[256];
-	bool result = 0;
-	uint8_t payload1;
-	uint8_t payload2;
-	uint8_t payload3;
-	uint8_t payload4;
-	int compressedJoinPayload;
 
 	Log.info("Resetting occupancy counts");
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
@@ -911,7 +902,6 @@ bool LoRA_Functions::resetOccupancyCounts(){
 	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
 
 	for (int i = 0; i < 100; i++) {											// Iterate through the array looking for a match
-		result = true;
 		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
 		if(nodeObjectContainer == NULL) {
 			break;															// Ran out of entries - no match found
@@ -1259,13 +1249,12 @@ bool LoRA_Functions::resetCurrentDataForNode(int nodeNumber){
 	jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);  			// Get the uniqueID
 	jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
 	LoRA_Functions::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
-
 	switch (sensorType) {
-		result = LoRA_Functions::instance().setAlertCode(nodeNumber, 6);         /*** Queue up an alert code to reset current data ***/
 		case 1 ... 9: {    						// Counter
 			// Reset Counter sensorType here
 		} break;
 		case 10 ... 19: {   					// Occupancy
+			result = LoRA_Functions::instance().setAlertCode(nodeNumber, 6);         /*** Queue up an alert code to reset current data ***/
 			if(result){
 				LoRA_Functions::instance().setJsonData1(nodeNumber, sensorType, 0);   // Set the JsonData1 to 0 for the node (occupancyNet)
 				LoRA_Functions::instance().setJsonData2(nodeNumber, sensorType, 0);   // Set the JsonData1 to 0 for the node (occupancyGross)
