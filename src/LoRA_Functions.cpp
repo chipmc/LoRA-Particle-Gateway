@@ -870,6 +870,7 @@ uint16_t LoRA_Functions::getOccupancyGrossBySpace(int space) {
 			}
 		}
 	}
+
 	return occupancyGrossTotal;
 }
 
@@ -896,7 +897,7 @@ bool LoRA_Functions::resetOccupancyCounts(){
 	int nodeNumber;
 	int sensorType;
 
-	Log.info("Resetting occupancy counts");
+	Log.info("Resetting all occupancy counts - resetOccupancyCounts");
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
 	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
@@ -1145,7 +1146,9 @@ byte LoRA_Functions::getNodeNumberForUniqueID(uint32_t uniqueID) {
 	int nodeNumber;
 	int index = 1;
 	uint32_t nodeDeviceID;
+
 	Log.info("searching array for node with unique id = %lu", uniqueID);
+
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
 	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
@@ -1168,9 +1171,9 @@ byte LoRA_Functions::getNodeNumberForUniqueID(uint32_t uniqueID) {
 }
 
 bool LoRA_Functions::resetInactiveSpaces(int secondsInactive){
-	const int MAX_SPACES = 64; // Maximum number of spaces (6 bytes)
-    const int MAX_NODES_PER_SPACE = 100; // High value because break; is called when fully parsed, as to not limit the max number of nodes in a space through this function
-	uint32_t spaceNodes[MAX_SPACES][MAX_NODES_PER_SPACE] = {0}; // Initialize to all zeros
+	const int maxSpaces = 64; // Maximum number of spaces (6 bytes)
+    const int maxNodesPerSpace = 100; // High value because break; is called when fully parsed, as to not limit the max number of nodes in a space through this function
+	uint32_t spaceNodes[maxSpaces][maxNodesPerSpace] = {0}; // Initialize to all zeros
     uint32_t lastReport;
 	int sensorType;
 	int nodeNumber;
@@ -1180,13 +1183,15 @@ bool LoRA_Functions::resetInactiveSpaces(int secondsInactive){
 	uint8_t payload4;
 	int compressedJoinPayload;
 	bool result = false;
+
+	Log.info("Searching for inactive spaces to reset - resetInactiveSpaces");
 	
     const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;
     jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
     const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;
 
     // Group nodes by their "space" number
-    for (int i = 0; i < MAX_NODES_PER_SPACE; i++) {
+    for (int i = 0; i < maxNodesPerSpace; i++) {
         nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
         if (nodeObjectContainer == NULL) {
             Log.info("resetInactiveSpaces ran out of entries at i = %d", i);
@@ -1203,14 +1208,14 @@ bool LoRA_Functions::resetInactiveSpaces(int secondsInactive){
 		LoRA_Functions::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the payload values (space is payload1)
 
         int j;
-        for (j = 0; j < MAX_NODES_PER_SPACE; j++) {  // Find the first available slot in the spaceNodes array for the given space, then add the lastReport for the node to this space's row
+        for (j = 0; j < maxNodesPerSpace; j++) {  // Find the first available slot in the spaceNodes array for the given space, then add the lastReport for the node to this space's row
             if (spaceNodes[payload1][j] == 0) {
                 spaceNodes[payload1][j] = lastReport;
                 break;
             }
         }
         
-        if (j == MAX_NODES_PER_SPACE) {  // Throw an alert if we reached the end of available slots for the space somehow
+        if (j == maxNodesPerSpace) {  // Throw an alert if we reached the end of available slots for the space somehow
 			char message[128];
 			snprintf(message, sizeof(message), "Maximum number of nodes per space exceeded for space %d", payload1);
 			Log.info(message);
@@ -1218,10 +1223,11 @@ bool LoRA_Functions::resetInactiveSpaces(int secondsInactive){
         }
     }
 
-    for (int space = 0; space < MAX_SPACES; space++) {  // Check each space for inactivity and reset if needed
+    for (int space = 0; space < maxSpaces; space++) {  // Check each space for inactivity and reset if needed
         bool allInactive = true;
-        for (int i = 0; i < MAX_NODES_PER_SPACE; i++) {
+        for (int i = 0; i < maxNodesPerSpace; i++) {
             if (spaceNodes[space][i] != 0 && (Time.now() - spaceNodes[space][i] <= (uint32_t)secondsInactive)) {
+				Log.info("Space %d is inactive. Resetting Nodes", space + 1);
 				allInactive = false;  // A node in this space is active, so the space is not all inactive
 				break;
 			}
@@ -1246,6 +1252,7 @@ bool LoRA_Functions::resetSpace(int space){
 	bool result = 0;
 	
 	Log.info("Searching JSON database for nodes with space == %d - resetSpace", space);
+
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
 	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
@@ -1301,6 +1308,8 @@ bool LoRA_Functions::resetCurrentDataForNode(int nodeNumber){
 	uint8_t payload4;
 	int compressedJoinPayload;
 
+	Log.info("Resetting current data for node %d - resetCurrentDataForNode", nodeNumber);
+
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
 	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
@@ -1327,7 +1336,7 @@ bool LoRA_Functions::resetCurrentDataForNode(int nodeNumber){
 				// Send with battery = -10. This is interpreted by UpdateGatewayNodesAndSpaces as "set the occupancyNet value only", which we set to 0
 				snprintf(message, sizeof(message), "{\"nodeUniqueID\":\"%lu\",\"battery\":%d,\"space\":%d,\"spaceNet\":%d,\"spaceGross\":%d}",\
 				uniqueID, -10, payload1 + 1, Room_Occupancy::instance().getRoomNet(payload1), Room_Occupancy::instance().getRoomGross(payload1));
-				PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v2", message, PRIVATE | WITH_ACK);
+				if (Particle.connected()) PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v2", message, PRIVATE | WITH_ACK);
 			} else {	// if we failed to set the alert for this node, throw an Alert to particle
 				snprintf(message, sizeof(message), "Node not reset due to failure in setAlertCode. uID: %lu", uniqueID);
 				Log.info(message);
@@ -1362,6 +1371,8 @@ bool LoRA_Functions::resetAllDataForNode(int nodeNumber){
 	uint8_t payload4;
 	int compressedJoinPayload;
 
+	Log.info("Resetting current and system data for node %d - resetAllDataForNode", nodeNumber);
+
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
 	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
@@ -1389,7 +1400,7 @@ bool LoRA_Functions::resetAllDataForNode(int nodeNumber){
 				// Send with battery = -10. This is interpreted by UpdateGatewayNodesAndSpaces as "set the occupancyNet value only", which we set to 0
 				snprintf(message, sizeof(message), "{\"nodeUniqueID\":\"%lu\",\"battery\":%d,\"space\":%d,\"spaceNet\":%d,\"spaceGross\":%d}",\
 				uniqueID, -10, payload1 + 1, Room_Occupancy::instance().getRoomNet(payload1), Room_Occupancy::instance().getRoomGross(payload1));
-				PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v2", message, PRIVATE | WITH_ACK);
+				if (Particle.connected()) PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v2", message, PRIVATE | WITH_ACK);
 			} else {	// if we failed to set the alert for this node, throw an Alert to particle
 				snprintf(message, sizeof(message), "Node not reset due to failure in setAlertCode. uID: %lu", uniqueID);
 				Log.info(message);

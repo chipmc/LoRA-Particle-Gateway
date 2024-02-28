@@ -141,7 +141,7 @@ void setup()
 
 	// Setup local time and set the publishing schedule
 	LocalTime::instance().withConfig(LocalTimePosixTimezone("EST5EDT,M3.2.0/2:00:00,M11.1.0/2:00:00"));			// East coast of the US
-	conv.withCurrentTime().convert();  				        // Convert to local time for use later
+	conv.withCurrentTime().convert();  				// Convert to local time for use later
 
 	if (Time.isValid()) {
 		Log.info("LocalTime initialized, time is %s and RTC %s set", conv.format("%I:%M:%S%p").c_str(), (ab1805.isRTCSet()) ? "is" : "is not");
@@ -153,7 +153,7 @@ void setup()
 
 	if (!digitalRead(BUTTON_PIN) || sysStatus.get_connectivityMode()== 1) {
 		Log.info("User button or pre-existing set to connected mode");
-		sysStatus.set_connectivityMode(1);					  // connectivityMode Code 1 keeps both LoRA and Cellular connections on
+		sysStatus.set_connectivityMode(1);			  // connectivityMode Code 1 keeps both LoRA and Cellular connections on
 		state = CONNECTING_STATE;
 	}
 	
@@ -207,15 +207,16 @@ void loop() {
 				if (oldState != REPORTING_STATE) startLoRAWindow = millis();    // Mark when we enter this state - for timeouts - but multiple messages won't keep us here forever
 				publishStateTransition();                   					// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 				conv.withCurrentTime().convert();								// Get the time and convert to Local
-				if (current.get_openHours() == false && (conv.getLocalTimeHMS().hour >= sysStatus.get_openTime() && conv.getLocalTimeHMS().hour <= sysStatus.get_closeTime())) {
+				if (conv.getLocalTimeHMS().hour >= sysStatus.get_openTime() && conv.getLocalTimeHMS().hour <= sysStatus.get_closeTime()) {
 					current.set_openHours(true);
-				} else if (current.get_openHours() == true){
-					current.set_openHours(false);
+				} else {
+					Log.info("Resetting all counts - not in open hours. Open hour: %d, Close Hour: %d, Current Hour: %d", sysStatus.get_openTime(), sysStatus.get_closeTime(), conv.getLocalTimeHMS().hour);
 					Room_Occupancy::instance().resetAllCounts();	// reset the room net AND gross counts at end of day for all occupancy nodes and update Ubidots
+					current.set_openHours(false);
 				};
 				
-				LoRA_Functions::instance().resetInactiveSpaces(3600);	// Define "inactive" spaces as those where ALL of the nodes in that space have not sent a report in 3600 seconds.
-																		// Check for inactive spaces and reset them. Ignores nodes of a "Counter" sensorType as they do not have spaces.
+				if (oldState == REPORTING_STATE) LoRA_Functions::instance().resetInactiveSpaces(3600);	// Define "inactive" spaces as those where ALL of the nodes in that space have not sent a report in 3600 seconds.
+																										// Check for inactive spaces and reset them. Ignores nodes of a "Counter" sensorType as they do not have spaces.
 				
 				String dayString = conv.timeStr().substring(0, 3);	// Take the first three characters of the timeStr ("Fri", "Sat", "Sun")
 				uint8_t breakLengthHours;
@@ -236,7 +237,7 @@ void loop() {
 							current.set_onBreak(1); // start the break
 							Room_Occupancy::instance().resetNetCounts(); // reset the room net counts for all occupancy nodes and update Ubidots
 						}
-					} else if (current.get_onBreak() != 0) {
+					} else {
 						current.set_onBreak(0); // Otherwise, we are still not on break
 					}
 
