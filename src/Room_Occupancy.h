@@ -53,7 +53,14 @@ public:
      * 
      * @return true if successful
     */
-    bool resetRoomCounts();
+    bool resetAllCounts();
+
+    /**
+     * @brief Reset all the room net counts - done each day at break time
+     * 
+     * @return true if successful
+    */
+    bool resetNetCounts();
 
     /**
      * @brief This function returns the current net room count

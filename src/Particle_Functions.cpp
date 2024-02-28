@@ -121,11 +121,11 @@ int Particle_Functions::jsonFunctionParser(String command) {
       else if(nodeNumber != 0) {                        // if we could not set the nodeNumber from that unique ID, throw an error
         if (variable == "all") {
           snprintf(messaging,sizeof(messaging),"Resetting node %d's system and current data", nodeNumber);
-          LoRA_Functions::instance().setAlertCode(nodeNumber,5);    // Alertcode 5 will reset all data on the node (requires no context)
+          LoRA_Functions::instance().resetAllDataForNode(nodeNumber);
         }
         else {
           snprintf(messaging,sizeof(messaging),"Resetting node %d's current data", nodeNumber);
-          LoRA_Functions::instance().setAlertCode(nodeNumber,6);    // Alertcode 6 will only reset all the current data on the node (requires no context)
+          LoRA_Functions::instance().resetCurrentDataForNode(nodeNumber);
         }
       } else {
         snprintf(messaging,sizeof(messaging),"Not a valid node uniqueID");
@@ -228,6 +228,36 @@ int Particle_Functions::jsonFunctionParser(String command) {
       }
       else {
         snprintf(messaging,sizeof(messaging),"Break length (minutes) - must be 0-240");
+        success = false;                                               // Make sure it falls in a valid range or send a "fail" result
+      }
+    }
+
+    // Sets weekend break time (hour)
+    else if (function == "weekendBreak") {
+      // Format - function - open, node - 0, variables - 0-23 break start hour (set to 24 to dedenote having no break)
+      // Test - {"cmd":[{"node":0, "var":"2","fn":"break"}]}
+      int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+      if ((tempValue >= 0) && (tempValue <= 24)) {
+        snprintf(messaging,sizeof(messaging),"Setting weekend break start hour to %d:00", tempValue);
+        sysStatus.set_weekendBreakTime(tempValue);
+      }
+      else {
+        snprintf(messaging,sizeof(messaging),"Weekend break start hour - must be 0-24");
+        success = false;                                               // Make sure it falls in a valid range or send a "fail" result
+      }
+    }
+
+    // Sets weekend break length in minutes
+    else if (function == "weekendBreakLengthMinutes") {
+      // Format - function - close, node - 0, variables - 0-60 break length (in minutes)
+      // Test - {"cmd":[{"node":0, "var":"21","fn":"breakLengthMinutes"}]}
+      int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+      if ((tempValue >= 0 ) && (tempValue <= 240)) {
+        snprintf(messaging,sizeof(messaging),"Setting weekend break length to %d minutes", tempValue);
+        sysStatus.set_weekendBreakLengthMinutes(tempValue);
+      }
+      else {
+        snprintf(messaging,sizeof(messaging),"Weekend break length (minutes) - must be 0-240");
         success = false;                                               // Make sure it falls in a valid range or send a "fail" result
       }
     }
@@ -427,9 +457,13 @@ int Particle_Functions::jsonFunctionParser(String command) {
     else if (function == "resetRoomCounts") {
       // Test - {"cmd":[{"node":3312487035, "var":"true","fn":"recalibrate"}]}
       if(nodeNumber == 0) {
-        if (variable == "true") {                   
-          snprintf(messaging,sizeof(messaging),"Resetting Room gross counts on gateway");
-          Room_Occupancy::instance().resetRoomCounts();
+        if (variable == "all") {                   
+          snprintf(messaging,sizeof(messaging),"Resetting Room gross AND net counts");
+          Room_Occupancy::instance().resetAllCounts();
+        }
+        if (variable == "net") {                   
+          snprintf(messaging,sizeof(messaging),"Resetting Room net counts");
+          Room_Occupancy::instance().resetNetCounts();
         }
       } else {
         snprintf(messaging,sizeof(messaging),"Can only reset gross counts for Gateway (node 0)");

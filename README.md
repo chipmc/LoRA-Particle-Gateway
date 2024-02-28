@@ -152,6 +152,14 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 * {"cmd":[{"node":0,"var":"30","fn":"breakLengthMinutes"}]} - Changes the length (in minutes) for the 'break' on the Gateway
     * var can be any value 0-240
 
+**Weekend Break Start Hour**
+* {"cmd":[{"node":0,"var":"2","fn":"weekendBreak"}]} - Changes the break start hour for the Gateway - set to 24 to denote having no break
+    * var can be any value 0-24, set to 24 to denote having no break
+
+**Weekend Break Length Minutes**
+* {"cmd":[{"node":0,"var":"30","fn":"weekendBreakLengthMinutes"}]} - Changes the length (in minutes) for the 'break' on the Gateway
+    * var can be any value 0-240
+
 **Power Cycle**
 * {"cmd":[{"node":0,"var":"1","fn":"pwr"}]} - Forces a power cycle for the Gateway
     * var can *only* be 1 

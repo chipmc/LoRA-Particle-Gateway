@@ -96,6 +96,8 @@ public:
 		uint8_t closeTime;                                // Close time 24 hours
 		uint8_t breakTime;                                // Break time 24 hours, set this to 24 if no break time is needed for this gateway.
 		uint8_t breakLengthMinutes;                       // Break length 1-60 minutes.
+		uint8_t weekendBreakTime;                         // Break time 24 hours (weekends), set this to 24 if no break time is needed for this gateway.
+		uint8_t weekendBreakLengthMinutes;                // Break length 1-60 minutes (weekends).
 		uint8_t tokenCore;								  // This is the random part of the daily token
 	};
 	SysData sysData;
@@ -174,6 +176,12 @@ public:
 
 	uint8_t get_breakLengthMinutes() const;
 	void set_breakLengthMinutes(uint8_t value);
+
+	uint8_t get_weekendBreakTime() const;
+	void set_weekendBreakTime(uint8_t value);
+
+	uint8_t get_weekendBreakLengthMinutes() const;
+	void set_weekendBreakLengthMinutes(uint8_t value);
 
 	uint8_t get_tokenCore() const;
 	void set_tokenCore(uint8_t value);

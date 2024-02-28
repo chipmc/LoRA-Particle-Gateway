@@ -1,7 +1,7 @@
 /*
  * Project LoRA-Particle-Gateway
  * Description: This device will listen for data from client devices and forward the data to Particle via webhook
- * Author: Chip McClelland and Jeff Skarda
+ * Author: Chip McClelland, Jeff Skarda, Alex Bowen
  * Date: 7-28-22
  */
 
@@ -67,6 +67,7 @@
 // v19.4 	Changed all instances of Particle.publish() to PublishQueuePosix.instance().publish(). Properly cleared nodeDatabase values when calling setType
 // v20		New JSON fixes from JSON-Parser-Test integrated into the system. Conducted a lot of testing. Good results, and found/fixed a bug with current.openHours that caused loops of alert code 6.
 // v20.1	Added the getJsonString helper function to eliminate problems with the JSON->String->memory piece.
+// v21		Added a function layer by which any alert codes that set a value on a device ALSO set that value in the JSON database and update Ubidots so reflecting node state does not rely on data reports being sent. 
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -86,7 +87,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(20);								// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="20.0";
+char currentPointRelease[6] ="21.0";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -204,18 +205,25 @@ void loop() {
 				if (oldState != REPORTING_STATE) startLoRAWindow = millis();    // Mark when we enter this state - for timeouts - but multiple messages won't keep us here forever
 				publishStateTransition();                   					// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 				conv.withCurrentTime().convert();								// Get the time and convert to Local
-				if (conv.getLocalTimeHMS().hour >= sysStatus.get_openTime() && conv.getLocalTimeHMS().hour <= sysStatus.get_closeTime()) current.set_openHours(true);
-				else current.set_openHours(false);
+				if (current.get_openHours() == false && (conv.getLocalTimeHMS().hour >= sysStatus.get_openTime() && conv.getLocalTimeHMS().hour <= sysStatus.get_closeTime())) {
+					current.set_openHours(true);
+				} else if (current.get_openHours() == true){
+					current.set_openHours(false);
+					Room_Occupancy::instance().resetAllCounts();	// reset the room net AND gross counts at end of day for all occupancy nodes and update Ubidots
+				};
 				
+				// TODO:: Create a "CheckForInactiveSpaces" function to see if a space has been inactive for 60+minutes, 
+				//        then use the new v21 backend layer to reset the nodes in that space and update Ubidots
+
+				// TODO:: use weekend break as well when setting onBreak in the below logic
 				uint8_t breakLengthHours = (sysStatus.get_breakLengthMinutes() / 60); // break length can be up to 240 minutes, so figure out how many hours the break is
-				
 				if(sysStatus.get_breakTime() != 24){ // Ignore break functionality entirely if it is set to be 24. This means no break is needed for this gateway
 					if(conv.getLocalTimeHMS().hour >= sysStatus.get_breakTime() /* if the hour is after breakTime */ 
 					&& conv.getLocalTimeHMS().hour <= (sysStatus.get_breakTime() + breakLengthHours) /* and the hour is before the hour the break is over (if breakLengthMinutes >= 60) */ 
 					&& conv.getLocalTimeHMS().minute < (sysStatus.get_breakLengthMinutes() - (breakLengthHours*60))) /* and the minute is before the minute the break is over */{
 						if(current.get_onBreak() == 0) { 	// if we are not on break
-							current.set_onBreak(1);		 		// start the break.
-							Room_Occupancy::instance().resetRoomCounts();	// and reset the room counts
+							current.set_onBreak(1);		 		// start the break
+							Room_Occupancy::instance().resetNetCounts();	// reset the room net counts for all occupancy nodes and update Ubidots
 						}
 					} else if(current.get_onBreak() != 0) current.set_onBreak(0);	  // Otherwise, we are still not on break
 					

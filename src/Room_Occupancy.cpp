@@ -26,8 +26,12 @@ void Room_Occupancy::loop() {
   // Put your code to run during the application thread loop here
 }
 
-bool Room_Occupancy::resetRoomCounts() {
+bool Room_Occupancy::resetAllCounts() {
   return LoRA_Functions::instance().resetOccupancyCounts();                                                       
+}
+
+bool Room_Occupancy::resetNetCounts() {
+  return LoRA_Functions::instance().resetOccupancyNetCounts();                                                       
 }
 
 int Room_Occupancy::getRoomNet(int space) {

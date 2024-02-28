@@ -53,7 +53,6 @@ RHEncryptedDriver driver(rf95, myCipher);   // Class instance for Encrypted RFM9
 // Class to manage message delivery and receipt, using the driver declared above
 RHMesh manager(driver, GATEWAY_ADDRESS);
 
-
 // Mesh has much greater memory requirements, and you may need to limit the
 // max message length to prevent weird crashes
 #ifndef RH_MAX_MESSAGE_LEN
@@ -64,9 +63,6 @@ RHMesh manager(driver, GATEWAY_ADDRESS);
 // max message length to prevent wierd crashes
 // #define RH_MESH_MAX_MESSAGE_LEN 50
 uint8_t buf[RH_MESH_MAX_MESSAGE_LEN];               // Related to max message size - RadioHead example note: dont put this on the stack:
-
-// Saces the JSON string to memory using our JsonParser.
-bool saveNodeDatabase(JsonParser &jp);
 
 bool LoRA_Functions::setup(bool gatewayID) {
     // Set up the Radio Module
@@ -179,7 +175,7 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 
 			if (LoRA_Functions::instance().nodeConfigured(current.get_nodeNumber(), current.get_uniqueID())) {	// This will return true if the node is configured
 				Log.info("Node %d is configured but the token is invalid - resetting token", current.get_nodeNumber());
-				current.set_token(setNodeToken(current.get_nodeNumber()));	// This is a valid node number but the token is not valid - reset the token
+				current.set_token(setNodeToken(current.get_nodeNumber()));		// This is a valid node number but the token is not valid - reset the token
 			}
 			else {																// This is an unconfigured node - need to assign it a node number
 				current.set_tempNodeNumber(current.get_nodeNumber());			// Store node number in temp for the repsonse
@@ -194,8 +190,8 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 		else {Log.info("Invalid message flag, returning"); return false;}
 
 		// At this point the message is valid and has been deciphered - now we need to send a response - if there is a change in freuqency, it is applied here
-		if (sysStatus.get_updatedFrequencyMinutes() > 0) {              			// If we are to change the update frequency, we need to tell the nodes (or at least one node) about it.
-			sysStatus.set_frequencyMinutes(sysStatus.get_updatedFrequencyMinutes());// This was the temporary value from the particle function
+		if (sysStatus.get_updatedFrequencyMinutes() > 0) {              				// If we are to change the update frequency, we need to tell the nodes (or at least one node) about it.
+			sysStatus.set_frequencyMinutes(sysStatus.get_updatedFrequencyMinutes());	// This was the temporary value from the particle function
 			sysStatus.set_updatedFrequencyMinutes(0);
 			Log.info("We are updating the publish frequency to %i minutes", sysStatus.get_frequencyMinutes());
 		}
@@ -236,10 +232,28 @@ bool LoRA_Functions::decipherDataReportGateway() {			// Receives the data report
 
 	// Log.info("Data recieved from the report: sensorType %d, temp %d, battery %d, batteryState %d, resets %d, message count %d, RSSI %d, SNR %d", current.get_sensorType(), current.get_internalTempC(), current.get_stateOfCharge(), current.get_batteryState(), current.get_resetCount(), sysStatus.get_messageCount(), current.get_RSSI(), current.get_SNR());
 	
-	// update data in JSON if needed.
-	LoRA_Functions::instance().setJsonData1(current.get_nodeNumber(), current.get_sensorType(), static_cast<int16_t>(current.get_payload3() <<8 | current.get_payload4()));
-	LoRA_Functions::instance().setJsonData2(current.get_nodeNumber(), current.get_sensorType(), static_cast<int16_t>(current.get_payload1() <<8 | current.get_payload2()));
-	LoRA_Functions::instance().setLastReport(current.get_nodeNumber(), (int)Time.now());
+	// Type differentiated JSON updates 
+	switch (current.get_sensorType()) {
+		case 1 ... 9: {    						// Counter
+			// Update the node JSON for Counter sensorTypes here
+		} break;
+		case 10 ... 19: {   					// Occupancy
+			if(LoRA_Functions::instance().getAlertCode(current.get_nodeNumber()) != 0) {  // Don't update the node's occupancy counts if we have a queued alert, we should resolve that alert first. 
+				// Update the occupancy counts in the nodeJson
+				LoRA_Functions::instance().setJsonData1(current.get_nodeNumber(), current.get_sensorType(), static_cast<int16_t>(current.get_payload3() <<8 | current.get_payload4()));
+				LoRA_Functions::instance().setJsonData2(current.get_nodeNumber(), current.get_sensorType(), static_cast<int16_t>(current.get_payload1() <<8 | current.get_payload2()));
+			}
+		} break;
+		case 20 ... 29: {   					// Sensor
+			// Update the node JSON for Sensor sensorTypes here
+		} break;
+		default: {          		
+			Log.info("Unknown sensor type in decipherDataReportGateway %d",current.get_sensorType());
+			if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "Unknown sensor type in decipherDataReportGateway", PRIVATE);
+		} break;
+	}
+
+	LoRA_Functions::instance().setLastReport(current.get_nodeNumber(), (int)Time.now()); // save the timestamp of this report in the JSON
 
 	lora_state = DATA_ACK;		// Prepare to respond
 	return true;
@@ -251,6 +265,7 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 	if(current.get_onBreak()){ // if we are on break, respond based on sensor type
 		switch (current.get_sensorType()) {
 			case 1 ... 9: {    						// Counter
+				// Handle a break for Counter sensorTypes here
 			} break;
 			case 10 ... 19: {   					// Occupancy
 				if((current.get_payload3() <<8 | current.get_payload4()) != 0) { // if occupancyNet isn't zero
@@ -261,6 +276,7 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 				}
 			} break;
 			case 20 ... 29: {   					// Sensor
+				// Handle a break for Sensor sensorTypes here
 			} break;
 			default: {          		
 				Log.info("Unknown sensor type in acknowledgeDataReportGateway %d", current.get_sensorType());
@@ -431,11 +447,12 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	}
 }
 
-// ************************************************************************
-// **                     Node Management Functions                      **
-// ************************************************************************
+/************************************************************************
+ **                     Node Management Functions                      **
+ ************************************************************************
 
-/* NodeID JSON structure
+NodeID JSON structure
+
 {nodes:[
 	{
 		{node:(int)nodeNumber},
@@ -460,110 +477,9 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	....]
 }
 
-Let's try something new here:
-
 */
 
-// These functions access data in the nodeID JSON
-uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, uint32_t uniqueID) {
-	int index=1;															// Variables to hold values for the function
-	int nodeDeviceNumber;
-	uint32_t nodeDeviceID;
-	int sensorType = (int)current.get_sensorType();
-
-	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
-	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
-	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
-
-	for (int i = 0; i < 100; i++) {												// Iterate through the array looking for a match
-		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
-		if(nodeObjectContainer == NULL) {
-			Log.info("findNodeNumber ran out of entries at i = %d",i);
-			break;															// Ran out of entries - no match found
-		} 
-		jp.getValueByKey(nodeObjectContainer, "uID", nodeDeviceID);			// Get the deviceID and compare
-		if (nodeDeviceID == uniqueID) {
-			jp.getValueByKey(nodeObjectContainer, "node", nodeDeviceNumber);		// A match!
-			return nodeDeviceNumber;												// All is good - return node number for the deviceID passed to the function
-		}
-		index++;															// This will be the node number for the next node if no match is found
-	}
-	// If we got to here, the nodeID was not a match for any entry and a new nodeNumer will be assigned
-	nodeNumber = index;
-	JsonModifier mod(jp);
-
-	Log.info("New node will be assigned node number %d, nodeID of %lu ", nodeNumber, uniqueID);
-
-	// Create node database entry
-	mod.startAppend(jp.getOuterArray());
-		mod.startObject();
-		mod.insertKeyValue("node", nodeNumber);
-		mod.insertKeyValue("uID", uniqueID);
-		mod.insertKeyValue("type", sensorType);			// This is the sensor type reported by the node			
-		mod.insertKeyValue("p",(int)0);
-		mod.insertKeyValue("pend",(int)0);
-		mod.insertKeyValue("cont",(int)0);
-		mod.insertKeyValue("lrep",(int)Time.now());
-		mod.insertKeyValue("jd1",(int)0);	
-		mod.insertKeyValue("jd2",(int)0);
-		mod.finishObjectOrArray();
-	mod.finish();
-
-	bool result = saveNodeDatabase(jp);									// This should backup the nodeID database - now updated to persistent storage
-
-	// Set the configuration settings from the join payload into the new database entry
-	LoRA_Functions::instance().setJoinPayload(nodeNumber);
-
-	if (!result) {
-		if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "set_nodeIDJson failed to add a node to the database!!", PRIVATE);
-	}
-
-	return index;
-}
-
-
-bool LoRA_Functions::nodeConfigured(int nodeNumber, uint32_t uniqueID)  {	// node is 'configured' if a uniqueID for it exists in the payload is set
-	if (nodeNumber == 0 || nodeNumber == 255) return false;
-
-	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
-	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
-	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
-
-	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
-	if(nodeObjectContainer == NULL) { 
-		Log.info("Ran out of entries in node database - nodeConfigured object parsing");
-		return false;								// Ran out of entries 
-	}							// Ran out of entries - no match found
-	
-	jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);					// Get the uniqueID for the node number in question
-
-	if (uniqueID == current.get_uniqueID()) return true;
-	else {
-		Log.info("Node number is found but uniqueID is not a match - nodeConfigured");  // See the raw JSON string
-		return false;
-	}
-}
-
-bool LoRA_Functions::uniqueIDExistsInDatabase(uint32_t uniqueID)  {			// node is 'configured' if a uniqueID for it exists in the payload is set
-	uint32_t nodeDeviceID;
-	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
-	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
-	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
-
-	for (int i = 0; i < 100; i++) {												// Iterate through the array looking for a match
-		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
-		if(nodeObjectContainer == NULL) {
-			Log.info("uniqueIDExistsInDatabase ran out of entries at i = %d",i);
-			break;															// Ran out of entries - no match found
-		} 
-		jp.getValueByKey(nodeObjectContainer, "uID", nodeDeviceID);			// Get the deviceID and compare
-		if (nodeDeviceID == uniqueID) {										// A match!		
-			Log.info("uniqueIDExistsInDatabase returned true");
-			return true;													// All is good - return node number for the deviceID passed to the function
-		}
-	}
-	return false;
-}
+// These functions interact with data in the nodeID JSON
 
 byte LoRA_Functions::getType(int nodeNumber) {
 	int type;
@@ -613,32 +529,6 @@ bool LoRA_Functions::setType(int nodeNumber, int newType) {
 	mod.insertOrUpdateKeyValue(nodeObjectContainer, "jd2",(int)0);
 
 	return true;
-}
-
-byte LoRA_Functions::getNodeNumberForUniqueID(uint32_t uniqueID) {
-	int nodeNumber;
-	int index = 1;
-	uint32_t nodeDeviceID;
-	Log.info("searching array for node with unique id = %lu", uniqueID);
-	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
-	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
-	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
-
-	for (int i = 0; i < 100; i++) {												// Iterate through the array looking for a match
-		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
-		if(nodeObjectContainer == NULL) {
-			Log.info("getNodeNumberForUniqueID ran out of entries at i = %d",i);
-			break;															// Ran out of entries - no match found
-		} 
-		jp.getValueByKey(nodeObjectContainer, "uID", nodeDeviceID);			// Get the deviceID and compare
-		Log.info("comparing id %lu to uniqueID %lu", nodeDeviceID, uniqueID);
-		if (nodeDeviceID == uniqueID) {
-			jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);		// A match!
-			return nodeNumber;												// All is good - return node number for the deviceID passed to the function
-		}
-		index++;															// This will be the node number for the next node if no match is found
-	}
-	return 0;
 }
 
 bool LoRA_Functions::getJoinPayload(uint8_t nodeNumber) {
@@ -731,27 +621,6 @@ byte LoRA_Functions::getAlertCode(int nodeNumber) {
 	return pendingAlert;
 }
 
-uint16_t LoRA_Functions::getAlertContext(int nodeNumber) {
-	if (nodeNumber == 0 || nodeNumber == 255) return 255;					// Not a configured node
-
-	// This function returns the pending alert context for the node - if there is one
-	int pendingAlertContext;
-
-	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
-	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
-	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
-
-	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
-	if(nodeObjectContainer == NULL) {
-		Log.info("From getAlertContext function, Node number not found");
-		return 255;															// Ran out of entries 
-	} 
-
-	jp.getValueByKey(nodeObjectContainer, "cont", pendingAlertContext);
-
-	return pendingAlertContext;
-}
-
 bool LoRA_Functions::setAlertCode(int nodeNumber, int newAlert) {
 	if (nodeNumber == 0 || nodeNumber == 255) return false;
 	int currentAlert;
@@ -775,6 +644,27 @@ bool LoRA_Functions::setAlertCode(int nodeNumber, int newAlert) {
 	saveNodeDatabase(jp);						
 
 	return true;
+}
+
+uint16_t LoRA_Functions::getAlertContext(int nodeNumber) {
+	if (nodeNumber == 0 || nodeNumber == 255) return 255;					// Not a configured node
+
+	// This function returns the pending alert context for the node - if there is one
+	int pendingAlertContext;
+
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
+	if(nodeObjectContainer == NULL) {
+		Log.info("From getAlertContext function, Node number not found");
+		return 255;															// Ran out of entries 
+	} 
+
+	jp.getValueByKey(nodeObjectContainer, "cont", pendingAlertContext);
+
+	return pendingAlertContext;
 }
 
 bool LoRA_Functions::setAlertContext(int nodeNumber, int newAlertContext) {
@@ -802,87 +692,12 @@ bool LoRA_Functions::setAlertContext(int nodeNumber, int newAlertContext) {
 	return true;
 }
 
-void LoRA_Functions::printNodeData(bool publish) {
-	int nodeNumber;
-	uint32_t uniqueID;
-	int sensorType;
-	uint8_t  payload1;
-	uint8_t  payload2;
-	uint8_t  payload3;
-	uint8_t  payload4;
-	int compressedJoinPayload;
-	int pendingAlertCode;
-	int pendingAlertContext;
-	int jsonData1;
-	int jsonData2;
-	int lastReport;
-	char data[622];  // max size
-
-	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
-	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
-	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
-
-	for (int i = 0; i < 100; i++) {												// Iterate through the array looking for a match
-		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
-		if(nodeObjectContainer == NULL) {
-			break;								// Ran out of entries 
-		} 
-		jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);
-		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);
-		jp.getValueByKey(nodeObjectContainer, "type", sensorType);
-		jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);
-		jp.getValueByKey(nodeObjectContainer, "pend", pendingAlertCode);
-		jp.getValueByKey(nodeObjectContainer, "cont", pendingAlertContext);
-		jp.getValueByKey(nodeObjectContainer, "jd1", jsonData1);
-		jp.getValueByKey(nodeObjectContainer, "jd2", jsonData2);
-		jp.getValueByKey(nodeObjectContainer, "lrep", lastReport);
-
-		LoRA_Functions::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4);
-
-		// Type differentiated console printing
-		switch (sensorType) {
-			case 1 ... 9: {    						// Counter
-				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d", nodeNumber, uniqueID, sensorType, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, lastReport);
-			} break;
-			case 10 ... 19: {   					// Occupancy
-				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, net %d, gross %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d", nodeNumber, uniqueID, sensorType, jsonData1, jsonData2, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, lastReport);
-			} break;
-			case 20 ... 29: {   					// Sensor
-				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d", nodeNumber, uniqueID, sensorType, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, lastReport);
-			} break;
-			default: {          		
-				Log.info("Unknown sensor type in printNodeData %d", sensorType);
-				if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "Unknown sensor type in printNodeData", PRIVATE);
-			} break;
-    	}
-
-		Log.info(data);
-		if (Particle.connected() && publish) {
-			PublishQueuePosix::instance().publish("nodeData", data, PRIVATE);
-			delay(1000);
-		}
-	}
-	Log.info(nodeDatabase.get_nodeIDJson());  // See the raw JSON string
-}
-
-bool LoRA_Functions::checkForValidToken(uint8_t nodeNumber, uint16_t token) {
-	if (nodeNumber == 0 || nodeNumber == 255) return false;
-	Log.info("Checking for a valid token - nodeNumber %d, token %d, tokenCore %d", nodeNumber, token, sysStatus.get_tokenCore());
-
-	if (token / sysStatus.get_tokenCore() == nodeNumber) {
-		Log.info("Token is valid");
-		return true;
-	}
-	else return false;
-}
-
 uint16_t LoRA_Functions::setNodeToken(uint8_t nodeNumber) {
 	if (nodeNumber == 0 || nodeNumber == 255) return 0;
 	uint16_t token = sysStatus.get_tokenCore() * nodeNumber;	// This is the token for the node - it is a function of the core token and the day of the month
 	Log.info("Setting token for node %d to %d", nodeNumber, token);
 	return token;
 }
-
 
 bool LoRA_Functions::setJsonData1(int nodeNumber, int sensorType, int newJsonData1) {
 	if (nodeNumber == 0 || nodeNumber == 255) return false;
@@ -913,7 +728,7 @@ bool LoRA_Functions::setJsonData1(int nodeNumber, int sensorType, int newJsonDat
 
 bool LoRA_Functions::setJsonData2(int nodeNumber, int sensorType, int newJsonData2) {
 	if (nodeNumber == 0 || nodeNumber == 255) return false;
-	if (sensorType < 10 || sensorType > 19) return false; 					// Return false if node is not an occupancy counter
+	if (sensorType > 29) return false; 					// Return false if node is not a valid sensor type
 
 	int jsonData2;
 
@@ -930,10 +745,6 @@ bool LoRA_Functions::setJsonData2(int nodeNumber, int sensorType, int newJsonDat
 	jp.getValueByKey(nodeObjectContainer, "jd2", jsonData2);
 
 	Log.info("Updating jsonData2 value from %d to %d", jsonData2, newJsonData2);
-
-	const JsonParserGeneratorRK::jsmntok_t *value;
-
-	jp.getValueTokenByKey(nodeObjectContainer, "jd2", value);
 
 	JsonModifier mod(jp);
 	mod.insertOrUpdateKeyValue(nodeObjectContainer, "jd2", (int)newJsonData2);
@@ -960,11 +771,7 @@ bool LoRA_Functions::setLastReport(int nodeNumber, int newLastReport) {
 
 	jp.getValueByKey(nodeObjectContainer, "lrep", lastReport);
 
-	Log.info("Updating jsonData2 value from %d to %d", lastReport, newLastReport);
-
-	const JsonParserGeneratorRK::jsmntok_t *value;
-
-	jp.getValueTokenByKey(nodeObjectContainer, "lrep", value);
+	Log.info("Updating lastReport value from %d to %d", lastReport, newLastReport);
 
 	JsonModifier mod(jp);
 	mod.insertOrUpdateKeyValue(nodeObjectContainer, "lrep", (int)newLastReport);
@@ -978,7 +785,6 @@ bool LoRA_Functions::setLastReport(int nodeNumber, int newLastReport) {
 /**********************************************************************
  **           Occupancy Specific Node Management Functions           **
  **********************************************************************/
-
 
 uint16_t LoRA_Functions::getOccupancyNetBySpace(int space) {
 	char message[256];
@@ -1075,7 +881,7 @@ uint16_t LoRA_Functions::getOccupancyGrossBySpace(int space) {
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
 	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
 
-	for (int i = 0; i < 100; i++) {												// Iterate through the array looking for a match
+	for (int i = 0; i < 100; i++) {											// Iterate through the array looking for a match
 		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
 		if(nodeObjectContainer == NULL) {
 			break;															// Ran out of entries, break
@@ -1093,32 +899,85 @@ uint16_t LoRA_Functions::getOccupancyGrossBySpace(int space) {
 	return occupancyGrossTotal;
 }
 
-bool LoRA_Functions::resetOccupancyCounts(){
-	int nodeNumber;
+bool LoRA_Functions::setOccupancyNetForNode(int nodeNumber, int newOccupancyNet){
+	if (nodeNumber == 0 || nodeNumber == 255) return false;					// return false if node not configured
+
 	int sensorType;
 	uint32_t uniqueID;
 	char message[256];
-	bool result;
+	bool result = 0;
 	uint8_t payload1;
 	uint8_t payload2;
 	uint8_t payload3;
 	uint8_t payload4;
 	int compressedJoinPayload;
 
-	Log.info("Resetting occupancy counts");
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
 	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
 
-	for (int i = 0; i < 100; i++) {												// Iterate through the array looking for a match
+	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
+	if(nodeObjectContainer == NULL) { 
+		Log.info("Ran out of entries in node database - setOccupancyNetForNode object parsing");
+		return false;								// Ran out of entries 
+	}
+
+	jp.getValueByKey(nodeObjectContainer, "type", sensorType);  		// Get the sensorType
+	jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);  			// Get the uniqueID
+	jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
+	LoRA_Functions::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
+
+	if(sensorType < 10 || sensorType > 19){		// ignore nodes that are not occupancy sensors and throw an alert	
+		snprintf(message, sizeof(message), "Node is not an occupancy node - setOccupancyNetForNode. uID: %lu", uniqueID);
+		Log.info(message);
+		if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);
+		return false;
+	}
+
+	result = LoRA_Functions::instance().setAlertCode(nodeNumber, 12);         			  /*** Queue up an alert code with alert context ***/
+	result = LoRA_Functions::instance().setAlertContext(nodeNumber, newOccupancyNet);  	  /*** These will be set to current in the Data Acknowledgement message ***/
+	if(result) {
+		LoRA_Functions::instance().setJsonData1(nodeNumber, sensorType, newOccupancyNet);   /*** Set the nodeDatabase representation to 0 as well ***/
+		// Update Ubidots preemptively with battery = -10. This is interpreted by UpdateGatewayNodesAndSpaces as "set the occupancyNet value only"
+		snprintf(message, sizeof(message), "{\"nodeUniqueID\":\"%lu\",\"battery\":%d,\"space\":%d,\"spaceNet\":%d,\"spaceGross\":%d}",\
+		uniqueID, -10, payload1 + 1, Room_Occupancy::instance().getRoomNet(payload1), Room_Occupancy::instance().getRoomGross(payload1));
+		PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v2", message, PRIVATE | WITH_ACK);
+	}
+	else {	// if we failed to set the alert for this node, throw an Alert to particle
+		snprintf(message, sizeof(message), "Node not reset due to failure in setAlertCode or setAlertContext. uID: %lu", uniqueID);
+		Log.info(message);
+		if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);
+	}
+
+	return true;
+}
+
+bool LoRA_Functions::resetOccupancyNetCounts(){
+	int nodeNumber;
+	int sensorType;
+	uint32_t uniqueID;
+	char message[256];
+	bool result = 0;
+	uint8_t payload1;
+	uint8_t payload2;
+	uint8_t payload3;
+	uint8_t payload4;
+	int compressedJoinPayload;
+
+	Log.info("Resetting occupancy net counts");
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	for (int i = 0; i < 100; i++) {											// Iterate through the array looking for a match
 		result = true;
 		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
 		if(nodeObjectContainer == NULL) {
 			break;															// Ran out of entries - no match found
 		} 
-		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);  		// Get the compressedJoinPayload
-		jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);  			// Get the compressedJoinPayload
+		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);  		// Get the nodeNumber
 		jp.getValueByKey(nodeObjectContainer, "type", sensorType);  		// Get the sensorType
+		jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);  			// Get the uniqueID
 		jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
 		LoRA_Functions::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
 		result = LoRA_Functions::instance().setAlertCode(nodeNumber, 12);         /*** Queue up an alert code with alert context ***/
@@ -1139,11 +998,476 @@ bool LoRA_Functions::resetOccupancyCounts(){
 	return true;
 }
 
+bool LoRA_Functions::resetOccupancyCounts(){
+	int nodeNumber;
+	int sensorType;
+	uint32_t uniqueID;
+	char message[256];
+	bool result = 0;
+	uint8_t payload1;
+	uint8_t payload2;
+	uint8_t payload3;
+	uint8_t payload4;
+	int compressedJoinPayload;
+
+	Log.info("Resetting occupancy counts");
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	for (int i = 0; i < 100; i++) {											// Iterate through the array looking for a match
+		result = true;
+		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
+		if(nodeObjectContainer == NULL) {
+			break;															// Ran out of entries - no match found
+		} 
+		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);  		// Get the nodeNumber
+		jp.getValueByKey(nodeObjectContainer, "type", sensorType);  		// Get the sensorType
+		jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);  			// Get the uniqueID
+		jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
+		LoRA_Functions::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
+		result = LoRA_Functions::instance().setAlertCode(nodeNumber, 6);         /*** Queue up an alert code with alert context ***/
+		if(result) {
+			LoRA_Functions::instance().setJsonData1(nodeNumber, sensorType, 0);   /*** Set the nodeDatabase representation to 0 as well ***/
+			LoRA_Functions::instance().setJsonData2(nodeNumber, sensorType, 0);   /*** Set the nodeDatabase representation to 0 as well ***/
+			// Update Ubidots preemptively with battery = -10. This is interpreted by UpdateGatewayNodesAndSpaces as "set the occupancyNet value only"
+			snprintf(message, sizeof(message), "{\"nodeUniqueID\":\"%lu\",\"battery\":%d,\"space\":%d,\"spaceNet\":%d,\"spaceGross\":%d}",\
+			uniqueID, -10, payload1 + 1, Room_Occupancy::instance().getRoomNet(payload1), Room_Occupancy::instance().getRoomGross(payload1));
+			PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v2", message, PRIVATE | WITH_ACK);
+		}
+		else {	// if we failed to set the alert for this node, throw an Alert to particle
+			snprintf(message, sizeof(message), "Node not reset due to failure in setAlertCode or setAlertContext. uID: %lu", uniqueID);
+			Log.info(message);
+			if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);
+		}
+	}
+	return true;
+}
+
+
+/**********************************************************************
+ **                         Helper Functions                         **
+ **********************************************************************/
+
+void LoRA_Functions::printNodeData(bool publish) {
+	int nodeNumber;
+	uint32_t uniqueID;
+	int sensorType;
+	uint8_t  payload1;
+	uint8_t  payload2;
+	uint8_t  payload3;
+	uint8_t  payload4;
+	int compressedJoinPayload;
+	int pendingAlertCode;
+	int pendingAlertContext;
+	int jsonData1;
+	int jsonData2;
+	int lastReport;
+	char data[622];  // max size
+
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	for (int i = 0; i < 100; i++) {												// Iterate through the array looking for a match
+		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
+		if(nodeObjectContainer == NULL) {
+			break;								// Ran out of entries 
+		} 
+		jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);
+		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);
+		jp.getValueByKey(nodeObjectContainer, "type", sensorType);
+		jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);
+		jp.getValueByKey(nodeObjectContainer, "pend", pendingAlertCode);
+		jp.getValueByKey(nodeObjectContainer, "cont", pendingAlertContext);
+		jp.getValueByKey(nodeObjectContainer, "jd1", jsonData1);
+		jp.getValueByKey(nodeObjectContainer, "jd2", jsonData2);
+		jp.getValueByKey(nodeObjectContainer, "lrep", lastReport);
+
+		LoRA_Functions::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4);
+
+		// Type differentiated console printing
+		switch (sensorType) {
+			case 1 ... 9: {    						// Counter
+				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d", nodeNumber, uniqueID, sensorType, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, lastReport);
+			} break;
+			case 10 ... 19: {   					// Occupancy
+				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, net %d, gross %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d", nodeNumber, uniqueID, sensorType, jsonData1, jsonData2, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, lastReport);
+			} break;
+			case 20 ... 29: {   					// Sensor
+				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d", nodeNumber, uniqueID, sensorType, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, lastReport);
+			} break;
+			default: {          		
+				Log.info("Unknown sensor type in printNodeData %d", sensorType);
+				if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "Unknown sensor type in printNodeData", PRIVATE);
+			} break;
+    	}
+
+		Log.info(data);
+		if (Particle.connected() && publish) {
+			PublishQueuePosix::instance().publish("nodeData", data, PRIVATE);
+			delay(1000);
+		}
+	}
+	Log.info(nodeDatabase.get_nodeIDJson());  // See the raw JSON string
+}
+
+uint8_t LoRA_Functions::findNodeNumber(int nodeNumber, uint32_t uniqueID) {
+	int index=1;															// Variables to hold values for the function
+	int nodeDeviceNumber;
+	uint32_t nodeDeviceID;
+	int sensorType = (int)current.get_sensorType();
+
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	for (int i = 0; i < 100; i++) {												// Iterate through the array looking for a match
+		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
+		if(nodeObjectContainer == NULL) {
+			Log.info("findNodeNumber ran out of entries at i = %d",i);
+			break;															// Ran out of entries - no match found
+		} 
+		jp.getValueByKey(nodeObjectContainer, "uID", nodeDeviceID);			// Get the deviceID and compare
+		if (nodeDeviceID == uniqueID) {
+			jp.getValueByKey(nodeObjectContainer, "node", nodeDeviceNumber);		// A match!
+			return nodeDeviceNumber;												// All is good - return node number for the deviceID passed to the function
+		}
+		index++;															// This will be the node number for the next node if no match is found
+	}
+	// If we got to here, the nodeID was not a match for any entry and a new nodeNumer will be assigned
+	nodeNumber = index;
+	JsonModifier mod(jp);
+
+	Log.info("New node will be assigned node number %d, nodeID of %lu ", nodeNumber, uniqueID);
+
+	// Create node database entry
+	mod.startAppend(jp.getOuterArray());
+		mod.startObject();
+		mod.insertKeyValue("node", nodeNumber);
+		mod.insertKeyValue("uID", uniqueID);
+		mod.insertKeyValue("type", sensorType);			// This is the sensor type reported by the node			
+		mod.insertKeyValue("p",(int)0);
+		mod.insertKeyValue("pend",(int)0);
+		mod.insertKeyValue("cont",(int)0);
+		mod.insertKeyValue("lrep",(int)Time.now());
+		mod.insertKeyValue("jd1",(int)0);	
+		mod.insertKeyValue("jd2",(int)0);
+		mod.finishObjectOrArray();
+	mod.finish();
+
+	bool result = saveNodeDatabase(jp);									// This should backup the nodeID database - now updated to persistent storage
+
+	// Set the configuration settings from the join payload into the new database entry
+	LoRA_Functions::instance().setJoinPayload(nodeNumber);
+
+	if (!result) {
+		if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "set_nodeIDJson failed to add a node to the database!!", PRIVATE);
+	}
+
+	return index;
+}
+
+bool LoRA_Functions::nodeConfigured(int nodeNumber, uint32_t uniqueID)  {	// node is 'configured' if a uniqueID for it exists in the payload is set
+	if (nodeNumber == 0 || nodeNumber == 255) return false;
+
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
+	if(nodeObjectContainer == NULL) { 
+		Log.info("Ran out of entries in node database - nodeConfigured object parsing");
+		return false;								// Ran out of entries 
+	}							// Ran out of entries - no match found
+	
+	jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);					// Get the uniqueID for the node number in question
+
+	if (uniqueID == current.get_uniqueID()) return true;
+	else {
+		Log.info("Node number is found but uniqueID is not a match - nodeConfigured");  // See the raw JSON string
+		return false;
+	}
+}
+
+bool LoRA_Functions::checkForValidToken(uint8_t nodeNumber, uint16_t token) {
+	if (nodeNumber == 0 || nodeNumber == 255) return false;
+	Log.info("Checking for a valid token - nodeNumber %d, token %d, tokenCore %d", nodeNumber, token, sysStatus.get_tokenCore());
+
+	if (token / sysStatus.get_tokenCore() == nodeNumber) {
+		Log.info("Token is valid");
+		return true;
+	}
+	else return false;
+}
+
+bool LoRA_Functions::uniqueIDExistsInDatabase(uint32_t uniqueID)  {			// node is 'configured' if a uniqueID for it exists in the payload is set
+	uint32_t nodeDeviceID;
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	for (int i = 0; i < 100; i++) {												// Iterate through the array looking for a match
+		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
+		if(nodeObjectContainer == NULL) {
+			Log.info("uniqueIDExistsInDatabase ran out of entries at i = %d",i);
+			break;															// Ran out of entries - no match found
+		} 
+		jp.getValueByKey(nodeObjectContainer, "uID", nodeDeviceID);			// Get the deviceID and compare
+		if (nodeDeviceID == uniqueID) {										// A match!		
+			Log.info("uniqueIDExistsInDatabase returned true");
+			return true;													// All is good - return node number for the deviceID passed to the function
+		}
+	}
+	return false;
+}
+
+byte LoRA_Functions::getNodeNumberForUniqueID(uint32_t uniqueID) {
+	int nodeNumber;
+	int index = 1;
+	uint32_t nodeDeviceID;
+	Log.info("searching array for node with unique id = %lu", uniqueID);
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	for (int i = 0; i < 100; i++) {												// Iterate through the array looking for a match
+		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
+		if(nodeObjectContainer == NULL) {
+			Log.info("getNodeNumberForUniqueID ran out of entries at i = %d",i);
+			break;															// Ran out of entries - no match found
+		} 
+		jp.getValueByKey(nodeObjectContainer, "uID", nodeDeviceID);			// Get the deviceID and compare
+		Log.info("comparing id %lu to uniqueID %lu", nodeDeviceID, uniqueID);
+		if (nodeDeviceID == uniqueID) {
+			jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);		// A match!
+			return nodeNumber;												// All is good - return node number for the deviceID passed to the function
+		}
+		index++;															// This will be the node number for the next node if no match is found
+	}
+	return 0;
+}
+
+bool LoRA_Functions::resetSpace(int space){
+	char message[256];
+	uint32_t uniqueID;
+	int sensorType;
+	int nodeNumber;
+	uint8_t payload1;
+	uint8_t payload2;
+	uint8_t payload3;
+	uint8_t payload4;
+	int compressedJoinPayload;
+	bool result = 0;
+	
+	Log.info("Searching JSON database for nodes with space == %d - resetSpace", space);
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	for (int i = 0; i < 100; i++) {											// Iterate through the array looking for a match
+		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
+		if(nodeObjectContainer == NULL) {
+			snprintf(message, sizeof(message), "No nodes found with space = %d", space + 1);
+			Log.info(message);
+			if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);
+			return false;													// Ran out of entries, return false
+		} 
+		jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
+		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);  		// Get the sensorType
+		jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);  			// Get the uniqueID
+		jp.getValueByKey(nodeObjectContainer, "type", sensorType);  		// Get the sensorType
+		LoRA_Functions::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
+		if (payload1 == space) {
+			// Reset the node in the space based on the node's sensorType
+			switch (sensorType) {
+				case 1 ... 9: {    						// Counter
+					// Do nothing (devices with Counter sensorTypes do not have a "space" in their payload - see README)
+				} break;
+				case 10 ... 19: {   					// Occupancy
+					result = LoRA_Functions::instance().setAlertCode(nodeNumber, 12);         /*** Queue up an alert code with alert context ***/
+					result = LoRA_Functions::instance().setAlertContext(nodeNumber, 0);  	  /*** These will be set to current in the Data Acknowledgement message ***/
+					if(result){
+						LoRA_Functions::instance().setJsonData1(nodeNumber, sensorType, 0);   // Set the JsonData1 to 0 for the node (occupancyNet)
+						// Send with battery = -10. This is interpreted by UpdateGatewayNodesAndSpaces as "set the occupancyNet value only", which we set to 0
+						snprintf(message, sizeof(message), "{\"nodeUniqueID\":\"%lu\",\"battery\":%d,\"space\":%d,\"spaceNet\":%d,\"spaceGross\":%d}",\
+						uniqueID, -10, payload1 + 1, Room_Occupancy::instance().getRoomNet(payload1), Room_Occupancy::instance().getRoomGross(payload1));
+						PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v2", message, PRIVATE | WITH_ACK);
+					} else {	// if we failed to set the alert for this node, throw an Alert to particle
+						snprintf(message, sizeof(message), "Node not reset due to failure in setAlertCode or setAlertContext. uID: %lu", uniqueID);
+						Log.info(message);
+						if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);
+						return false;
+					}					
+				} break;
+				case 20 ... 29: {   					// Sensor
+					// Reset Sensor nodes in the space here
+				} break;
+				default: {          		
+					Log.info("Unknown sensor type in resetSpace %d", sensorType);
+					if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "Unknown sensor type in resetSpace", PRIVATE);
+					return false;
+				} break;
+			}
+		}
+	}
+	return true;
+}
+
+bool LoRA_Functions::resetCurrentDataForNode(int nodeNumber){
+	if (nodeNumber == 0 || nodeNumber == 255) return false;					// return false if node not configured
+
+	int sensorType;
+	uint32_t uniqueID;
+	char message[256];
+	bool result = 0;
+	uint8_t payload1;
+	uint8_t payload2;
+	uint8_t payload3;
+	uint8_t payload4;
+	int compressedJoinPayload;
+
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
+	if(nodeObjectContainer == NULL) { 
+		Log.info("Ran out of entries in node database - resetCurrentDataForNode object parsing");
+		return false;								// Ran out of entries 
+	}
+
+	jp.getValueByKey(nodeObjectContainer, "type", sensorType);  		// Get the sensorType
+	jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);  			// Get the uniqueID
+	jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
+	LoRA_Functions::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
+
+	switch (sensorType) {
+		case 1 ... 9: {    						// Counter
+			// Reset Counter sensorType here
+		} break;
+		case 10 ... 19: {   					// Occupancy
+			result = LoRA_Functions::instance().setAlertCode(nodeNumber, 6);         /*** Queue up an alert code with alert context ***/
+			if(result){
+				LoRA_Functions::instance().setJsonData1(nodeNumber, sensorType, 0);   // Set the JsonData1 to 0 for the node (occupancyNet)
+				LoRA_Functions::instance().setJsonData2(nodeNumber, sensorType, 0);   // Set the JsonData1 to 0 for the node (occupancyGross)
+				// Send with battery = -10. This is interpreted by UpdateGatewayNodesAndSpaces as "set the occupancyNet value only", which we set to 0
+				snprintf(message, sizeof(message), "{\"nodeUniqueID\":\"%lu\",\"battery\":%d,\"space\":%d,\"spaceNet\":%d,\"spaceGross\":%d}",\
+				uniqueID, -10, payload1 + 1, Room_Occupancy::instance().getRoomNet(payload1), Room_Occupancy::instance().getRoomGross(payload1));
+				PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v2", message, PRIVATE | WITH_ACK);
+			} else {	// if we failed to set the alert for this node, throw an Alert to particle
+				snprintf(message, sizeof(message), "Node not reset due to failure in setAlertCode. uID: %lu", uniqueID);
+				Log.info(message);
+				if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);
+				return false;
+			}					
+		} break;
+		case 20 ... 29: {   					// Sensor
+			// Reset Sensor sensorType here
+		} break;
+		default: {          		
+			Log.info("Unknown sensor type in resetCurrentDataForNode %d", sensorType);
+			if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "Unknown sensor type in resetCurrentDataForNode", PRIVATE);
+			return false;
+		} break;
+	}
+
+	return true;
+}
+
+bool LoRA_Functions::resetAllDataForNode(int nodeNumber){
+	if (nodeNumber == 0 || nodeNumber == 255) return false;					// return false if node not configured
+
+	int sensorType;
+	uint32_t uniqueID;
+	char message[256];
+	bool result = 0;
+	uint8_t payload1;
+	uint8_t payload2;
+	uint8_t payload3;
+	uint8_t payload4;
+	int compressedJoinPayload;
+
+	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
+	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
+
+	nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, nodeNumber-1);
+	if(nodeObjectContainer == NULL) { 
+		Log.info("Ran out of entries in node database - resetAllDataForNode object parsing");
+		return false;								// Ran out of entries 
+	}
+
+	jp.getValueByKey(nodeObjectContainer, "type", sensorType);  		// Get the sensorType
+	jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);  			// Get the uniqueID
+	jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
+	LoRA_Functions::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
+
+	switch (sensorType) {
+		case 1 ... 9: {    						// Counter
+			// Reset Counter sensorType here
+		} break;
+		case 10 ... 19: {   					// Occupancy
+			result = LoRA_Functions::instance().setAlertCode(nodeNumber, 6);         /*** Queue up an alert code with alert context ***/
+			if(result){
+				LoRA_Functions::instance().setJsonData1(nodeNumber, sensorType, 0);   // Set the JsonData1 to 0 for the node (occupancyNet)
+				LoRA_Functions::instance().setJsonData2(nodeNumber, sensorType, 0);   // Set the JsonData1 to 0 for the node (occupancyGross)
+				// Send with battery = -10. This is interpreted by UpdateGatewayNodesAndSpaces as "set the occupancyNet value only", which we set to 0
+				snprintf(message, sizeof(message), "{\"nodeUniqueID\":\"%lu\",\"battery\":%d,\"space\":%d,\"spaceNet\":%d,\"spaceGross\":%d}",\
+				uniqueID, -10, payload1 + 1, Room_Occupancy::instance().getRoomNet(payload1), Room_Occupancy::instance().getRoomGross(payload1));
+				PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v2", message, PRIVATE | WITH_ACK);
+			} else {	// if we failed to set the alert for this node, throw an Alert to particle
+				snprintf(message, sizeof(message), "Node not reset due to failure in setAlertCode. uID: %lu", uniqueID);
+				Log.info(message);
+				if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);
+				return false;
+			}					
+		} break;
+		case 20 ... 29: {   					// Sensor
+			// Reset Sensor sensorType here
+		} break;
+		default: {          		
+			Log.info("Unknown sensor type in resetAllDataForNode %d", sensorType);
+			if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "Unknown sensor type in resetAllDataForNode", PRIVATE);
+			return false;
+		} break;
+	}
+
+	return true;
+}
+
+bool LoRA_Functions::saveNodeDatabase(JsonParser &jp) {
+    // The first token is the outer object - here we get the total size of the object
+    JsonParserGeneratorRK::jsmntok_t *tok = jp.getTokens();
+    
+    // Allocate memory for tempBuf dynamically
+    char *tempBuf = (char*)malloc(tok->end - tok->start + 1);
+
+    // Check if memory allocation was successful
+    if (tempBuf != nullptr) {
+        // Copy the content to tempBuf
+        memcpy(tempBuf, jp.getBuffer() + tok->start, tok->end - tok->start);
+        
+        // Null-terminate the string
+        tempBuf[tok->end - tok->start] = '\0';
+
+        // Return the dynamically allocated string and save it
+		nodeDatabase.set_nodeIDJson(tempBuf);									// This should backup the nodeID database - now updated to persistent storage
+		nodeDatabase.flush(false);
+
+		free(tempBuf);															// Free the memory (good practice)
+        return true;
+    } else {
+        return "Memory allocation failure!!";
+		return false;
+    }
+}
+
+
 
 /**********************************************************************
  **                         Data Compression                         **
  **********************************************************************/
-
 
 uint8_t LoRA_Functions::getCompressedJoinPayload(uint8_t sensorType) {
     uint8_t data[4] = {0};
@@ -1261,36 +1585,5 @@ void LoRA_Functions::decompressData(uint8_t compressedData, uint8_t data[], uint
     for (uint8_t i = 0; i < 4; ++i) {
         data[i] = (compressedData >> bitOffset) & ((1 << bitSizes[i]) - 1);
         bitOffset += bitSizes[i];
-    }
-}
-
-/**********************************************************************
- **                         Helper Functions                         **
- **********************************************************************/
-
-bool saveNodeDatabase(JsonParser &jp) {
-    // The first token is the outer object - here we get the total size of the object
-    JsonParserGeneratorRK::jsmntok_t *tok = jp.getTokens();
-    
-    // Allocate memory for tempBuf dynamically
-    char *tempBuf = (char*)malloc(tok->end - tok->start + 1);
-
-    // Check if memory allocation was successful
-    if (tempBuf != nullptr) {
-        // Copy the content to tempBuf
-        memcpy(tempBuf, jp.getBuffer() + tok->start, tok->end - tok->start);
-        
-        // Null-terminate the string
-        tempBuf[tok->end - tok->start] = '\0';
-
-        // Return the dynamically allocated string and save it
-		nodeDatabase.set_nodeIDJson(tempBuf);									// This should backup the nodeID database - now updated to persistent storage
-		nodeDatabase.flush(false);
-
-		free(tempBuf);															// Free the memory (good practice)
-        return true;
-    } else {
-        return "Memory allocation failure!!";
-		return false;
     }
 }

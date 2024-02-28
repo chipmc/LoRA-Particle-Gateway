@@ -93,8 +93,10 @@ void sysStatusData::initialize() {
     sysStatus.set_alertTimestampGateway(0);
     sysStatus.set_openTime(6);
     sysStatus.set_closeTime(22);
-    sysStatus.set_breakTime(14);   // set to 2pm by default
+    sysStatus.set_breakTime(14);            // set to 2pm by default
     sysStatus.set_breakLengthMinutes(30);   // set to 30 minutes by default
+    sysStatus.set_weekendBreakTime(13);            // set to 1pm by default
+    sysStatus.set_weekendBreakLengthMinutes(30);   // set to 30 minutes by default
 
     // If you manually update fields here, be sure to update the hash
     updateHash();
@@ -234,6 +236,22 @@ uint8_t sysStatusData::get_breakLengthMinutes() const {
 
 void sysStatusData::set_breakLengthMinutes(uint8_t value) {
     setValue<uint8_t>(offsetof(SysData, breakLengthMinutes), value);
+}
+
+uint8_t sysStatusData::get_weekendBreakTime() const {
+    return getValue<uint8_t>(offsetof(SysData, weekendBreakTime));
+}
+
+void sysStatusData::set_weekendBreakTime(uint8_t value) {
+    setValue<uint8_t>(offsetof(SysData, weekendBreakTime), value);
+}
+
+uint8_t sysStatusData::get_weekendBreakLengthMinutes() const {
+    return getValue<uint8_t>(offsetof(SysData, weekendBreakLengthMinutes));
+}
+
+void sysStatusData::set_weekendBreakLengthMinutes(uint8_t value) {
+    setValue<uint8_t>(offsetof(SysData, weekendBreakLengthMinutes), value);
 }
 
 uint8_t sysStatusData::get_tokenCore() const {

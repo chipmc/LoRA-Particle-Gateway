@@ -195,15 +195,6 @@ public:
     bool acknowledgeJoinRequestGateway();   // Gateway - acknowledged receipt of a join request
 
     /**
-     * @brief Returns the node number for the deviceID provided.  This is used in join requests
-     * 
-     * @param deviceID
-     * @returns the node number for this deviceID
-     * 
-     */
-    uint8_t findNodeNumber(int nodeNumber, uint32_t nodeID);
-
-    /**
      * @brief Get Type is a function that returns the sensor Type for a given node number
      * 
      * @param nodeNumber
@@ -221,28 +212,12 @@ public:
     bool setType(int nodeNumber, int newType);
 
     /**
-     * @brief NodeNumberForUniqueId is a function that returns the node number for a given uniqueID
-     * 
-     * @param uniqueID
-     * @returns node number
-     */
-    byte getNodeNumberForUniqueID(uint32_t uniqueID);
-
-    /**
      * @brief Get the current alert code pending value from the nodeID data structure
      * 
      * @param nodeNumber 
      * @return byte 
      */
     byte getAlertCode(int nodeNumber);
-
-    /**
-     * @brief Get the current alert context pending value from the nodeID data structure
-     * 
-     * @param nodeNumber 
-     * @return byte 
-     */
-    uint16_t getAlertContext(int nodeNumber);
 
     /**
      * @brief Changes the alert value that is pending for the next report from the node
@@ -253,6 +228,14 @@ public:
      * @return false 
      */
     bool setAlertCode(int nodeNumber, int newAlertCode);
+
+    /**
+     * @brief Get the current alert context pending value from the nodeID data structure
+     * 
+     * @param nodeNumber 
+     * @return byte 
+     */
+    uint16_t getAlertContext(int nodeNumber);
 
     /**
      * @brief Changes the jsonData1 value for a node 
@@ -286,6 +269,11 @@ public:
      */
     bool setLastReport(int nodeNumber, int newLastReport);
 
+
+    /**********************************************************************
+     **           Occupancy Specific Node Management Functions           **
+     **********************************************************************/
+
     /**
      * @brief Parses the JSON database to return the sum of the occupancyNet values for all nodes in a space
      * 
@@ -303,8 +291,27 @@ public:
     uint16_t getOccupancyGrossBySpace(int space);
 
     /**
-     * @brief Parses the JSON database to set the occupancyNet and occupancyGross values for all nodes in a space to 0
+     * @brief Parses the JSON database to set the occupancyNet values for a specified node to 0
+     *        Also preemptively updates its space in Ubidots with the new zeroed values so we don't have to wait for a new report to come in.
      * 
+     * @param nodeNumber
+     * @param newOccupancyNet
+     * @return true if successful, false if not
+     */
+    bool setOccupancyNetForNode(int nodeNumber, int newOccupancyNet);
+
+    /**
+     * @brief Parses the JSON database to set the occupancyNet values for all nodes in ALL spaces to 0
+     *        Also preemptively updates spaces in Ubidots with the new zeroed values so we don't have to wait for a new report to come in.
+     *  
+     * @return true if successful, false if not
+     */
+    bool resetOccupancyNetCounts();
+
+    /**
+     * @brief Parses the JSON database to reset the currentData (occupancyGross, occupancyNet) for all nodes in ALL spaces
+     *        Also preemptively updates spaces in Ubidots with the new zeroed values so we don't have to wait for a new report to come in.
+     *  
      * @return true if successful, false if not
      */
     bool resetOccupancyCounts();
@@ -318,34 +325,6 @@ public:
      * @return false 
      */
     bool setAlertContext(int nodeNumber, int newAlertContext);
-
-    /**
-     * @brief Primarily used for debugging
-     * 
-     */
-    void printNodeData(bool publish);
-    
-    /**
-     * @brief Returns true if node is configured and false if it is not
-     * 
-     * @param nodeNumber and a float for the % of successful messages delivered
-     * @param uniqueID the id to check
-     * @returns true or false
-     */
-    bool nodeConfigured(int nodeNumber, uint32_t uniqueID);
-
-    /**
-     * @brief Returns true if the uniqueID for the node exists in the database false if it does not
-     * 
-     * @param radioID the id to check
-     * @returns true or false
-     */
-    bool uniqueIDExistsInDatabase(uint32_t uniqueID);
-
-    /** 
-     * @brief This function returns true if the nodeNumber / Token combination is valid
-    */
-    bool checkForValidToken(uint8_t nodeNumber, uint16_t token);
 
     /**
      * @brief This function calculates a valid token for a node
@@ -363,6 +342,93 @@ public:
     * @return true if successful, false if not
     */
     bool setJoinPayload(uint8_t nodeNumber);
+
+
+    /**********************************************************************
+     **                         Helper Functions                         **
+     **********************************************************************/
+
+    /**
+     * @brief Primarily used for debugging
+     * 
+     */
+    void printNodeData(bool publish);
+
+    /**
+     * @brief Returns the node number for the deviceID provided.  This is used in join requests
+     * 
+     * @param nodeID
+     * @returns the node number for this deviceID
+     * 
+     */
+    uint8_t findNodeNumber(int nodeNumber, uint32_t nodeID);
+    
+    /**
+     * @brief Returns true if node is configured and false if it is not
+     * 
+     * @param nodeNumber and a float for the % of successful messages delivered
+     * @param uniqueID the id to check
+     * @returns true or false
+     */
+    bool nodeConfigured(int nodeNumber, uint32_t uniqueID);
+
+    /** 
+     * @brief This function returns true if the nodeNumber / Token combination is valid
+    */
+    bool checkForValidToken(uint8_t nodeNumber, uint16_t token);
+
+    /**
+     * @brief Returns true if the uniqueID for the node exists in the database false if it does not
+     * 
+     * @param radioID the id to check
+     * @returns true or false
+     */
+    bool uniqueIDExistsInDatabase(uint32_t uniqueID);
+
+    /**
+     * @brief NodeNumberForUniqueId is a function that returns the node number for a given uniqueID
+     * 
+     * @param uniqueID
+     * @returns node number
+     */
+    byte getNodeNumberForUniqueID(uint32_t uniqueID);
+
+    /**
+     * @brief Parses the JSON database to set the occupancyNet and occupancyGross values for all nodes in a space to 0
+     *        Also preemptively updates Ubidots with the new zeroed values so we don't have to wait for a new report to come in.
+     * 
+     * @param space
+     * @return true if successful, false if not
+     */
+    bool resetSpace(int space);
+
+    /**
+     * @brief Resets the current data for a node in the JSON, then sends alert code 6
+     *        Also preemptively updates Ubidots with the new zeroed values so we don't have to wait for a new report to come in.
+     * 
+     * @param nodeNumber
+     * @return true if successful, false if not
+     */
+    bool resetCurrentDataForNode(int nodeNumber);
+
+     /**
+     * @brief Resets the current data for a node in the JSON, then sends alert code 5
+     *        Also preemptively updates Ubidots with the new zeroed values so we don't have to wait for a new report to come in.
+     * 
+     * @param nodeNumber
+     * @return true if successful, false if not
+     */
+    bool resetAllDataForNode(int nodeNumber);
+
+    /** 
+     * @brief Saves the node database as a string to memory.
+     */
+    bool saveNodeDatabase(JsonParser &jp);
+
+
+    /**********************************************************************
+     **                         Data Compression                         **
+     **********************************************************************/
 
     /**
      * @brief Compresses currentData's payload1 - payload4 (Join Payload) based on a sensor type, returns it
