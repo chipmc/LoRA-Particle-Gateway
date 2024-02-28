@@ -209,12 +209,15 @@ void loop() {
 				
 				uint8_t breakLengthHours = (sysStatus.get_breakLengthMinutes() / 60); // break length can be up to 240 minutes, so figure out how many hours the break is
 				
-				if(sysStatus.get_breakTime() != 24){	// Ignore break functionality entirely if it is set to be 24. This means no break is needed for this gateway
+				if(sysStatus.get_breakTime() != 24){ // Ignore break functionality entirely if it is set to be 24. This means no break is needed for this gateway
 					if(conv.getLocalTimeHMS().hour >= sysStatus.get_breakTime() /* if the hour is after breakTime */ 
-					&& conv.getLocalTimeHMS().hour <= (sysStatus.get_breakTime() + breakLengthHours)/* and the hour is before the hour the break is over (if breakLengthMinutes >= 60) */ 
-					&& conv.getLocalTimeHMS().minute < (sysStatus.get_breakLengthMinutes() - (breakLengthHours*60)))/* and the minute is before the minute the break is over */{
-						current.set_onBreak(1);		// we are on break.
-					} else current.set_onBreak(0);	    // Otherwise, we are not on break
+					&& conv.getLocalTimeHMS().hour <= (sysStatus.get_breakTime() + breakLengthHours) /* and the hour is before the hour the break is over (if breakLengthMinutes >= 60) */ 
+					&& conv.getLocalTimeHMS().minute < (sysStatus.get_breakLengthMinutes() - (breakLengthHours*60))) /* and the minute is before the minute the break is over */{
+						if(current.get_onBreak() == 0) { 	// if we are not on break
+							current.set_onBreak(1);		 		// start the break.
+							Room_Occupancy::instance().resetRoomCounts();	// and reset the room counts
+						}
+					} else if(current.get_onBreak() != 0) current.set_onBreak(0);	  // Otherwise, we are still not on break
 					
 					Log.info("Break Starts at %d with length of %d minutes. Current hour = %d, minute = %d On Break? %s", sysStatus.get_breakTime(), sysStatus.get_breakLengthMinutes(), conv.getLocalTimeHMS().hour, conv.getLocalTimeHMS().minute, current.get_onBreak() ? "Yes" : "No");
 				}

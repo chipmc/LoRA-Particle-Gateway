@@ -276,6 +276,16 @@ public:
      */
     bool setJsonData2(int nodeNumber, int sensorType, int newJsonData2);
 
+     /**
+     * @brief sets the last report field to Time.now() for the specified nodeNumber
+     * 
+     * @param nodeNumber
+     * @param newLastReport - a unix timestamp as an integer
+     * @return true
+     * @return false if the nodeNumber suggests an unconfigured node
+     */
+    bool setLastReport(int nodeNumber, int newLastReport);
+
     /**
      * @brief Parses the JSON database to return the sum of the occupancyNet values for all nodes in a space
      * 
