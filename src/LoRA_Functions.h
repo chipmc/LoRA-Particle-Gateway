@@ -238,6 +238,33 @@ public:
     uint16_t getAlertContext(int nodeNumber);
 
     /**
+     * @brief Changes the alert context that is pending for the next report from the node
+     * 
+     * @param nodeNumber 
+     * @param newAlertContext
+     * @return true 
+     * @return false 
+     */
+    bool setAlertContext(int nodeNumber, int newAlertContext);
+
+    /**
+     * @brief This function calculates a valid token for a node
+     */
+    uint16_t setNodeToken(uint8_t nodeNumber);
+
+    /**
+     * @brief Loads the current "Join Payload" values with the values from the node into the currentData struct.
+     * @return true if successful, false if not
+    */
+    bool getJoinPayload(uint8_t nodeNumber);
+
+    /**
+    * @brief Changes the "Join Payload" values for a given node to be equal to the values in payload1-payload4 of the currentData struct.
+    * @return true if successful, false if not
+    */
+    bool setJoinPayload(uint8_t nodeNumber);
+
+    /**
      * @brief Changes the jsonData1 value for a node 
      * 
      * @param nodeNumber
@@ -291,16 +318,6 @@ public:
     uint16_t getOccupancyGrossBySpace(int space);
 
     /**
-     * @brief Parses the JSON database to set the occupancyNet values for a specified node to 0
-     *        Also preemptively updates its space in Ubidots with the new zeroed values so we don't have to wait for a new report to come in.
-     * 
-     * @param nodeNumber
-     * @param newOccupancyNet
-     * @return true if successful, false if not
-     */
-    bool setOccupancyNetForNode(int nodeNumber, int newOccupancyNet);
-
-    /**
      * @brief Parses the JSON database to set the occupancyNet values for all nodes in ALL spaces to 0
      *        Also preemptively updates spaces in Ubidots with the new zeroed values so we don't have to wait for a new report to come in.
      *  
@@ -317,32 +334,14 @@ public:
     bool resetOccupancyCounts();
 
     /**
-     * @brief Changes the alert context that is pending for the next report from the node
+     * @brief Parses the JSON database to set the occupancyNet values for a specified node to 0
+     *        Also preemptively updates its space in Ubidots with the new zeroed values so we don't have to wait for a new report to come in.
      * 
-     * @param nodeNumber 
-     * @param newAlertContext
-     * @return true 
-     * @return false 
-     */
-    bool setAlertContext(int nodeNumber, int newAlertContext);
-
-    /**
-     * @brief This function calculates a valid token for a node
-     */
-    uint16_t setNodeToken(uint8_t nodeNumber);
-
-    /**
-     * @brief Loads the current "Join Payload" values with the values from the node into the currentData struct.
+     * @param nodeNumber
+     * @param newOccupancyNet
      * @return true if successful, false if not
-    */
-    bool getJoinPayload(uint8_t nodeNumber);
-
-    /**
-    * @brief Changes the "Join Payload" values for a given node to be equal to the values in payload1-payload4 of the currentData struct.
-    * @return true if successful, false if not
-    */
-    bool setJoinPayload(uint8_t nodeNumber);
-
+     */
+    bool setOccupancyNetForNode(int nodeNumber, int newOccupancyNet);
 
     /**********************************************************************
      **                         Helper Functions                         **

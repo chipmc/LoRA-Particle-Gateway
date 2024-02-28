@@ -68,6 +68,7 @@
 // v20		New JSON fixes from JSON-Parser-Test integrated into the system. Conducted a lot of testing. Good results, and found/fixed a bug with current.openHours that caused loops of alert code 6.
 // v20.1	Added the getJsonString helper function to eliminate problems with the JSON->String->memory piece.
 // v21		Added a function layer by which any alert codes that set a value on a device ALSO set that value in the JSON database and update Ubidots so reflecting node state does not rely on data reports being sent. 
+// v21.1    Integrated new backend layer from v21 in places where alert code 12, 5, and 6 are set on the node.
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
