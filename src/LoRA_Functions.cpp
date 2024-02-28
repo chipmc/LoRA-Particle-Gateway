@@ -1167,6 +1167,73 @@ byte LoRA_Functions::getNodeNumberForUniqueID(uint32_t uniqueID) {
 	return 0;
 }
 
+bool LoRA_Functions::resetInactiveSpaces(int secondsInactive){
+	const int MAX_SPACES = 64; // Maximum number of spaces (6 bytes)
+    const int MAX_NODES_PER_SPACE = 100; // High value because break; is called when fully parsed, as to not limit the max number of nodes in a space through this function
+	uint32_t spaceNodes[MAX_SPACES][MAX_NODES_PER_SPACE] = {0}; // Initialize to all zeros
+    uint32_t lastReport;
+	int sensorType;
+	int nodeNumber;
+	uint8_t payload1;
+	uint8_t payload2;
+	uint8_t payload3;
+	uint8_t payload4;
+	int compressedJoinPayload;
+	bool result = false;
+	
+    const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;
+    jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
+    const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;
+
+    // Group nodes by their "space" number
+    for (int i = 0; i < MAX_NODES_PER_SPACE; i++) {
+        nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
+        if (nodeObjectContainer == NULL) {
+            Log.info("resetInactiveSpaces ran out of entries at i = %d", i);
+            break;
+        } 
+
+        jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
+		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);  		// Get the nodeNumber
+		jp.getValueByKey(nodeObjectContainer, "type", sensorType);  		// Get the sensorType
+		jp.getValueByKey(nodeObjectContainer, "lrep", lastReport);  		// Get the lastReport
+		if (sensorType > 0 && sensorType <= 9) {	// Ignore nodes that have a Counter sensorType in this function (they do not have a space)
+			continue;  
+		}
+		LoRA_Functions::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the payload values (space is payload1)
+
+        int j;
+        for (j = 0; j < MAX_NODES_PER_SPACE; j++) {  // Find the first available slot in the spaceNodes array for the given space, then add the lastReport for the node to this space's row
+            if (spaceNodes[payload1][j] == 0) {
+                spaceNodes[payload1][j] = lastReport;
+                break;
+            }
+        }
+        
+        if (j == MAX_NODES_PER_SPACE) {  // Throw an alert if we reached the end of available slots for the space somehow
+			char message[128];
+			snprintf(message, sizeof(message), "Maximum number of nodes per space exceeded for space %d", payload1);
+			Log.info(message);
+			if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);
+        }
+    }
+
+    for (int space = 0; space < MAX_SPACES; space++) {  // Check each space for inactivity and reset if needed
+        bool allInactive = true;
+        for (int i = 0; i < MAX_NODES_PER_SPACE; i++) {
+            if (spaceNodes[space][i] != 0 && (Time.now() - spaceNodes[space][i] <= (uint32_t)secondsInactive)) {
+				allInactive = false;  // A node in this space is active, so the space is not all inactive
+				break;
+			}
+        }
+        if (allInactive) {
+            result = resetSpace(space);
+        }
+    }
+
+    return result;
+}
+
 bool LoRA_Functions::resetSpace(int space){
 	char message[256];
 	int sensorType;
@@ -1186,13 +1253,10 @@ bool LoRA_Functions::resetSpace(int space){
 	for (int i = 0; i < 100; i++) {											// Iterate through the array looking for a match
 		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
 		if(nodeObjectContainer == NULL) {
-			snprintf(message, sizeof(message), "No nodes found with space = %d", space + 1);
-			Log.info(message);
-			if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);
-			return false;													// Ran out of entries, return false
+			break;													// Ran out of entries, return false
 		} 
 		jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
-		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);  		// Get the sensorType
+		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);  		// Get the nodeNumber
 		jp.getValueByKey(nodeObjectContainer, "type", sensorType);  		// Get the sensorType
 		LoRA_Functions::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
 		if (payload1 == space) {
@@ -1204,17 +1268,19 @@ bool LoRA_Functions::resetSpace(int space){
 				case 10 ... 19: {   					// Occupancy
 					result = LoRA_Functions::setOccupancyNetForNode(nodeNumber, 0);		
 					if (!result) {
-						Log.info("resetSpace - Could not reset node %d", nodeNumber);
-						if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "Unknown sensor type in resetSpace", PRIVATE);
+						snprintf(message, sizeof(message), "resetSpace - Could not reset node %d", nodeNumber);
+						Log.info(message);
+						if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);		
 					}			
 				} break;
 				case 20 ... 29: {   					// Sensor
 					// Reset Sensor nodes in the space here
 				} break;
-				default: {          		
-					Log.info("Unknown sensor type %d in resetSpace", sensorType);
-					if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "Unknown sensor type in resetSpace", PRIVATE);
-					return false;
+				default: {          
+					snprintf(message, sizeof(message), "Unknown sensor type %d in resetSpace", sensorType);
+					Log.info(message);
+					if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);	
+					return false;	
 				} break;
 			}
 		}
@@ -1272,9 +1338,10 @@ bool LoRA_Functions::resetCurrentDataForNode(int nodeNumber){
 		case 20 ... 29: {   					// Sensor
 			// Reset Sensor sensorType here
 		} break;
-		default: {          		
-			Log.info("Unknown sensor type in resetCurrentDataForNode %d", sensorType);
-			if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "Unknown sensor type in resetCurrentDataForNode", PRIVATE);
+		default: {  
+			snprintf(message, sizeof(message), "Unknown sensor type in resetCurrentDataForNode %d", sensorType);
+			Log.info(message);
+			if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);		        		
 			return false;
 		} break;
 	}

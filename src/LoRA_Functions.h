@@ -402,6 +402,16 @@ public:
     bool resetSpace(int space);
 
     /**
+     * @brief Parses the JSON database, checking the lastReport timestamp of all nodes in order to see if any spaces have not been updated for [lengthOfInactivity] seconds.
+     *        If all nodes in a space have not reported for 1 hour, this function calls resetSpace on that space to reset the node counts and update Ubidots.
+     *        Resets multiple spaces if needed.
+     * 
+     * @param secondsInactive
+     * @return true if at least 1 space was reset successfully, false if not
+     */
+    bool resetInactiveSpaces(int secondsInactive);
+
+    /**
      * @brief Resets the current data for a node in the JSON, then sends alert code 6
      *        Also preemptively updates Ubidots with the new zeroed values so we don't have to wait for a new report to come in.
      * 

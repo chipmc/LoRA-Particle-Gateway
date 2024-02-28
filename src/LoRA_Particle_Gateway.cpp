@@ -69,6 +69,7 @@
 // v20.1	Added the getJsonString helper function to eliminate problems with the JSON->String->memory piece.
 // v21		Added a function layer by which any alert codes that set a value on a device ALSO set that value in the JSON database and update Ubidots so reflecting node state does not rely on data reports being sent. 
 // v21.1    Integrated new backend layer from v21 in places where alert code 12, 5, and 6 are set on the node.
+// v21.2    Going back to LORA_STATE now resets any spaces that have been inactive for an hour. A separate weekend break time is now in effect, with Particle functions to manage it.
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -88,7 +89,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(20);								// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="21.1";
+char currentPointRelease[6] ="21.2";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -213,22 +214,33 @@ void loop() {
 					Room_Occupancy::instance().resetAllCounts();	// reset the room net AND gross counts at end of day for all occupancy nodes and update Ubidots
 				};
 				
-				// TODO:: Create a "CheckForInactiveSpaces" function to see if a space has been inactive for 60+minutes, 
-				//        then use the new v21 backend layer to reset the nodes in that space and update Ubidots
-
-				// TODO:: use weekend break as well when setting onBreak in the below logic
-				uint8_t breakLengthHours = (sysStatus.get_breakLengthMinutes() / 60); // break length can be up to 240 minutes, so figure out how many hours the break is
-				if(sysStatus.get_breakTime() != 24){ // Ignore break functionality entirely if it is set to be 24. This means no break is needed for this gateway
-					if(conv.getLocalTimeHMS().hour >= sysStatus.get_breakTime() /* if the hour is after breakTime */ 
-					&& conv.getLocalTimeHMS().hour <= (sysStatus.get_breakTime() + breakLengthHours) /* and the hour is before the hour the break is over (if breakLengthMinutes >= 60) */ 
-					&& conv.getLocalTimeHMS().minute < (sysStatus.get_breakLengthMinutes() - (breakLengthHours*60))) /* and the minute is before the minute the break is over */{
-						if(current.get_onBreak() == 0) { 	// if we are not on break
-							current.set_onBreak(1);		 		// start the break
-							Room_Occupancy::instance().resetNetCounts();	// reset the room net counts for all occupancy nodes and update Ubidots
+				LoRA_Functions::instance().resetInactiveSpaces(3600);	// Define "inactive" spaces as those where ALL of the nodes in that space have not sent a report in 3600 seconds.
+																		// Check for inactive spaces and reset them. Ignores nodes of a "Counter" sensorType as they do not have spaces.
+				
+				String dayString = conv.timeStr().substring(0, 3);	// Take the first three characters of the timeStr ("Fri", "Sat", "Sun")
+				uint8_t breakLengthHours;
+				bool isWeekend = (dayString == "Sat" || dayString == "Sun");	// If it is a weekend, we will use the weekendBreakTime and weekendBreakLengthMinutes instead
+				if (isWeekend) {
+					breakLengthHours = (sysStatus.get_weekendBreakLengthMinutes() / 60);
+				} else {
+					breakLengthHours = (sysStatus.get_breakLengthMinutes() / 60);
+				}
+				uint8_t breakTime = isWeekend ? sysStatus.get_weekendBreakTime() : sysStatus.get_breakTime();
+				uint16_t breakLengthMinutes = isWeekend ? sysStatus.get_weekendBreakLengthMinutes() : sysStatus.get_breakLengthMinutes();
+				
+				if (breakTime != 24) { // Ignore break functionality entirely if it is set to be 24. This means no break is needed for this gateway
+					if (conv.getLocalTimeHMS().hour >= breakTime &&
+						conv.getLocalTimeHMS().hour <= (breakTime + breakLengthHours) &&
+						conv.getLocalTimeHMS().minute < (breakLengthMinutes - (breakLengthHours * 60))) {
+						if (current.get_onBreak() == 0) {
+							current.set_onBreak(1); // start the break
+							Room_Occupancy::instance().resetNetCounts(); // reset the room net counts for all occupancy nodes and update Ubidots
 						}
-					} else if(current.get_onBreak() != 0) current.set_onBreak(0);	  // Otherwise, we are still not on break
-					
-					Log.info("Break Starts at %d with length of %d minutes. Current hour = %d, minute = %d On Break? %s", sysStatus.get_breakTime(), sysStatus.get_breakLengthMinutes(), conv.getLocalTimeHMS().hour, conv.getLocalTimeHMS().minute, current.get_onBreak() ? "Yes" : "No");
+					} else if (current.get_onBreak() != 0) {
+						current.set_onBreak(0); // Otherwise, we are still not on break
+					}
+
+					Log.info("%s Break Starts at %d with length of %d minutes. Current hour = %d, minute = %d On Break? %s", isWeekend ? "Weekend" : "Weekday", breakTime, breakLengthMinutes, conv.getLocalTimeHMS().hour, conv.getLocalTimeHMS().minute, current.get_onBreak() ? "Yes" : "No");
 				}
 
 				if (sysStatus.get_connectivityMode() == 0) connectionWindow = DEFAULT_LORA_WINDOW;
