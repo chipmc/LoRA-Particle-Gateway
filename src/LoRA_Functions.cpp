@@ -238,7 +238,7 @@ bool LoRA_Functions::decipherDataReportGateway() {			// Receives the data report
 			// Update the node JSON for Counter sensorTypes here
 		} break;
 		case 10 ... 19: {   					// Occupancy
-			if(LoRA_Functions::instance().getAlertCode(current.get_nodeNumber()) != 0) {  // Don't update the node's occupancy counts if we have a queued alert, we should resolve that alert first. 
+			if(LoRA_Functions::instance().getAlertCode(current.get_nodeNumber()) == 0) {  // Don't update the node's occupancy counts if we have a queued alert, we should resolve that alert first. 
 				// Update the occupancy counts in the nodeJson
 				LoRA_Functions::instance().setJsonData1(current.get_nodeNumber(), current.get_sensorType(), static_cast<int16_t>(current.get_payload3() <<8 | current.get_payload4()));
 				LoRA_Functions::instance().setJsonData2(current.get_nodeNumber(), current.get_sensorType(), static_cast<int16_t>(current.get_payload1() <<8 | current.get_payload2()));
