@@ -464,6 +464,9 @@ int Particle_Functions::jsonFunctionParser(String command) {
         if (variable == "net") {                   
           snprintf(messaging,sizeof(messaging),"Resetting Room net counts");
           Room_Occupancy::instance().resetNetCounts();
+        } else {
+          snprintf(messaging,sizeof(messaging),"Must enter \"all\" or \"net\" for var");
+          success = false; 
         }
       } else {
         snprintf(messaging,sizeof(messaging),"Can only reset counts for Gateway (node 0)");
