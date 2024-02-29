@@ -948,6 +948,9 @@ bool LoRA_Functions::setOccupancyNetForNode(int nodeNumber, int newOccupancyNet)
 		result = LoRA_Functions::instance().setAlertCode(nodeNumber, 12);         			  /*** Queue up an alert code with alert context ***/
 		result = LoRA_Functions::instance().setAlertContext(nodeNumber, newOccupancyNet);  	  /*** These will be set to current in the Data Acknowledgement message ***/
 		if(result) {
+			snprintf(message, sizeof(message), "Node %d net count set to %d", uniqueID, newOccupancyNet);
+			Log.info(message);
+			if (Particle.connected()) PublishQueuePosix::instance().publish("Setting Occupancy", message, PRIVATE);
 			LoRA_Functions::instance().setJsonData1(nodeNumber, sensorType, newOccupancyNet);   /*** Set the nodeDatabase representation to 0 as well ***/
 			// Update Ubidots preemptively with battery = -10. This is interpreted by UpdateGatewayNodesAndSpaces as "set the occupancyNet value only"
 			snprintf(message, sizeof(message), "{\"nodeUniqueID\":\"%lu\",\"battery\":%d,\"space\":%d,\"spaceNet\":%d,\"spaceGross\":%d}",\
@@ -1174,7 +1177,7 @@ bool LoRA_Functions::resetInactiveSpaces(int secondsInactive){
 	const int maxSpaces = 64; // Maximum number of spaces (6 bytes)
     const int maxNodesPerSpace = 100; // High value because break; is called when fully parsed, as to not limit the max number of nodes in a space through this function
 	uint32_t spaceNodes[maxSpaces][maxNodesPerSpace] = {0}; // Initialize to all zeros
-    uint32_t lastReport;
+    uint32_t lastReport = 0;
 	int sensorType;
 	int nodeNumber;
 	uint8_t payload1;
@@ -1228,6 +1231,10 @@ bool LoRA_Functions::resetInactiveSpaces(int secondsInactive){
         for (int i = 0; i < maxNodesPerSpace; i++) {
             if (spaceNodes[space][i] != 0 && (Time.now() - spaceNodes[space][i] <= (uint32_t)secondsInactive)) {
 				Log.info("Space %d is inactive. Resetting Nodes", space + 1);
+				char message[128];
+				snprintf(message, sizeof(message), "Space %d has been inactive for 1 hour. Resetting the space", space + 1);
+				Log.info(message);
+				if (Particle.connected()) PublishQueuePosix::instance().publish("Inactive Space", message, PRIVATE);
 				allInactive = false;  // A node in this space is active, so the space is not all inactive
 				break;
 			}
@@ -1251,7 +1258,9 @@ bool LoRA_Functions::resetSpace(int space){
 	int compressedJoinPayload;
 	bool result = 0;
 	
-	Log.info("Searching JSON database for nodes with space == %d - resetSpace", space);
+	snprintf(message, sizeof(message), "resetSpace - Resetting space %d", space + 1);
+	Log.info(message);
+	if (Particle.connected()) PublishQueuePosix::instance().publish("Space Reset", message, PRIVATE);
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
@@ -1273,6 +1282,9 @@ bool LoRA_Functions::resetSpace(int space){
 					// Do nothing (devices with Counter sensorTypes do not have a "space" in their payload - see README)
 				} break;
 				case 10 ... 19: {   					// Occupancy
+					snprintf(message, sizeof(message), "resetSpace - Resetting node %d", nodeNumber);
+					Log.info(message);
+					if (Particle.connected()) PublishQueuePosix::instance().publish("Space Reset", message, PRIVATE);
 					result = LoRA_Functions::setOccupancyNetForNode(nodeNumber, 0);		
 					if (!result) {
 						snprintf(message, sizeof(message), "resetSpace - Could not reset node %d", nodeNumber);
