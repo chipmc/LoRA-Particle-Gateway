@@ -1,6 +1,7 @@
 #include "LoRA_Functions.h"
 #include "Room_Occupancy.h"							// Aggregates node data to get net room occupancy for Occupancy Nodes
 #include "PublishQueuePosixRK.h"
+#include <ctime>									// formats unix timestamps as h:m:s
 
 // Singleton instantiation - from template
 LoRA_Functions *LoRA_Functions::_instance;
@@ -948,7 +949,7 @@ bool LoRA_Functions::setOccupancyNetForNode(int nodeNumber, int newOccupancyNet)
 		result = LoRA_Functions::instance().setAlertCode(nodeNumber, 12);         			  /*** Queue up an alert code with alert context ***/
 		result = LoRA_Functions::instance().setAlertContext(nodeNumber, newOccupancyNet);  	  /*** These will be set to current in the Data Acknowledgement message ***/
 		if(result) {
-			snprintf(message, sizeof(message), "Node %d net count set to %d", uniqueID, newOccupancyNet);
+			snprintf(message, sizeof(message), "Node %d net count set to %d", (int)uniqueID, newOccupancyNet);
 			Log.info(message);
 			if (Particle.connected()) PublishQueuePosix::instance().publish("Setting Occupancy", message, PRIVATE);
 			LoRA_Functions::instance().setJsonData1(nodeNumber, sensorType, newOccupancyNet);   /*** Set the nodeDatabase representation to 0 as well ***/
@@ -1007,18 +1008,22 @@ void LoRA_Functions::printNodeData(bool publish) {
 		jp.getValueByKey(nodeObjectContainer, "jd2", jsonData2);
 		jp.getValueByKey(nodeObjectContainer, "lrep", lastReport);
 
+		struct tm * timeinfo;
+		time_t unixTime = static_cast<time_t>(lastReport);
+    	timeinfo = localtime(&unixTime);
+
 		LoRA_Functions::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4);
 
 		// Type differentiated console printing
 		switch (sensorType) {
 			case 1 ... 9: {    						// Counter
-				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d", nodeNumber, uniqueID, sensorType, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, lastReport);
+				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d:%d:%d", nodeNumber, uniqueID, sensorType, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
 			} break;
 			case 10 ... 19: {   					// Occupancy
-				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, net %d, gross %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d", nodeNumber, uniqueID, sensorType, jsonData1, jsonData2, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, lastReport);
+				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, net %d, gross %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d:%d:%d", nodeNumber, uniqueID, sensorType, jsonData1, jsonData2, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
 			} break;
 			case 20 ... 29: {   					// Sensor
-				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d", nodeNumber, uniqueID, sensorType, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, lastReport);
+				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d:%d:%d", nodeNumber, uniqueID, sensorType, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
 			} break;
 			default: {          		
 				Log.info("Unknown sensor type in printNodeData %d", sensorType);
