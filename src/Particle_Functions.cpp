@@ -474,6 +474,24 @@ int Particle_Functions::jsonFunctionParser(String command) {
       }
     }
 
+    // Resets the Room Occupancy numbers
+    else if (function == "resetSpace") {
+      // Test - {"cmd":[{"node":0, "var":"1","fn":"resetSpace"}]}
+      if(nodeNumber == 0) {
+        int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+        if ((tempValue >= 1 ) && (tempValue <= 64)) {                   
+          snprintf(messaging,sizeof(messaging),"Resetting Space %d", tempValue);
+          LoRA_Functions::instance().resetSpace(tempValue - 1); // Send the index of the space rather than the space number. Ex. space 1 is index 0
+        } else {
+          snprintf(messaging,sizeof(messaging),"Space number must be between 1 and 64");
+          success = false; 
+        }
+      } else {
+        snprintf(messaging,sizeof(messaging),"Can only reset spaces through Gateway (node 0)");
+        success = false; 
+      }
+    }
+
     // Sets the net count for a node manually
     else if (function == "setOccupancyNetForNode") {
       // Test - {"cmd":[{"node":3312487035, "var":"5","fn":"setNodeNetCount"}]}

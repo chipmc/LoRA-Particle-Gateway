@@ -199,6 +199,10 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 * {"cmd":[{"node":0, "var":"true","fn":"resetRoomCounts"}]} - Resets the Room Occupancy (net and gross) numbers to 0 for all nodes. 
     * var must *only* be "true"
 
+**Reset a Space**
+* {"cmd":[{"node":"0", "var":"5","fn":"resetSpace"}]} - Resets the values in a space and updates ubidots.
+    * var must be 1-64
+
 **Set Net Count for an Occupancy Node**
 * {"cmd":[{"node":*node uniqueID here*, "var":"5","fn":"setOccupancyNetForNode"}]} - Sets the Net Occupancy number for a node and updates the node's space value on Ubidots
     * var must be an integer value

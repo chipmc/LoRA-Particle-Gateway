@@ -70,8 +70,8 @@
 // v21		Added a function layer by which any alert codes that set a value on a device ALSO set that value in the JSON database and update Ubidots so reflecting node state does not rely on data reports being sent. 
 // v21.1    Integrated new backend layer from v21 in places where alert code 12, 5, and 6 are set on the node.
 // v21.2    Going back to LORA_STATE now resets any spaces that have been inactive for an hour. A separate weekend break time is now in effect, with Particle functions to manage it.
-// v21.3    Added a particle function and Room_Occupancy layer that allows for a node to have its net count set manually through Particle/Ubidots.
-
+// v21.3    Added a particle function (setOccupancyNetForNode) and Room_Occupancy layer that allows for a node to have its net count set manually through Particle/Ubidots.
+// v21.4    Added a particle function (resetSpace) that allows for a space (and all its nodes) to have their values reset through Particle/Ubidots.
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -91,7 +91,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(21);								// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="21.3";
+char currentPointRelease[6] ="21.4";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
