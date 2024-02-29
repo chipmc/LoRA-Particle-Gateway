@@ -1,6 +1,7 @@
 #include "LoRA_Functions.h"
 #include "Room_Occupancy.h"							// Aggregates node data to get net room occupancy for Occupancy Nodes
 #include "PublishQueuePosixRK.h"
+#include "LocalTimeRK.h"					        // https://rickkas7.github.io/LocalTimeRK/
 #include <ctime>									// formats unix timestamps as h:m:s
 
 // Singleton instantiation - from template
@@ -53,6 +54,8 @@ RHEncryptedDriver driver(rf95, myCipher);   // Class instance for Encrypted RFM9
 
 // Class to manage message delivery and receipt, using the driver declared above
 RHMesh manager(driver, GATEWAY_ADDRESS);
+
+LocalTimeConvert conv2;						// For printing the time of the report in local time
 
 // Mesh has much greater memory requirements, and you may need to limit the
 // max message length to prevent weird crashes
@@ -253,7 +256,7 @@ bool LoRA_Functions::decipherDataReportGateway() {			// Receives the data report
 			if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", "Unknown sensor type in decipherDataReportGateway", PRIVATE);
 		} break;
 	}
-
+	conv2.withCurrentTime().convert();								// Get the time and convert to Local
 	LoRA_Functions::instance().setLastReport(current.get_nodeNumber(), (int)Time.now()); // save the timestamp of this report in the JSON
 
 	lora_state = DATA_ACK;		// Prepare to respond
@@ -949,7 +952,7 @@ bool LoRA_Functions::setOccupancyNetForNode(int nodeNumber, int newOccupancyNet)
 		result = LoRA_Functions::instance().setAlertCode(nodeNumber, 12);         			  /*** Queue up an alert code with alert context ***/
 		result = LoRA_Functions::instance().setAlertContext(nodeNumber, newOccupancyNet);  	  /*** These will be set to current in the Data Acknowledgement message ***/
 		if(result) {
-			snprintf(message, sizeof(message), "Node %d net count set to %d", (int)uniqueID, newOccupancyNet);
+			snprintf(message, sizeof(message), "Node %lu net count set to %d", uniqueID, newOccupancyNet);
 			Log.info(message);
 			if (Particle.connected()) PublishQueuePosix::instance().publish("Setting Occupancy", message, PRIVATE);
 			LoRA_Functions::instance().setJsonData1(nodeNumber, sensorType, newOccupancyNet);   /*** Set the nodeDatabase representation to 0 as well ***/
@@ -1008,22 +1011,22 @@ void LoRA_Functions::printNodeData(bool publish) {
 		jp.getValueByKey(nodeObjectContainer, "jd2", jsonData2);
 		jp.getValueByKey(nodeObjectContainer, "lrep", lastReport);
 
-		struct tm * timeinfo;
 		time_t unixTime = static_cast<time_t>(lastReport);
-    	timeinfo = localtime(&unixTime);
+		conv2.withTime(unixTime).convert();
+		conv2.getLocalTimeHMS();
 
 		LoRA_Functions::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4);
 
 		// Type differentiated console printing
 		switch (sensorType) {
 			case 1 ... 9: {    						// Counter
-				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d:%d:%d", nodeNumber, uniqueID, sensorType, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d:%d:%d", nodeNumber, uniqueID, sensorType, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, conv2.getLocalTimeHMS().hour, conv2.getLocalTimeHMS().minute, conv2.getLocalTimeHMS().second);
 			} break;
 			case 10 ... 19: {   					// Occupancy
-				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, net %d, gross %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d:%d:%d", nodeNumber, uniqueID, sensorType, jsonData1, jsonData2, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, net %d, gross %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d:%d:%d", nodeNumber, uniqueID, sensorType, jsonData1, jsonData2, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, conv2.getLocalTimeHMS().hour, conv2.getLocalTimeHMS().minute, conv2.getLocalTimeHMS().second);
 			} break;
 			case 20 ... 29: {   					// Sensor
-				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d:%d:%d", nodeNumber, uniqueID, sensorType, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+				snprintf(data, sizeof(data), "Node %d, uniqueID %lu, type %d, payload (%d/%d/%d/%d) with pending alert %d and alert context %d, lastReport %d:%d:%d", nodeNumber, uniqueID, sensorType, payload1, payload2, payload3, payload4, pendingAlertCode, pendingAlertContext, conv2.getLocalTimeHMS().hour, conv2.getLocalTimeHMS().minute, conv2.getLocalTimeHMS().second);
 			} break;
 			default: {          		
 				Log.info("Unknown sensor type in printNodeData %d", sensorType);
@@ -1263,7 +1266,7 @@ bool LoRA_Functions::resetSpace(int space){
 	int compressedJoinPayload;
 	bool result = 0;
 	
-	snprintf(message, sizeof(message), "resetSpace - Resetting space %d", space + 1);
+	snprintf(message, sizeof(message), "Resetting space %d - resetSpace", space + 1);
 	Log.info(message);
 	if (Particle.connected()) PublishQueuePosix::instance().publish("Space Reset", message, PRIVATE);
 
@@ -1287,12 +1290,12 @@ bool LoRA_Functions::resetSpace(int space){
 					// Do nothing (devices with Counter sensorTypes do not have a "space" in their payload - see README)
 				} break;
 				case 10 ... 19: {   					// Occupancy
-					snprintf(message, sizeof(message), "resetSpace - Resetting node %d", nodeNumber);
+					snprintf(message, sizeof(message), "Resetting node %d - resetSpace", nodeNumber);
 					Log.info(message);
 					if (Particle.connected()) PublishQueuePosix::instance().publish("Space Reset", message, PRIVATE);
 					result = LoRA_Functions::setOccupancyNetForNode(nodeNumber, 0);		
 					if (!result) {
-						snprintf(message, sizeof(message), "resetSpace - Could not reset node %d", nodeNumber);
+						snprintf(message, sizeof(message), "Could not reset node %d - resetSpace", nodeNumber);
 						Log.info(message);
 						if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);		
 					}			
