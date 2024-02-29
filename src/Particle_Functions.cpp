@@ -474,6 +474,19 @@ int Particle_Functions::jsonFunctionParser(String command) {
       }
     }
 
+    // Sets the net count for a node manually
+    else if (function == "setOccupancyNetForNode") {
+      // Test - {"cmd":[{"node":3312487035, "var":"5","fn":"setNodeNetCount"}]}
+      if(nodeNumber != 0) {
+        int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+        snprintf(messaging,sizeof(messaging),"Setting net occupancy to %d for node %d", tempValue, nodeNumber);
+        Room_Occupancy::instance().setOccupancyNetForNode(nodeNumber, tempValue);
+      } else {
+        snprintf(messaging,sizeof(messaging),"No node exists in the database with that uniqueID");
+        success = false; 
+      }
+    }
+
     // What if none of these functions are recognized
     else {
       snprintf(messaging,sizeof(messaging),"Not a valid command");

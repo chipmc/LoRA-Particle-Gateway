@@ -34,6 +34,10 @@ bool Room_Occupancy::resetNetCounts() {
   return LoRA_Functions::instance().resetOccupancyNetCounts();                                                       
 }
 
+bool Room_Occupancy::setOccupancyNetForNode(int nodeNumber, int newOccupancyNet) {
+  return LoRA_Functions::instance().setOccupancyNetForNode(nodeNumber, newOccupancyNet);                                                       
+}
+
 int Room_Occupancy::getRoomNet(int space) {
   return LoRA_Functions::instance().getOccupancyNetBySpace(space);                                                       
 }

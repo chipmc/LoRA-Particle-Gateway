@@ -52,26 +52,32 @@ public:
      * @brief Reset all the room counts - done each day at midnight
      * 
      * @return true if successful
-    */
+     */
     bool resetAllCounts();
 
     /**
      * @brief Reset all the room net counts - done each day at break time
      * 
      * @return true if successful
-    */
+     */
     bool resetNetCounts();
 
     /**
+     * @brief Manually sets the net counts for a specified node - also updates the node's space on Ubidots with the new net value
+     * 
+     * @return true if successful
+     */
+    bool setOccupancyNetForNode(int nodeNumber, int newOccupancyNet);
+
+    /**
      * @brief This function returns the current net room count
-    */
+     */
     int getRoomNet(int space);
 
     /**
      * @brief This function returns the current gross room count
-    */
+     */
     int getRoomGross(int space);
-
 
 protected:
     /**
