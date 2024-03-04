@@ -15,7 +15,7 @@ buf[0 - 1] magicNumber                      // Magic number that identifies the 
 buf[2] nodeNumber                           // nodeNumber - unique to each node on the gateway's network
 buf[3 - 4] Token                            // Token given to the node and good for 24 hours
 buf[5] sensorType                           // What sensor type is it
-buf[6 - 9] uniqueID          // This is a 4-byte identifier that is unique to each node and is only set once
+buf[6 - 9] uniqueID                         // This is a 4-byte identifier that is unique to each node and is only set once
 *** Payload Section - 12 Bytes but interpretion is different for each sensor type
 buf[10 - 17] payload                        // Payload - 8 bytes sensor type determines interpretation
 *** Status Data - Common to all Nodes
@@ -38,10 +38,10 @@ buf[27] Re-Transmission Delay               // This byte is dedicated to RHRelia
     buf[5 - 8] Time.now()                   // Set the time 
     buf[9 - 10] Seconds to next Report      // The gateway tells the node how many seconds until next transmission window - up to 18 hours
     buf[11] alertCodeNode                   // This lets the Gateway trigger an alert on the node - typically a join request
-    buf[12] alertContextNode                // This lets the Gateway send context with an alert code if needed
-    buf[13] sensorType                      // Let's the Gateway reset the sensor if needed 
-    buf[14] Re-Tries                        // This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
-    buf[15] Re-Transmission Delay           // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
+    buf[12-13] alertContextNode                // This lets the Gateway send context with an alert code if needed
+    buf[14] sensorType                      // Let's the Gateway reset the sensor if needed 
+    buf[15] Re-Tries                        // This byte is dedicated to RHReliableDatagram.cpp to update the number of re-transmissions
+    buf[16] Re-Transmission Delay           // This byte is dedicated to RHReliableDatagram.cpp to update the accumulated delay with each re-transmission
 */
 
 // Format of a join request - From the Node to the Gateway
@@ -84,7 +84,7 @@ buf[15]  Re-Transmission Delay              // This byte is dedicated to RHRelia
 #include <RHEncryptedDriver.h>
 #include <RHMesh.h>
 #include <Speck.h>
-#include <base64RK.h>
+#include "Base64RK.h"
 #include "device_pinout.h"
 #include "MyPersistentData.h"
 #include "JsonParserGeneratorRK.h"
@@ -195,21 +195,13 @@ public:
     bool acknowledgeJoinRequestGateway();   // Gateway - acknowledged receipt of a join request
 
     /**
-     * @brief Returns the node number for the deviceID provided.  This is used in join requests
-     * 
-     * @param deviceID
-     * @returns the node number for this deviceID
-     * 
-     */
-    uint8_t findNodeNumber(int nodeNumber, uint32_t nodeID);
-
-    /**
      * @brief Get Type is a function that returns the sensor Type for a given node number
      * 
      * @param nodeNumber
      * @returns sensor type
      */
     byte getType(int nodeNumber);
+    
     /**
      * @brief change the sensor type for a given node number
      * 
@@ -220,28 +212,12 @@ public:
     bool setType(int nodeNumber, int newType);
 
     /**
-     * @brief NodeNumberForUniqueId is a function that returns the node number for a given uniqueID
-     * 
-     * @param uniqueID
-     * @returns node number
-     */
-    byte getNodeNumberForUniqueID(uint32_t uniqueID);
-
-    /**
      * @brief Get the current alert code pending value from the nodeID data structure
      * 
      * @param nodeNumber 
      * @return byte 
      */
     byte getAlertCode(int nodeNumber);
-
-    /**
-     * @brief Get the current alert context pending value from the nodeID data structure
-     * 
-     * @param nodeNumber 
-     * @return byte 
-     */
-    byte getAlertContext(int nodeNumber);
 
     /**
      * @brief Changes the alert value that is pending for the next report from the node
@@ -254,6 +230,14 @@ public:
     bool setAlertCode(int nodeNumber, int newAlertCode);
 
     /**
+     * @brief Get the current alert context pending value from the nodeID data structure
+     * 
+     * @param nodeNumber 
+     * @return byte 
+     */
+    uint16_t getAlertContext(int nodeNumber);
+
+    /**
      * @brief Changes the alert context that is pending for the next report from the node
      * 
      * @param nodeNumber 
@@ -264,10 +248,119 @@ public:
     bool setAlertContext(int nodeNumber, int newAlertContext);
 
     /**
+     * @brief This function calculates a valid token for a node
+     */
+    uint16_t setNodeToken(uint8_t nodeNumber);
+
+    /**
+     * @brief Loads the current "Join Payload" values with the values from the node into the currentData struct.
+     * @return true if successful, false if not
+    */
+    bool getJoinPayload(uint8_t nodeNumber);
+
+    /**
+    * @brief Changes the "Join Payload" values for a given node to be equal to the values in payload1-payload4 of the currentData struct.
+    * @return true if successful, false if not
+    */
+    bool setJoinPayload(uint8_t nodeNumber);
+
+    /**
+     * @brief Changes the jsonData1 value for a node 
+     * 
+     * @param nodeNumber
+     * @param sensorType
+     * @param newJsonData1
+     * @return true
+     * @return false if the nodeNumber suggests an unconfigured node or sensorType is not known
+     */
+    bool setJsonData1(int nodeNumber, int sensorType, int newJsonData1);
+
+    /**
+     * @brief Changes the jsonData2 value for a node
+     * 
+     * @param nodeNumber
+     * @param sensorType
+     * @param newJsonData2
+     * @return true
+     * @return false if the nodeNumber suggests an unconfigured node or sensorType is not known
+     */
+    bool setJsonData2(int nodeNumber, int sensorType, int newJsonData2);
+
+     /**
+     * @brief sets the last report field to Time.now() for the specified nodeNumber
+     * 
+     * @param nodeNumber
+     * @param newLastReport - a unix timestamp as an integer
+     * @return true
+     * @return false if the nodeNumber suggests an unconfigured node
+     */
+    bool setLastReport(int nodeNumber, int newLastReport);
+
+
+    /**********************************************************************
+     **           Occupancy Specific Node Management Functions           **
+     **********************************************************************/
+
+    /**
+     * @brief Parses the JSON database to return the sum of the occupancyNet values for all nodes in a space
+     * 
+     * @param space
+     * @return occupancyNet total for the space
+     */
+    uint16_t getOccupancyNetBySpace(int space);
+
+    /**
+     * @brief Parses the JSON database to return the sum of the occupancyGross values for all nodes in a space
+     * 
+     * @param space
+     * @return occupancyGross total for the space
+     */
+    uint16_t getOccupancyGrossBySpace(int space);
+
+    /**
+     * @brief Parses the JSON database to set the occupancyNet values for all nodes in ALL spaces to 0
+     *        Also preemptively updates spaces in Ubidots with the new zeroed values so we don't have to wait for a new report to come in.
+     *  
+     * @return true if successful, false if not
+     */
+    bool resetOccupancyNetCounts();
+
+    /**
+     * @brief Parses the JSON database to reset the currentData (occupancyGross, occupancyNet) for all nodes in ALL spaces
+     *        Also preemptively updates spaces in Ubidots with the new zeroed values so we don't have to wait for a new report to come in.
+     *  
+     * @return true if successful, false if not
+     */
+    bool resetOccupancyCounts();
+
+    /**
+     * @brief Parses the JSON database to set the occupancyNet values for a specified node to 0
+     *        Also preemptively updates its space in Ubidots with the new zeroed values so we don't have to wait for a new report to come in.
+     * 
+     * @param nodeNumber
+     * @param newOccupancyNet
+     * @return true if successful, false if not
+     */
+    bool setOccupancyNetForNode(int nodeNumber, int newOccupancyNet);
+
+    /**********************************************************************
+     **                         Helper Functions                         **
+     **********************************************************************/
+
+    /**
      * @brief Primarily used for debugging
      * 
      */
     void printNodeData(bool publish);
+
+    /**
+     * @brief Returns the node number for the deviceID provided.  This is used in join requests
+     * 
+     * @param nodeID
+     * @returns the node number for this deviceID
+     * 
+     */
+    uint8_t findNodeNumber(int nodeNumber, uint32_t nodeID);
     
     /**
      * @brief Returns true if node is configured and false if it is not
@@ -278,6 +371,11 @@ public:
      */
     bool nodeConfigured(int nodeNumber, uint32_t uniqueID);
 
+    /** 
+     * @brief This function returns true if the nodeNumber / Token combination is valid
+    */
+    bool checkForValidToken(uint8_t nodeNumber, uint16_t token);
+
     /**
      * @brief Returns true if the uniqueID for the node exists in the database false if it does not
      * 
@@ -286,31 +384,63 @@ public:
      */
     bool uniqueIDExistsInDatabase(uint32_t uniqueID);
 
-    /** 
-     * @brief This function returns true if the nodeNumber / Token combination is valid
-    */
-    bool checkForValidToken(uint8_t nodeNumber, uint16_t token);
-
     /**
-     * @brief This function calculates a valid token for a node
-     *
+     * @brief NodeNumberForUniqueId is a function that returns the node number for a given uniqueID
+     * 
+     * @param uniqueID
+     * @returns node number
      */
-    uint16_t setNodeToken(uint8_t nodeNumber);
+    byte getNodeNumberForUniqueID(uint32_t uniqueID);
 
     /**
-     * @brief Loads the current payload values with the values from the node
+     * @brief Parses the JSON database to set the occupancyNet and occupancyGross values for all nodes in a space to 0
+     *        Also preemptively updates Ubidots with the new zeroed values so we don't have to wait for a new report to come in.
+     * 
+     * @param space
      * @return true if successful, false if not
-    */
-    bool getPayload(uint8_t nodeNumber);
+     */
+    bool resetSpace(int space);
 
     /**
-    * @brief Changes the payload values for a given node
-    * @return true if successful, false if not
-    */
-    bool setPayload(uint8_t nodeNumber);
+     * @brief Parses the JSON database, checking the lastReport timestamp of all nodes in order to see if any spaces have not been updated for [lengthOfInactivity] seconds.
+     *        If all nodes in a space have not reported for 1 hour, this function calls resetSpace on that space to reset the node counts and update Ubidots.
+     *        Resets multiple spaces if needed.
+     * 
+     * @param secondsInactive
+     * @return true if at least 1 space was reset successfully, false if not
+     */
+    bool resetInactiveSpaces(int secondsInactive);
 
     /**
-     * @brief Compresses currentData's payload1 - payload4 based on a sensor type and returns it
+     * @brief Resets the current data for a node in the JSON, then sends alert code 6
+     *        Also preemptively updates Ubidots with the new zeroed values so we don't have to wait for a new report to come in.
+     * 
+     * @param nodeNumber
+     * @return true if successful, false if not
+     */
+    bool resetCurrentDataForNode(int nodeNumber);
+
+     /**
+     * @brief Resets the current data for a node in the JSON, then sends alert code 5
+     *        Also preemptively updates Ubidots with the new zeroed values so we don't have to wait for a new report to come in.
+     * 
+     * @param nodeNumber
+     * @return true if successful, false if not
+     */
+    bool resetAllDataForNode(int nodeNumber);
+
+    /** 
+     * @brief Saves the node database as a string to memory.
+     */
+    bool saveNodeDatabase(JsonParser &jp);
+
+
+    /**********************************************************************
+     **                         Data Compression                         **
+     **********************************************************************/
+
+    /**
+     * @brief Compresses currentData's payload1 - payload4 (Join Payload) based on a sensor type, returns it
      *
      * @details This function is a higher-level compression function that utilizes the 
      * JSON database and compressData functions to compress the payload based on
@@ -318,7 +448,7 @@ public:
      * 
      * @param sensorType the sensor type of the node who's payload we are decompressing
      */
-    uint8_t getCompressedPayload(uint8_t sensorType);
+    uint8_t getCompressedJoinPayload(uint8_t sensorType);
 
     /**
      * @brief Decompresses the compressed payload and hydrates the currentData object for a payload based on a sensor type
@@ -331,23 +461,23 @@ public:
      * @param compressedPayload the payload variables compressed to 1 byte
      * @return true if successful, false if not
      */
-    bool hydratePayload(uint8_t sensorType, uint8_t compressedPayload);
+    bool hydrateJoinPayload(uint8_t sensorType, uint8_t compressedPayload);
 
     /**
-     * @brief Parses a compressed payload and sets the payload1 - payload4 variables with those values.
+     * @brief Parses a compressed payload and sets the payload1 - payload4 variables (Join Payload) with those values.
      *
      * @details Takes a compressed payload and 4 uint8_t variables. Decompresses the payload into its
      * components based on a given device type
      * 
      * @param sensorType the sensor type of the node who's payload we are decompressing
-     * @param compressedPayload the payload variables compressed to 1 byte
+     * @param compressedJoinPayload the payload variables compressed to 1 byte
      * @param payload1 payload1 to set
      * @param payload2 payload2 to set
      * @param payload3 payload3 to set
      * @param payload4 payload4 to set
      * @return true if successful, false if not
      */
-    bool parsePayloadValues(uint8_t sensorType, uint8_t compressedPayload, uint8_t& payload1, uint8_t& payload2, uint8_t& payload3, uint8_t& payload4);
+    bool parseJoinPayloadValues(uint8_t sensorType, uint8_t compressedJoinPayload, uint8_t& payload1, uint8_t& payload2, uint8_t& payload3, uint8_t& payload4);
 
     /**
      * @brief Compresses up to four pieces of data into a single byte.

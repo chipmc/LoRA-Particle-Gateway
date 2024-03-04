@@ -48,11 +48,19 @@ The Alert Codes and their actions are key to this process:
 * Part of the configuration process, the counts from the node are assigned to a "space" (could be a room, entrance, field, court) stored in the node Join payload so we know where to send data / counts / occupancy on the back end. Their mounting variables (placement, multi, etc.) are also set from the node Join payload. 
     * Node Join payload contains a payload of 4 bytes compressed into 1 byte. Data in the payload varies by sensorType. See chart for "Join Payload" at the bottom of this README for details.
 
-**Alert Code 2 - Change the frequency of responses**
+**Alert Code 2 - Time not Synced (CURRENTLY AN INTERNAL CODE FOR THE NODE)**
 * No Alert Context
-* This alert code tells the node that it TODO:: finish Alert 2
+* If the time is not synced on a node, the node rejoins with Alert 2
 
-**[Alert Codes 3-4?]**
+**Alert Code 3 - Power cycle the node (CURRENTLY AN INTERNAL CODE FOR THE NODE)**
+* No Alert Context
+* Currently only used internally on a node when something goes wrong
+* Power cycles the device to recover from any errors that occur internally on a node.
+
+**Alert Code 4 - Reinitialize the modem (CURRENTLY AN INTERNAL CODE FOR THE NODE)**
+* No Alert Context
+* Currently only used internally on a node when something goes wrong
+* Used when the node has retried sending enough that it is time to reinitilize the modem
 
 **Alert Code 5 - Resets ALL data of a node**
 * No Alert Context
@@ -101,6 +109,10 @@ The Alert Codes and their actions are key to this process:
 * Currently does not check for sensorType before sending the alert and alertContext
 * Initiates recalibration for a sensor. Often used after setting different sensor configuration values or a new zoneMode.
 
+**Alert Code 12 - Gateway override to occupancyNet value of a node.**
+* Alert Context - occupancyNet(int16_t)
+* Sets the value of the current net count to the value sent in the alert context on the data acknowledgement.
+
 ## Particle Function Commands 
 
 Particle Function Commands are executed through the Particle Console for a device (TODO:: or through the Ubidots dashboard widget frontend). The UniqueID of a node is specified as the value for the "node" key of the command and thus, a node must be present in the JSON database of the gateway before executing them. 
@@ -132,6 +144,22 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 * {"cmd":[{"node":0,"var":"6","fn":"open"}]} - Changes the closing hour of the Gateway
     * var can be any value 13-24
 
+**Break Start Hour**
+* {"cmd":[{"node":0,"var":"2","fn":"break"}]} - Changes the break start hour for the Gateway - set to 24 to denote having no break
+    * var can be any value 0-24, set to 24 to denote having no break
+
+**Break Length Minutes**
+* {"cmd":[{"node":0,"var":"30","fn":"breakLengthMinutes"}]} - Changes the length (in minutes) for the 'break' on the Gateway
+    * var can be any value 0-240
+
+**Weekend Break Start Hour**
+* {"cmd":[{"node":0,"var":"2","fn":"weekendBreak"}]} - Changes the break start hour for the Gateway - set to 24 to denote having no break
+    * var can be any value 0-24, set to 24 to denote having no break
+
+**Weekend Break Length Minutes**
+* {"cmd":[{"node":0,"var":"30","fn":"weekendBreakLengthMinutes"}]} - Changes the length (in minutes) for the 'break' on the Gateway
+    * var can be any value 0-240
+
 **Power Cycle**
 * {"cmd":[{"node":0,"var":"1","fn":"pwr"}]} - Forces a power cycle for the Gateway
     * var can *only* be 1 
@@ -157,22 +185,34 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 
 **Set Floor Interference Buffer for an Occupancy Node**
 * {"cmd":[{"node":*node uniqueID here*, "var":"150","fn":"interferenceBuffer"}]} - Sets the interferenceBuffer for the node with the given uniqueID by sending Alert Code 9 with Alert Context == var
-    * var must be 0-255 (1 byte)
+    * var must be 0-2000
 
 **Set Number of Calibration Loops for an Occupancy Node**
 * {"cmd":[{"node":*node uniqueID here*, "var":"50","fn":"occupancyCalibrationLoops"}]} - Sets the occupancyCalibrationLoops for the node with the given uniqueID by sending Alert Code 10 with Alert Context == var
-    * var must be 0-255 (1 byte)
+    * var must be 0-1000
 
-**Recalibrare an Occupancy Node**
+**Recalibrate an Occupancy Node**
 * {"cmd":[{"node":*node uniqueID here*, "var":"true","fn":"recalibrate"}]} - Triggers a recalibration of the TOF Sensor on the node with the given uniqueID by sending Alert Code 11 
     * var must *only* be "true"
+
+**Reset all Room Occupancy**
+* {"cmd":[{"node":0, "var":"true","fn":"resetRoomCounts"}]} - Resets the Room Occupancy (net and gross) numbers to 0 for all nodes. 
+    * var must *only* be "true"
+
+**Reset a Space**
+* {"cmd":[{"node":"0", "var":"5","fn":"resetSpace"}]} - Resets the values in a space and updates ubidots.
+    * var must be 1-64
+
+**Set Net Count for an Occupancy Node**
+* {"cmd":[{"node":*node uniqueID here*, "var":"5","fn":"setOccupancyNetForNode"}]} - Sets the Net Occupancy number for a node and updates the node's space value on Ubidots
+    * var must be an integer value
 
 ## Payload Assignments for Data Report by Sensor Type
 
 | Type  | Payload1   | Payload2   | Payload3   | Payload4   | Payload5   | Payload6   | Payload7   | Payload8   |
 | ---------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | 
-| Counter | Gross-H | Gross-L | Net - H | Net - L | TBD | TBD | TBD | TBD |
-| Occupancy | Hourly - H | Hourly - L | Daily - H | Daily - L | Space | Placement | Multi | Zone Mode | 
+| Counter | Hourly - H | Hourly - L | Daily - H | Daily - L | TBD | TBD | TBD | TBD |
+| Occupancy | Gross-H | Gross-L | Net - H | Net - L | Space | Placement | Multi | Zone Mode | 
 | Sensor | Data1 - H | Data1 - L | Data2 - H | Data2 - L | Data3 - H | Data3 - L | Data4 - H | Data4 - L | 
 
 ## Payload Assignments for Join Request by Sensor Type (4 values compressed to 1 byte)
@@ -182,3 +222,11 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 | Counter | 2-Way (1 bit) | TBD | TBD | TBD |
 | Occupancy | Space (6 bits) | Placement (1 bit) | Multi (1 bit) | TBD |
 | Sensor | Space (6 bits)  | Placement (1 bit) | TBD | TBD |
+
+## Additional Data stored in JSON database by Sensor Type
+
+| Type  | JsonData1 (jd1)   | JsonData2(jd2)   |
+| ---------- | ----------- | ----------- |
+| TBD | TBD | TBD |
+| Occupancy | OccupancyNet | OccupancyGross | 
+| TBD | TBD | TBD |

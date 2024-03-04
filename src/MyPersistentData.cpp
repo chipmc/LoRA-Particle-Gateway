@@ -2,9 +2,16 @@
 #include "MB85RC256V-FRAM-RK.h"
 #include "StorageHelperRK.h"
 #include "MyPersistentData.h"
+#include "PublishQueuePosixRK.h"
+#include <stack>
+#include <cstring>
 
 
 MB85RC64 fram(Wire, 0);
+// We use the 64kbit part so we have 8k bytes of storage
+// SysStatus Object - starts at 0
+// Current Object - starts at 100
+// Node Object - starts at 200
 
 // *******************  SysStatus Storage Object **********************
 //
@@ -86,6 +93,10 @@ void sysStatusData::initialize() {
     sysStatus.set_alertTimestampGateway(0);
     sysStatus.set_openTime(6);
     sysStatus.set_closeTime(22);
+    sysStatus.set_breakTime(14);            // set to 2pm by default
+    sysStatus.set_breakLengthMinutes(30);   // set to 30 minutes by default
+    sysStatus.set_weekendBreakTime(13);            // set to 1pm by default
+    sysStatus.set_weekendBreakLengthMinutes(30);   // set to 30 minutes by default
 
     // If you manually update fields here, be sure to update the hash
     updateHash();
@@ -209,6 +220,38 @@ uint8_t sysStatusData::get_closeTime() const {
 
 void sysStatusData::set_closeTime(uint8_t value) {
     setValue<uint8_t>(offsetof(SysData, closeTime), value);
+}
+
+uint8_t sysStatusData::get_breakTime() const {
+    return getValue<uint8_t>(offsetof(SysData, breakTime));
+}
+
+void sysStatusData::set_breakTime(uint8_t value) {
+    setValue<uint8_t>(offsetof(SysData, breakTime), value);
+}
+
+uint8_t sysStatusData::get_breakLengthMinutes() const {
+    return getValue<uint8_t>(offsetof(SysData, breakLengthMinutes));
+}
+
+void sysStatusData::set_breakLengthMinutes(uint8_t value) {
+    setValue<uint8_t>(offsetof(SysData, breakLengthMinutes), value);
+}
+
+uint8_t sysStatusData::get_weekendBreakTime() const {
+    return getValue<uint8_t>(offsetof(SysData, weekendBreakTime));
+}
+
+void sysStatusData::set_weekendBreakTime(uint8_t value) {
+    setValue<uint8_t>(offsetof(SysData, weekendBreakTime), value);
+}
+
+uint8_t sysStatusData::get_weekendBreakLengthMinutes() const {
+    return getValue<uint8_t>(offsetof(SysData, weekendBreakLengthMinutes));
+}
+
+void sysStatusData::set_weekendBreakLengthMinutes(uint8_t value) {
+    setValue<uint8_t>(offsetof(SysData, weekendBreakLengthMinutes), value);
 }
 
 uint8_t sysStatusData::get_tokenCore() const {
@@ -435,6 +478,14 @@ void currentStatusData::set_openHours(uint8_t value) {
     setValue<uint8_t>(offsetof(CurrentData, openHours), value);
 }
 
+byte currentStatusData::get_onBreak() const {
+    return getValue<byte>(offsetof(CurrentData, onBreak));
+}
+
+void currentStatusData::set_onBreak(byte value) {
+    setValue<byte>(offsetof(CurrentData, onBreak), value);
+}
+
 uint8_t currentStatusData::get_hops() const {
     return getValue<uint8_t>(offsetof(CurrentData, hops));
 }
@@ -458,6 +509,7 @@ uint8_t currentStatusData::get_retransmissionDelay() const {
 void currentStatusData::set_retransmissionDelay(uint8_t value) {
     setValue<uint8_t>(offsetof(CurrentData, retransmissionDelay), value);
 }
+
 
 
 // *******************  nodeID Storage Object **********************
@@ -498,7 +550,7 @@ void nodeIDData::loop() {
 
 void nodeIDData::resetNodeIDs() {
     String blank = "{\"nodes\":[]}";
-    Log.info("Resettig NodeID config to: %s", blank.c_str());
+    Log.info("Resetting NodeID config to: %s", blank.c_str());
     nodeDatabase.set_nodeIDJson(blank);
     nodeDatabase.flush(true);
     Log.info("NodeID data is now %s", nodeDatabase.get_nodeIDJson().c_str());
@@ -530,6 +582,35 @@ String nodeIDData::get_nodeIDJson() const {
 	return result;
 }
 
-bool nodeIDData::set_nodeIDJson(const char *str) {
-	return setValueString(offsetof(NodeData, nodeIDJson), sizeof(NodeData::nodeIDJson), str);
+bool nodeIDData::set_nodeIDJson(const char* str) {
+
+    // Set the cleaned JSON value
+    bool result = setValueString(offsetof(NodeData, nodeIDJson), sizeof(NodeData::nodeIDJson), str);
+    
+    // // Send chunks of the nodeDatabase string as Particle events for debugging
+    // if (result && Particle.connected()) {
+    //     const size_t maxChunkSize = 622; // max report size
+    //     size_t messageLength = strlen(str);
+
+    //     size_t offset = 0;
+    //     while (offset < messageLength) {
+    //         // Calculate chunk size for the current iteration
+    //         size_t chunkSize = std::min(maxChunkSize, messageLength - offset);
+
+    //         // Create a buffer for the current chunk
+    //         char chunk[maxChunkSize + 1]; // +1 for null terminator
+    //         snprintf(chunk, sizeof(chunk), "%.*s", static_cast<int>(chunkSize), str + offset);
+
+    //         // Publish the current chunk
+    //         PublishQueuePosix::instance().publish("Updated Database String:", chunk, PRIVATE);
+            
+    //         // Move to the next chunk
+    //         offset += chunkSize;
+    //     }
+    // }
+
+    // Save to disk
+    nodeDatabase.flush(false);
+
+    return result;
 }

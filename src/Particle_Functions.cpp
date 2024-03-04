@@ -5,6 +5,7 @@
 #include "Particle_Functions.h"
 #include "PublishQueuePosixRK.h"
 #include "LoRA_Functions.h"
+#include "Room_Occupancy.h"
 #include "JsonParserGeneratorRK.h"
 
 char openTimeStr[8] = " ";
@@ -64,7 +65,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
 	jp.addString(command);
 	if (!jp.parse()) {
 		Log.info("Parsing failed - check syntax");
-    Particle.publish("cmd", "Parsing failed - check syntax",PRIVATE);
+    PublishQueuePosix::instance().publish("cmd", "Parsing failed - check syntax",PRIVATE);
 		char data[128];  
     snprintf(data, sizeof(data), "{\"commands\":%i,\"context\":\"%s,\"timestamp\":%lu000 }", -1, command.c_str(), Time.now());        // Send -1 (Syntax Error) to the 'commands' Synthetic Variable
     PublishQueuePosix::instance().publish("Ubidots_Command_Hook", data, PRIVATE);
@@ -103,7 +104,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
           snprintf(messaging,sizeof(messaging),"Resetting the gateway's node Data");
           nodeDatabase.resetNodeIDs();
           Log.info("Resetting the Gateway node so new database is in effect");
-          Particle.publish("Alert","Resetting Gateway",PRIVATE);
+          PublishQueuePosix::instance().publish("Alert","Resetting Gateway",PRIVATE);
           delay(2000);
           System.reset();
         }
@@ -120,11 +121,11 @@ int Particle_Functions::jsonFunctionParser(String command) {
       else if(nodeNumber != 0) {                        // if we could not set the nodeNumber from that unique ID, throw an error
         if (variable == "all") {
           snprintf(messaging,sizeof(messaging),"Resetting node %d's system and current data", nodeNumber);
-          LoRA_Functions::instance().setAlertCode(nodeNumber,5);    // Alertcode 5 will reset all data on the node (requires no context)
+          LoRA_Functions::instance().resetAllDataForNode(nodeNumber);
         }
         else {
           snprintf(messaging,sizeof(messaging),"Resetting node %d's current data", nodeNumber);
-          LoRA_Functions::instance().setAlertCode(nodeNumber,6);    // Alertcode 6 will only reset all the current data on the node (requires no context)
+          LoRA_Functions::instance().resetCurrentDataForNode(nodeNumber);
         }
       } else {
         snprintf(messaging,sizeof(messaging),"Not a valid node uniqueID");
@@ -148,7 +149,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
 
     // Stay Connected
     else if (function == "stay") {
-      // Format - function - rpt, node - 0, variables - true or false
+      // Format - function - stay, node - 0, variables - true or false
       // Test - {"cmd":[{"node":0,"var":"true" or "false","fn":"stay"}]}
       if (variable == "true") {
         snprintf(messaging,sizeof(messaging),"Going to keep Gateway on Particle and LoRA networks");
@@ -188,7 +189,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
 
     // Sets Closing hour
     else if (function == "close") {
-      // Format - function - close, node - 0, variables - 13-24 open hour
+      // Format - function - close, node - 0, variables - 13-24 closing hour
       // Test - {"cmd":[{"node":0, "var":"21","fn":"close"}]}
       int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
       if ((tempValue >= 13 ) && (tempValue <= 24)) {
@@ -198,6 +199,66 @@ int Particle_Functions::jsonFunctionParser(String command) {
       else {
         snprintf(messaging,sizeof(messaging),"Close hour - must be 13-24");
         success = false;                                                       // Make sure it falls in a valid range or send a "fail" result
+      }
+    }
+
+    // Sets break time (hour)
+    else if (function == "break") {
+      // Format - function - open, node - 0, variables - 0-23 break start hour (set to 24 to dedenote having no break)
+      // Test - {"cmd":[{"node":0, "var":"2","fn":"break"}]}
+      int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+      if ((tempValue >= 0) && (tempValue <= 24)) {
+        snprintf(messaging,sizeof(messaging),"Setting break start hour to %d:00", tempValue);
+        sysStatus.set_breakTime(tempValue);
+      }
+      else {
+        snprintf(messaging,sizeof(messaging),"Break start hour - must be 0-24");
+        success = false;                                               // Make sure it falls in a valid range or send a "fail" result
+      }
+    }
+
+    // Sets break length in minutes
+    else if (function == "breakLengthMinutes") {
+      // Format - function - close, node - 0, variables - 0-60 break length (in minutes)
+      // Test - {"cmd":[{"node":0, "var":"21","fn":"breakLengthMinutes"}]}
+      int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+      if ((tempValue >= 0 ) && (tempValue <= 240)) {
+        snprintf(messaging,sizeof(messaging),"Setting break length to %d minutes", tempValue);
+        sysStatus.set_breakLengthMinutes(tempValue);
+      }
+      else {
+        snprintf(messaging,sizeof(messaging),"Break length (minutes) - must be 0-240");
+        success = false;                                               // Make sure it falls in a valid range or send a "fail" result
+      }
+    }
+
+    // Sets weekend break time (hour)
+    else if (function == "weekendBreak") {
+      // Format - function - open, node - 0, variables - 0-23 break start hour (set to 24 to dedenote having no break)
+      // Test - {"cmd":[{"node":0, "var":"2","fn":"break"}]}
+      int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+      if ((tempValue >= 0) && (tempValue <= 24)) {
+        snprintf(messaging,sizeof(messaging),"Setting weekend break start hour to %d:00", tempValue);
+        sysStatus.set_weekendBreakTime(tempValue);
+      }
+      else {
+        snprintf(messaging,sizeof(messaging),"Weekend break start hour - must be 0-24");
+        success = false;                                               // Make sure it falls in a valid range or send a "fail" result
+      }
+    }
+
+    // Sets weekend break length in minutes
+    else if (function == "weekendBreakLengthMinutes") {
+      // Format - function - close, node - 0, variables - 0-60 break length (in minutes)
+      // Test - {"cmd":[{"node":0, "var":"21","fn":"breakLengthMinutes"}]}
+      int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+      if ((tempValue >= 0 ) && (tempValue <= 240)) {
+        snprintf(messaging,sizeof(messaging),"Setting weekend break length to %d minutes", tempValue);
+        sysStatus.set_weekendBreakLengthMinutes(tempValue);
+      }
+      else {
+        snprintf(messaging,sizeof(messaging),"Weekend break length (minutes) - must be 0-240");
+        success = false;                                               // Make sure it falls in a valid range or send a "fail" result
       }
     }
 
@@ -263,9 +324,9 @@ int Particle_Functions::jsonFunctionParser(String command) {
               //jp.getValueByIndex(varArrayContainer, 3, nothing);     // reserved for future use
               uint8_t space = static_cast<uint8_t>(spaceInt);
               if(nodeNumber != 0) {
-                if(LoRA_Functions::instance().getPayload(nodeNumber)) {
-                  if(space < 64) {
-                    current.set_payload1(space);
+                if(LoRA_Functions::instance().getJoinPayload(nodeNumber)) {
+                  if(space >= 1 && space <= 64) {                            // People don't like a space to be zero so they start at one
+                    current.set_payload1(space - 1);                              // Store it as a 6 bit anyway though (This allows us to index space as 0-63 in the app, while displaying space + 1 to Ubidots/Particle)
                     if(placementStr != "null"){                              // null is sent here when blank on ubidots widget - ignoring reduces punishment of user error
                       placement = placementStr == "true" ? 1 : 0;
                       current.set_payload2(placement);
@@ -275,10 +336,10 @@ int Particle_Functions::jsonFunctionParser(String command) {
                       current.set_payload3(multi);
                     }
                     snprintf(messaging,sizeof(messaging), "Set payload for node %d. space: %d, placement: %s, multi: %s", nodeNumber, space, placementStr.c_str(), multiStr.c_str());
-                    LoRA_Functions::instance().setPayload(nodeNumber);
+                    LoRA_Functions::instance().setJoinPayload(nodeNumber);
                     LoRA_Functions::instance().setAlertCode(nodeNumber, 1);    // trigger a rejoin alert code               
                   } else {
-                    snprintf(messaging,sizeof(messaging), "Error in mountConfig. \"Space\" must be less than 64.");
+                    snprintf(messaging,sizeof(messaging), "Error in mountConfig. \"Space\" must be between 1 and 64.");
                     success = false;
                   }
                 } else {
@@ -340,13 +401,13 @@ int Particle_Functions::jsonFunctionParser(String command) {
       // Test - {"cmd":[{"node":3312487035, "var":"150","fn":"interferenceBuffer"}]}
       if(nodeNumber != 0) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
-        if ((tempValue >= 0 ) && (tempValue <= 255)) {                   
+        if ((tempValue >= 0 ) && (tempValue <= 2000)) {                   
           snprintf(messaging,sizeof(messaging),"Setting interferenceBuffer to %d for node %d", tempValue, nodeNumber);
           LoRA_Functions::instance().setAlertCode(nodeNumber,9);
           LoRA_Functions::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its floor interference buffer by setting an alert code and sending the value as context 
         }
         else {
-          snprintf(messaging,sizeof(messaging),"Floor Interference Buffer must be 0-255mm");
+          snprintf(messaging,sizeof(messaging),"Floor Interference Buffer must be 0-2000mm");
           success = false;                                                   // Make sure it falls in a valid range or send a "fail" result
         }
       } else {
@@ -360,13 +421,13 @@ int Particle_Functions::jsonFunctionParser(String command) {
       // Test - {"cmd":[{"node":3312487035, "var":"50","fn":"occupancyCalibrationLoops"}]}
       if(nodeNumber != 0) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
-        if ((tempValue >= 0 ) && (tempValue <= 255)) {                   
+        if ((tempValue >= 0 ) && (tempValue <= 1000)) {                   
           snprintf(messaging,sizeof(messaging),"Setting occupancyCalibrationLoops to %d for node %d", tempValue, nodeNumber);
           LoRA_Functions::instance().setAlertCode(nodeNumber,10);
           LoRA_Functions::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its floor interference buffer by setting an alert code and sending the value as context 
         }
         else {
-          snprintf(messaging,sizeof(messaging),"the number of calibration loops must be 0-255");
+          snprintf(messaging,sizeof(messaging),"the number of calibration loops must be 0-1000");
           success = false;                                                   // Make sure it falls in a valid range or send a "fail" result
         }
       } else {
@@ -382,7 +443,62 @@ int Particle_Functions::jsonFunctionParser(String command) {
         if (variable == "true") {                   
           snprintf(messaging,sizeof(messaging),"Initiating recalibration for node %d", nodeNumber);
           LoRA_Functions::instance().setAlertCode(nodeNumber,11);
+        } else {
+          snprintf(messaging,sizeof(messaging),"Incorrect value for var. Must be \"true\"");
+          success = false; 
         }
+      } else {
+        snprintf(messaging,sizeof(messaging),"No node exists in the database with that uniqueID");
+        success = false; 
+      }
+    }
+
+    // Resets the Room Occupancy numbers
+    else if (function == "resetRoomCounts") {
+      // Test - {"cmd":[{"node":3312487035, "var":"true","fn":"recalibrate"}]}
+      if(nodeNumber == 0) {
+        if (variable == "all") {                   
+          snprintf(messaging,sizeof(messaging),"Resetting Room gross AND net counts");
+          Room_Occupancy::instance().resetAllCounts();
+        }
+        if (variable == "net") {                   
+          snprintf(messaging,sizeof(messaging),"Resetting Room net counts");
+          Room_Occupancy::instance().resetNetCounts();
+        } else {
+          snprintf(messaging,sizeof(messaging),"Must enter \"all\" or \"net\" for var");
+          success = false; 
+        }
+      } else {
+        snprintf(messaging,sizeof(messaging),"Can only reset counts for Gateway (node 0)");
+        success = false; 
+      }
+    }
+
+    // Resets the Room Occupancy numbers
+    else if (function == "resetSpace") {
+      // Test - {"cmd":[{"node":0, "var":"1","fn":"resetSpace"}]}
+      if(nodeNumber == 0) {
+        int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+        if ((tempValue >= 1 ) && (tempValue <= 64)) {                   
+          snprintf(messaging,sizeof(messaging),"Resetting Space %d", tempValue);
+          LoRA_Functions::instance().resetSpace(tempValue - 1); // Send the index of the space rather than the space number. Ex. space 1 is index 0
+        } else {
+          snprintf(messaging,sizeof(messaging),"Space number must be between 1 and 64");
+          success = false; 
+        }
+      } else {
+        snprintf(messaging,sizeof(messaging),"Can only reset spaces through Gateway (node 0)");
+        success = false; 
+      }
+    }
+
+    // Sets the net count for a node manually
+    else if (function == "setOccupancyNetForNode") {
+      // Test - {"cmd":[{"node":3312487035, "var":"5","fn":"setNodeNetCount"}]}
+      if(nodeNumber != 0) {
+        int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+        snprintf(messaging,sizeof(messaging),"Setting net occupancy to %d for node %d", tempValue, nodeNumber);
+        Room_Occupancy::instance().setOccupancyNetForNode(nodeNumber, tempValue);
       } else {
         snprintf(messaging,sizeof(messaging),"No node exists in the database with that uniqueID");
         success = false; 
@@ -398,7 +514,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
     
     if (!(strncmp(messaging," ",1) == 0)) {
       Log.info(messaging);
-      if (Particle.connected()) Particle.publish("cmd",messaging,PRIVATE);
+      if (Particle.connected()) PublishQueuePosix::instance().publish("cmd",messaging,PRIVATE);
     }
   }
 

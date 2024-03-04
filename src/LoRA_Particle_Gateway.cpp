@@ -1,7 +1,7 @@
 /*
  * Project LoRA-Particle-Gateway
  * Description: This device will listen for data from client devices and forward the data to Particle via webhook
- * Author: Chip McClelland and Jeff Skarda
+ * Author: Chip McClelland, Jeff Skarda, Alex Bowen
  * Date: 7-28-22
  */
 
@@ -53,7 +53,25 @@
 //  		... reworked the Alert system to include alertContext with the alert. Stored in the NodeArray as an integer and passed as a single byte
 // v17.10	Fixed data type issues when printing occupancyNet
 // v17.20	Fixed join process
-
+// v17.30  	Added a function that will keep track of the net occupanncy of rooms. Will be specific for MAFC then will generalize
+			// - New class for Room Occupancy, new alert to adjust nodes for negative room occupancy (need to implement alert 3 on the node)
+			// - Instead of publishing node webhooks - just publish to the console - perhaps that is a special "verbose mode"
+			// - Nodes send updates to the gateway that captures the net and gross for each room in an array
+// v17.40  	Setting Room Occupancy after receiving a Data Report from the Node. Space range now 1-64, but stored as 0-63 (for 6 bits). TODO:: comments added with questions/clarifications
+// v17.50  	Breaking Change - Node v11.4 or later - Changed alertContext to uint16_t to prevent occupancyNet correction edge cases. Expanded Particle_Function bounds that used old uint8_t as the bounds.
+// v18 		Integrated Ubidots-LoRA-Occupancy-v2 Particle integration, which sends node battery information and space values to the UpdateGatewayNodesAndSpaces UbiFunction.
+// v19 		Added 'break time' to SysStatus, which now tells the nodes to reset to 0 at a certain time. Increased NodeID string size to 3072 characters. Fixed major bug in Room_Occupancy.cpp. 
+// v19.1 	removed type-based JSON in favor of 'jsonData1' and 'jsonData2' which have been added as additional persistent storage based on sensor type.
+// v19.2 	Added alerts to troubleshoot infinite joins caused by JSON database errors. Join requests now set the nodes' configuration settings (from the join payload) when the node database is empty and the node joins the network.
+// v19.3 	Fixed declaration of Base64RK in LoRA_Functions.cpp that was preventing cloud compile and cloud flash
+// v19.4 	Changed all instances of Particle.publish() to PublishQueuePosix.instance().publish(). Properly cleared nodeDatabase values when calling setType
+// v20		New JSON fixes from JSON-Parser-Test integrated into the system. Conducted a lot of testing. Good results, and found/fixed a bug with current.openHours that caused loops of alert code 6.
+// v20.1	Added the getJsonString helper function to eliminate problems with the JSON->String->memory piece.
+// v21		Added a function layer by which any alert codes that set a value on a device ALSO set that value in the JSON database and update Ubidots so reflecting node state does not rely on data reports being sent. 
+// v21.1    Integrated new backend layer from v21 in places where alert code 12, 5, and 6 are set on the node.
+// v21.2    Going back to LORA_STATE now resets any spaces that have been inactive for an hour. A separate weekend break time is now in effect, with Particle functions to manage it.
+// v21.3    Added a particle function (setOccupancyNetForNode) and Room_Occupancy layer that allows for a node to have its net count set manually through Particle/Ubidots.
+// v21.4    Added a particle function (resetSpace) that allows for a space (and all its nodes) to have their values reset through Particle/Ubidots.
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -66,13 +84,14 @@
 // Application Files
 #include "LoRA_Functions.h"							// Where we store all the information on our LoRA implementation - application specific not a general library
 #include "device_pinout.h"							// Define pinouts and initialize them
-#include "Particle_Functions.h"							// Particle specific functions
+#include "Particle_Functions.h"						// Particle specific functions
 #include "take_measurements.h"						// Manages interactions with the sensors (default is temp for charging)
 #include "MyPersistentData.h"						// Where my persistent storage files are kept
+#include "Room_Occupancy.h"							// Aggregates node data to get net room occupancy for Occupancy Nodes
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
-PRODUCT_VERSION(14);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="17.20";
+PRODUCT_VERSION(21);								// For now, we are putting nodes and gateways in the same product group - need to deconflict #
+char currentPointRelease[6] ="21.4";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -124,7 +143,7 @@ void setup()
 
 	// Setup local time and set the publishing schedule
 	LocalTime::instance().withConfig(LocalTimePosixTimezone("EST5EDT,M3.2.0/2:00:00,M11.1.0/2:00:00"));			// East coast of the US
-	conv.withCurrentTime().convert();  				        // Convert to local time for use later
+	conv.withCurrentTime().convert();  				// Convert to local time for use later
 
 	if (Time.isValid()) {
 		Log.info("LocalTime initialized, time is %s and RTC %s set", conv.format("%I:%M:%S%p").c_str(), (ab1805.isRTCSet()) ? "is" : "is not");
@@ -136,7 +155,7 @@ void setup()
 
 	if (!digitalRead(BUTTON_PIN) || sysStatus.get_connectivityMode()== 1) {
 		Log.info("User button or pre-existing set to connected mode");
-		sysStatus.set_connectivityMode(1);					  // connectivityMode Code 1 keeps both LoRA and Cellular connections on
+		sysStatus.set_connectivityMode(1);			  // connectivityMode Code 1 keeps both LoRA and Cellular connections on
 		state = CONNECTING_STATE;
 	}
 	
@@ -184,14 +203,48 @@ void loop() {
 
 		case LoRA_STATE: {														// Enter this state every reporting period and stay here for 5 minutes
 			static system_tick_t startLoRAWindow = 0;
-			static byte connectionWindow = 0;
+			static byte connectionWindow = 0;				
 
 			if (state != oldState) {
 				if (oldState != REPORTING_STATE) startLoRAWindow = millis();    // Mark when we enter this state - for timeouts - but multiple messages won't keep us here forever
 				publishStateTransition();                   					// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 				conv.withCurrentTime().convert();								// Get the time and convert to Local
-				if (conv.getLocalTimeHMS().hour >= sysStatus.get_openTime() && conv.getLocalTimeHMS().hour <= sysStatus.get_closeTime()) current.set_openHours(true);
-				else current.set_openHours(false);
+				if (conv.getLocalTimeHMS().hour >= sysStatus.get_openTime() && conv.getLocalTimeHMS().hour <= sysStatus.get_closeTime()) {
+					current.set_openHours(true);
+				} else {
+					Log.info("Resetting all counts - not in open hours. Open hour: %d, Close Hour: %d, Current Hour: %d", sysStatus.get_openTime(), sysStatus.get_closeTime(), conv.getLocalTimeHMS().hour);
+					Room_Occupancy::instance().resetAllCounts();	// reset the room net AND gross counts at end of day for all occupancy nodes and update Ubidots
+					current.set_openHours(false);
+				};
+				
+				if (oldState == REPORTING_STATE) LoRA_Functions::instance().resetInactiveSpaces(3600);	// Define "inactive" spaces as those where ALL of the nodes in that space have not sent a report in 3600 seconds.
+																										// Check for inactive spaces and reset them. Ignores nodes of a "Counter" sensorType as they do not have spaces.
+				
+				String dayString = conv.timeStr().substring(0, 3);	// Take the first three characters of the timeStr ("Fri", "Sat", "Sun")
+				uint8_t breakLengthHours;
+				bool isWeekend = (dayString == "Sat" || dayString == "Sun");	// If it is a weekend, we will use the weekendBreakTime and weekendBreakLengthMinutes instead
+				if (isWeekend) {
+					breakLengthHours = (sysStatus.get_weekendBreakLengthMinutes() / 60);
+				} else {
+					breakLengthHours = (sysStatus.get_breakLengthMinutes() / 60);
+				}
+				uint8_t breakTime = isWeekend ? sysStatus.get_weekendBreakTime() : sysStatus.get_breakTime();
+				uint16_t breakLengthMinutes = isWeekend ? sysStatus.get_weekendBreakLengthMinutes() : sysStatus.get_breakLengthMinutes();
+				
+				if (breakTime != 24) { // Ignore break functionality entirely if it is set to be 24. This means no break is needed for this gateway
+					if (conv.getLocalTimeHMS().hour >= breakTime &&
+						conv.getLocalTimeHMS().hour <= (breakTime + breakLengthHours) &&
+						conv.getLocalTimeHMS().minute < (breakLengthMinutes - (breakLengthHours * 60))) {
+						if (current.get_onBreak() == 0) {
+							current.set_onBreak(1); // start the break
+							Room_Occupancy::instance().resetNetCounts(); // reset the room net counts for all occupancy nodes and update Ubidots
+						}
+					} else {
+						current.set_onBreak(0); // Otherwise, we are still not on break
+					}
+
+					Log.info("%s Break Starts at %d with length of %d minutes. Current hour = %d, minute = %d On Break? %s", isWeekend ? "Weekend" : "Weekday", breakTime, breakLengthMinutes, conv.getLocalTimeHMS().hour, conv.getLocalTimeHMS().minute, current.get_onBreak() ? "Yes" : "No");
+				}
 
 				if (sysStatus.get_connectivityMode() == 0) connectionWindow = DEFAULT_LORA_WINDOW;
 				else connectionWindow = STAY_CONNECTED;
@@ -275,7 +328,7 @@ void loop() {
 
 			if (state != oldState) {
 				publishStateTransition();
-				if (Particle.connected()) Particle.publish("Alert","Deep power down in 30 seconds", PRIVATE);
+				if (Particle.connected()) PublishQueuePosix::instance().publish("Alert","Deep power down in 30 seconds", PRIVATE);
 				sysStatus.set_alertCodeGateway(0);			// Reset this
 			}
 
@@ -362,7 +415,8 @@ void publishWebhook(uint8_t nodeNumber) {
 	if (nodeNumber == 0) {												// Webhook for the Gateway					
 		Log.info("Publishing for Gateway");
 		takeMeasurements();												// Loads the current values for the Gateway
-
+		// Gateway reporting
+		// The first webhook could be sent once a day or so it would give the health of the gateway
 		snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d, \"alerts\": %d, \"msg\":%d, \"timestamp\":%lu000}",\
 		Particle.deviceID().c_str(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
 		current.get_internalTempC(), sysStatus.get_resetCount(), sysStatus.get_alertCodeGateway(), sysStatus.get_messageCount(), endTimePeriod);
@@ -380,24 +434,32 @@ void publishWebhook(uint8_t nodeNumber) {
 			} break;
 
 			case 10 ... 19: {												// Occupancy
+				// (v17.40, now sending (space + 1) to Ubidots, as we index it as an unsigned 6-bit integer in the application now and would cause problems if space were to be 64)
 				snprintf(data, sizeof(data), "{\"uniqueid\":\"%lu\", \"gross\":%u, \"net\":%i, \"space\":%d, \"placement\":%d, \"multi\":%d, \"zoneMode\":%d, \"sensortype\":%d, \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\":%d, \"node\":%d, \"rssi\":%d, \"snr\":%d,\"hops\":%d,\"timestamp\":%lu000}",\
-				current.get_uniqueID(), (current.get_payload1() << 8 | current.get_payload2()), (int16_t)(current.get_payload3() << 8 | current.get_payload4()), current.get_payload5(), current.get_payload6(), current.get_payload7(), current.get_payload8(), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
+				current.get_uniqueID(), (current.get_payload1() << 8 | current.get_payload2()), (int16_t)(current.get_payload3() << 8 | current.get_payload4()), current.get_payload5() + 1, current.get_payload6(), current.get_payload7(), current.get_payload8(), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
 				current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_hops(), endTimePeriod);
 				Log.info("Data is %s", data);
-				PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v1", data, PRIVATE | WITH_ACK);
+				// Don't send the webhook - just publish if connected
+				if (Particle.connected()) {
+					PublishQueuePosix::instance().publish("Node Data", data, PRIVATE);
+				}
+				// Compose and send the node and space information to the UpdateGatewayNodesAndSpaces ubiFunction
+				snprintf(data, sizeof(data), "{\"nodeUniqueID\":\"%lu\",\"battery\":%d,\"space\":%d,\"spaceNet\":%d,\"spaceGross\":%d}",\
+				current.get_uniqueID(), current.get_stateOfCharge(), current.get_payload5() + 1, Room_Occupancy::instance().getRoomNet(current.get_payload5()), Room_Occupancy::instance().getRoomGross(current.get_payload5()));
+				PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v2", data, PRIVATE | WITH_ACK);
 			} break;
 
 			case 20 ... 29: {												// Sensor
 				snprintf(data, sizeof(data), "{\"uniqueid\":\"%lu\", \"soilvwc\":%u, \"soiltemp\":%u, \"space\":%d, \"placement\":%d, \"sensortype\":%d, \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d,  \"snr\":%d, \"hops\":%d,\"timestamp\":%lu000}",\
-				current.get_uniqueID(), (current.get_payload1() << 8 | current.get_payload2()), (current.get_payload3() << 8 | current.get_payload4()), current.get_payload5(), current.get_payload6(),current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
+				current.get_uniqueID(), (current.get_payload1() << 8 | current.get_payload2()), (current.get_payload3() << 8 | current.get_payload4()), current.get_payload5() + 1, current.get_payload6(),current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
 				current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_hops(), endTimePeriod);
 				Log.info("Data is %s", data);
 				PublishQueuePosix::instance().publish("Ubidots-LoRA-Sensor-v1", data, PRIVATE | WITH_ACK);
 			} break;
 
 			default: {														// Unknown
-				Log.info("Unknown sensor type %d", current.get_sensorType());
-				if (Particle.connected()) Particle.publish("Alert","Unknown sensor type", PRIVATE);
+				Log.info("Unknown sensor type in gateway publish %d", current.get_sensorType());
+				if (Particle.connected()) PublishQueuePosix::instance().publish("Alert","Unknown sensor type in gateway publish", PRIVATE);
 			} break;
 		}
 	}

@@ -11,6 +11,11 @@
 #define sysStatus sysStatusData::instance()
 #define nodeDatabase nodeIDData::instance()
 
+// We use the 64kbit part so we have 8k bytes of storage
+// SysStatus Object - starts at 0
+// Current Object - starts at 100
+// Node Object - starts at 200
+
 /**
  * This class is a singleton; you do not create one as a global, on the stack, or with new.
  * 
@@ -89,8 +94,11 @@ public:
 		time_t alertTimestampGateway;              		  // When was the last alert
 		uint8_t openTime;                                 // Open time 24 hours
 		uint8_t closeTime;                                // Close time 24 hours
+		uint8_t breakTime;                                // Break time 24 hours, set this to 24 if no break time is needed for this gateway.
+		uint8_t breakLengthMinutes;                       // Break length 1-60 minutes.
+		uint8_t weekendBreakTime;                         // Break time 24 hours (weekends), set this to 24 if no break time is needed for this gateway.
+		uint8_t weekendBreakLengthMinutes;                // Break length 1-60 minutes (weekends).
 		uint8_t tokenCore;								  // This is the random part of the daily token
-
 	};
 	SysData sysData;
 
@@ -162,6 +170,18 @@ public:
 
 	uint8_t get_closeTime() const;
 	void set_closeTime(uint8_t value);
+
+	uint8_t get_breakTime() const;
+	void set_breakTime(uint8_t value);
+
+	uint8_t get_breakLengthMinutes() const;
+	void set_breakLengthMinutes(uint8_t value);
+
+	uint8_t get_weekendBreakTime() const;
+	void set_weekendBreakTime(uint8_t value);
+
+	uint8_t get_weekendBreakLengthMinutes() const;
+	void set_weekendBreakLengthMinutes(uint8_t value);
 
 	uint8_t get_tokenCore() const;
 	void set_tokenCore(uint8_t value);
@@ -292,6 +312,7 @@ public:
 		int16_t SNR;									  // Latest LoRA Signal to Noise Ratio from the Node
 		uint8_t alertCodeNode;                            // Alert code from node
 		uint8_t openHours; 								  // Will set to true or false based on time of dat
+		byte onBreak; 								  	  // Equal to 1 if the device is on "break", which resets all node counts
 		uint8_t	hops;									  // How many hops did the message take to get to the gateway
 		uint8_t retryCount;								  // How many retries did the message take to get to the gateway
 		uint8_t retransmissionDelay;					  // How extra time did retransmissinos add to the time it took the message to get to the gateway
@@ -387,6 +408,9 @@ public:
 	uint8_t get_openHours() const;
 	void set_openHours(uint8_t value);
 
+	byte get_onBreak() const;
+	void set_onBreak(byte value);
+
 	uint8_t get_hops() const;
 	void set_hops(uint8_t value);
 
@@ -431,6 +455,7 @@ protected:
 	static const uint32_t CURRENT_DATA_MAGIC = 0x20a99e80;
 	static const uint16_t CURRENT_DATA_VERSION = 3;
 };
+
 
 
 // *****************  nodeID Data Storage Object **********************
@@ -491,7 +516,7 @@ public:
 		// Your fields go here. Once you've added a field you cannot add fields
 		// (except at the end), insert fields, remove fields, change size of a field.
 		// Doing so will cause the data to be corrupted!
-		char nodeIDJson[1024];                             // JSON string that stores the nodeID data
+		char nodeIDJson[3072];                             // JSON string that stores the nodeID data
 	};
 	NodeData nodeData;
 
@@ -521,6 +546,13 @@ public:
 
 	String get_nodeIDJson() const;
 	bool set_nodeIDJson(const char *str);
+
+	/**
+	 *  Removes any unformatted text from a JSON string
+	 * 
+	 *  @param jsonString the string to be cleaned
+	 */
+	void cleanJSON(char* jsonString);
 	
 
 	//Members here are internal only and therefore protected
