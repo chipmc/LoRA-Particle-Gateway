@@ -511,7 +511,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
       if(nodeNumber != 0) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
         if ((tempValue >= 0 ) && (tempValue <= 255)) {                   
-          snprintf(messaging,sizeof(messaging),"Setting tofPollingRateMS to %dms", tempValue, nodeNumber);
+          snprintf(messaging,sizeof(messaging), "Setting tofPollingRateMS to %dms for node %d", tempValue, nodeNumber);
           LoRA_Functions::instance().setAlertCode(nodeNumber,13);
           LoRA_Functions::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its tofPollingRateMS by setting an alert code and sending the value as context 
         }
