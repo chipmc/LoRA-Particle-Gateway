@@ -206,7 +206,14 @@ void loop() {
 			static byte connectionWindow = 0;				
 
 			if (state != oldState) {
-				if (oldState != REPORTING_STATE) startLoRAWindow = millis();    // Mark when we enter this state - for timeouts - but multiple messages won't keep us here forever
+				if (oldState != REPORTING_STATE){ 
+					startLoRAWindow = millis(); // Mark when we enter this state - for timeouts - but multiple messages won't keep us here forever
+				} else {
+					// Check for inactive spaces and reset them. Ignores nodes of a "Counter" sensorType as they do not have spaces.
+					Log.info("Checking for inactive spaces...");
+					LoRA_Functions::instance().resetInactiveSpaces(3600);  // Define "inactive" spaces as those where ALL of the nodes in that space have not sent a report in 3600 seconds.
+				}
+
 				publishStateTransition();                   					// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 				conv.withCurrentTime().convert();								// Get the time and convert to Local
 				if (conv.getLocalTimeHMS().hour >= sysStatus.get_openTime() && conv.getLocalTimeHMS().hour <= sysStatus.get_closeTime()) {
@@ -215,10 +222,7 @@ void loop() {
 					Log.info("Resetting all counts - not in open hours. Open hour: %d, Close Hour: %d, Current Hour: %d", sysStatus.get_openTime(), sysStatus.get_closeTime(), conv.getLocalTimeHMS().hour);
 					Room_Occupancy::instance().resetAllCounts();	// reset the room net AND gross counts at end of day for all occupancy nodes and update Ubidots
 					current.set_openHours(false);
-				};
-				
-				if (oldState == REPORTING_STATE) LoRA_Functions::instance().resetInactiveSpaces(3600);	// Define "inactive" spaces as those where ALL of the nodes in that space have not sent a report in 3600 seconds.
-																										// Check for inactive spaces and reset them. Ignores nodes of a "Counter" sensorType as they do not have spaces.
+				};																										
 				
 				String dayString = conv.timeStr().substring(0, 3);	// Take the first three characters of the timeStr ("Fri", "Sat", "Sun")
 				uint8_t breakLengthHours;

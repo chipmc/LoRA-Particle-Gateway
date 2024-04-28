@@ -79,6 +79,8 @@ The Alert Codes and their actions are key to this process:
     * 2 = verySeparated - zones are 4 SPADS deep and 16 SPADS wide such that they activate the front 4 rows of the front panel and back 4 rows of the back panel. (Useful when zones overlap too much in "separated" and occupancyState 3 occurs often without 1 or 2 occurring first)
     * 3 = frontFocused - zones are 4 SPADS deep and 16 SPADS wide such that they activate all SPADS in the front panel only, splitting the front panel evenly into 2 zones.
     * 4 = backFocused - zones are 4 SPADS deep and 16 SPADS wide such that they activate all SPADS in the back panel only, splitting the back panel evenly into 2 zones.
+    * 5 = thin - zones are 8 SPADS deep and 8 SPADS wide such that they activate a thinner matrix of SPADS, splitting the thinner matrix depth-wise evenly into 2 zones like zoneMode 0's depth.
+    * 6 = veryThin - zones are 8 SPADS deep and 4 SPADS wide such that they activate a much thinner matrix of SPADS, splitting the much thinner matrix depth-wise evenly into 2 zones like zoneMode 0's depth.
 * See TOF Occupancy Module within Config.h in SeeInsights-LoRA-Node repository for exact configuration specifics.
 * More Zone Modes can be defined by adding to the switch statement of TOFSensor.cpp in SeeInsights_LoRA_Node. Be sure to expand the bounds of the zoneMode particle function in LoRA_Particle_Gateway's Particle_Functions.cpp file.
 
