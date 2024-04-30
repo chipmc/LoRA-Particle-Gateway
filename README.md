@@ -115,14 +115,11 @@ The Alert Codes and their actions are key to this process:
 * Alert Context - occupancyNet(int16_t)
 * Sets the value of the current net count to the value sent in the alert context on the data acknowledgement.
 
-**Alert Code 13 - Sets the polling rate (in ms) for a TOF Occupancy Sensor**
-* Alert Context - tofPollingRateMS(uint8_t)
+**Alert Code 13 - Sets detections per second for a TOF Occupancy Sensor**
+* Alert Context - tofDetectionsPerSecond(uint8_t)
 * Currently does not check for sensorType before sending the alert and alertContext
-* Specifies the polling rate (in ms) for the VL53L1X TOF Sensor.
-* Polling rate can have values 20-255ms
-* Defaults to 33ms (minimum for long distanceMode) - This minimum is enforced in the TOFSensor module of the node. 
-* Short distance mode can range every 20ms, while Medium and Long can range every 33ms.
-    * If the tofPollingRateMS is set to 20ms, but the distanceMode is set to 2(Long), 33ms will be used as the polling rate instead
+* Specifies the detections per second for the VL53L1X TOF Sensor to make while in detection mode.
+* tofDetectionsPerSecond can have values 1-20
 
 ## Particle Function Commands 
 
@@ -216,6 +213,10 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 
 **Set Net Count for an Occupancy Node**
 * {"cmd":[{"node":*node uniqueID here*, "var":"5","fn":"setOccupancyNetForNode"}]} - Sets the Net Occupancy number for a node and updates the node's space value on Ubidots
+    * var must be an integer value
+
+**Set Net Count for an Occupancy Node**
+* {"cmd":[{"node":*node uniqueID here*, "var":"5","fn":"setTofDetectionsPerSecond"}]} - Sets the tofDetectionsPerSecond for the node with the given uniqueID by sending Alert Code 13 with Alert Context == var
     * var must be an integer value
 
 ## Payload Assignments for Data Report by Sensor Type
