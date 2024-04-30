@@ -215,7 +215,7 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 * {"cmd":[{"node":*node uniqueID here*, "var":"5","fn":"setOccupancyNetForNode"}]} - Sets the Net Occupancy number for a node and updates the node's space value on Ubidots
     * var must be an integer value
 
-**Set Net Count for an Occupancy Node**
+**Set Detections per Second for a TOF Sensor Occupancy Node**
 * {"cmd":[{"node":*node uniqueID here*, "var":"5","fn":"setTofDetectionsPerSecond"}]} - Sets the tofDetectionsPerSecond for the node with the given uniqueID by sending Alert Code 13 with Alert Context == var
     * var must be an integer value
 
