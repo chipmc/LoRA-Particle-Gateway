@@ -72,7 +72,7 @@
 // v21.2    Going back to LORA_STATE now resets any spaces that have been inactive for an hour. A separate weekend break time is now in effect, with Particle functions to manage it.
 // v21.3    Added a particle function (setOccupancyNetForNode) and Room_Occupancy layer that allows for a node to have its net count set manually through Particle/Ubidots.
 // v21.4    Added a particle function (resetSpace) that allows for a space (and all its nodes) to have their values reset through Particle/Ubidots.
-// v21.5    Breaking Change - Node v12 of later - Added a particle function (setTofPollingRateMS) with alert code 13 - sets tof polling rate on a node
+// v21.5    Node v12 or later - Added a particle function (setTofDetectionsPerSecond) with alert code 13 - sets tofDetectionsPerSecond on a node
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
