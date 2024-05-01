@@ -93,15 +93,15 @@ The Alert Codes and their actions are key to this process:
 * Short distance mode can range every 20ms, while Medium and Long can range every 33ms. (TODO:: explore power saving capabilities of slower ranging speeds)
 
 **Alert Code 9 - Sets the "Floor Interference Buffer" of a TOF Occupancy Sensor**
-* Alert Context - interferenceBuffer(uint8_t)
+* Alert Context - interferenceBuffer(uint16_t)
 * Currently does not check for sensorType before sending the alert and alertContext
-* The Floor Interference Buffer is a value from 0-255 in which we reduce the effective distance of a range.
+* The Floor Interference Buffer is a value from 0-2000 in which we reduce the effective distance of a range.
 * Raising the Floor Interference Buffer makes calibration restart less frequently and can quiet noise that occurs due to the slight differences in measurements of the same object at the same distance.
 
 **Alert Code 10 - Sets the number of calibration loops for a TOF Occupancy Sensor**
-* Alert Context - occupancyCalibrationLoops(uint8_t)
+* Alert Context - occupancyCalibrationLoops(uint16_t)
 * Currently does not check for sensorType before sending the alert and alertContext
-* The number of calibration loops is a value from 0-255 that represents the number of measurements to take (for each zone) during calibration.
+* The number of calibration loops is a value from 0-1000 that represents the number of measurements to take (for each zone) during calibration.
 * Raising the number of calibration loops makes calibration slower and more accurate.
 * Raising the number of calibration loops can quiet down noisy occupancy measurements.
     * The maximum distance that is measured during calibration for each zone is used as the baseline value for the zone.
@@ -114,6 +114,12 @@ The Alert Codes and their actions are key to this process:
 **Alert Code 12 - Gateway override to occupancyNet value of a node.**
 * Alert Context - occupancyNet(int16_t)
 * Sets the value of the current net count to the value sent in the alert context on the data acknowledgement.
+
+**Alert Code 13 - Sets detections per second for a TOF Occupancy Sensor**
+* Alert Context - tofDetectionsPerSecond(uint8_t)
+* Currently does not check for sensorType before sending the alert and alertContext
+* Specifies the detections per second for the VL53L1X TOF Sensor to make while in detection mode.
+* tofDetectionsPerSecond can have values 1-20
 
 ## Particle Function Commands 
 
@@ -183,7 +189,7 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 
 **Set Distance Mode for an Occupancy Node**
 * {"cmd":[{"node":*node uniqueID here*, "var":"2","fn":"distanceMode"}]} - Sets the distanceMode for the node with the given uniqueID by sending Alert Code 8 with Alert Context == var
-    * var must be 0-2
+    * var must be 0-2 (0 = short, 1 = medium, 2 = long)
 
 **Set Floor Interference Buffer for an Occupancy Node**
 * {"cmd":[{"node":*node uniqueID here*, "var":"150","fn":"interferenceBuffer"}]} - Sets the interferenceBuffer for the node with the given uniqueID by sending Alert Code 9 with Alert Context == var
@@ -207,6 +213,10 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 
 **Set Net Count for an Occupancy Node**
 * {"cmd":[{"node":*node uniqueID here*, "var":"5","fn":"setOccupancyNetForNode"}]} - Sets the Net Occupancy number for a node and updates the node's space value on Ubidots
+    * var must be an integer value
+
+**Set Detections per Second for a TOF Sensor Occupancy Node**
+* {"cmd":[{"node":*node uniqueID here*, "var":"5","fn":"setTofDetectionsPerSecond"}]} - Sets the tofDetectionsPerSecond for the node with the given uniqueID by sending Alert Code 13 with Alert Context == var
     * var must be an integer value
 
 ## Payload Assignments for Data Report by Sensor Type
