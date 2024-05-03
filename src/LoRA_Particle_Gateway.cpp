@@ -263,7 +263,10 @@ void loop() {
 				if (current.get_alertCodeNode() != 1) state = REPORTING_STATE; 				    // Received and acknowledged data from a node - need to report the alert
 			}
 
-			if ((millis() - startLoRAWindow) > (connectionWindow *60000UL)) { 					// Keeps us in listening mode for the specified windpw - then back to idle unless in test mode - keeps listening
+			if (sysStatus.get_connectivityMode() == 1)	{										// If we are in connected mode - we will stay in the LoRA state
+				break;
+			}
+			else if ((millis() - startLoRAWindow) > (connectionWindow *60000UL)) { 					// Keeps us in listening mode for the specified windpw - then back to idle unless in test mode - keeps listening
 				Log.info("Listening window over");
 				LoRA_Functions::instance().sleepLoRaRadio();									// Done with the LoRA phase - put the radio to sleep
 				LoRA_Functions::instance().printNodeData(false);
