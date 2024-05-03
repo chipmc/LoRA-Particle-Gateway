@@ -88,8 +88,8 @@ public:
 		time_t lastHookResponse;                   		  // Last time we got a valid Webhook response
 		time_t lastConnection;                     		  // Last time we successfully connected to Particle
 		uint16_t lastConnectionDuration;                  // How long - in seconds - did it take to last connect to the Particle cloud
-		uint16_t frequencyMinutes;                        // When we are reporing at minute increments - what are they - for Gateways
-		uint16_t updatedFrequencyMinutes;				  // When we update the reporting frequency, it is stored here
+		uint16_t frequencySeconds;                        // When we are reporing at minute increments - what are they - for Gateways
+		uint16_t updatedfrequencySeconds;				  // When we update the reporting frequency, it is stored here
 		uint8_t alertCodeGateway;                         // Alert code for Gateway Alerts
 		time_t alertTimestampGateway;              		  // When was the last alert
 		uint8_t openTime;                                 // Open time 24 hours
@@ -153,11 +153,11 @@ public:
 	uint16_t get_lastConnectionDuration() const;
 	void set_lastConnectionDuration(uint16_t value);
 
-	uint16_t get_frequencyMinutes() const;
-	void set_frequencyMinutes(uint16_t value);
+	uint16_t get_frequencySeconds() const;
+	void set_frequencySeconds(uint16_t value);
 
-	uint16_t get_updatedFrequencyMinutes() const;
-	void set_updatedFrequencyMinutes(uint16_t value);
+	uint16_t get_updatedfrequencySeconds() const;
+	void set_updatedfrequencySeconds(uint16_t value);
 
 	uint8_t get_alertCodeGateway() const;
 	void set_alertCodeGateway(uint8_t value);

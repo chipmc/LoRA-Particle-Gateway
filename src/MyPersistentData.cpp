@@ -58,8 +58,8 @@ bool sysStatusData::validate(size_t dataSize) {
             Log.info("data not valid openTime=%d and closeTime=%d", sysStatus.get_openTime(), sysStatus.get_closeTime());
             valid = false;
         }
-        else if (sysStatus.get_frequencyMinutes() <=0 || sysStatus.get_frequencyMinutes() > 60) {
-            Log.info("data not valid frequency minutes =%d", sysStatus.get_frequencyMinutes());
+        else if (sysStatus.get_frequencySeconds() <=0 || sysStatus.get_frequencySeconds() > 60) {
+            Log.info("data not valid frequency minutes =%d", sysStatus.get_frequencySeconds());
             valid = false;
         }
         else if (sysStatus.get_nodeNumber() != 0) {
@@ -87,8 +87,8 @@ void sysStatusData::initialize() {
     sysStatus.set_resetCount(0);
     sysStatus.set_messageCount(0);
     sysStatus.set_lastHookResponse(0);
-    sysStatus.set_frequencyMinutes(60);
-    sysStatus.set_updatedFrequencyMinutes(0);
+    sysStatus.set_frequencySeconds(60);
+    sysStatus.set_updatedfrequencySeconds(0);
     sysStatus.set_alertCodeGateway(0);
     sysStatus.set_alertTimestampGateway(0);
     sysStatus.set_openTime(6);
@@ -174,20 +174,20 @@ void sysStatusData::set_lastConnectionDuration(uint16_t value) {
     setValue<uint16_t>(offsetof(SysData,lastConnectionDuration), value);
 }
 
-uint16_t sysStatusData::get_frequencyMinutes() const {
-    return getValue<uint16_t>(offsetof(SysData,frequencyMinutes));
+uint16_t sysStatusData::get_frequencySeconds() const {
+    return getValue<uint16_t>(offsetof(SysData,frequencySeconds));
 }
 
-void sysStatusData::set_frequencyMinutes(uint16_t value) {
-    setValue<uint16_t>(offsetof(SysData, frequencyMinutes), value);
+void sysStatusData::set_frequencySeconds(uint16_t value) {
+    setValue<uint16_t>(offsetof(SysData, frequencySeconds), value);
 }
 
-uint16_t sysStatusData::get_updatedFrequencyMinutes() const {
-    return getValue<uint16_t>(offsetof(SysData,updatedFrequencyMinutes));
+uint16_t sysStatusData::get_updatedfrequencySeconds() const {
+    return getValue<uint16_t>(offsetof(SysData,updatedfrequencySeconds));
 }
 
-void sysStatusData::set_updatedFrequencyMinutes(uint16_t value) {
-    setValue<uint16_t>(offsetof(SysData, updatedFrequencyMinutes), value);
+void sysStatusData::set_updatedfrequencySeconds(uint16_t value) {
+    setValue<uint16_t>(offsetof(SysData, updatedfrequencySeconds), value);
 }
 
 uint8_t sysStatusData::get_alertCodeGateway() const {
