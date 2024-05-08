@@ -139,7 +139,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
       int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
       if ((tempValue > 0) && (tempValue <= 60) && 60 % tempValue == 0) {
         snprintf(messaging,sizeof(messaging),"Setting reporting frequency to %d minutes", tempValue);
-        sysStatus.set_updatedFrequencyMinutes(tempValue);
+        sysStatus.set_updatedfrequencySeconds(tempValue * 60UL);
       }
       else {
         snprintf(messaging,sizeof(messaging),"Not a valid reporting frequency");

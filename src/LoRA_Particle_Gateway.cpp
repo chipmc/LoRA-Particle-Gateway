@@ -73,6 +73,7 @@
 // v21.3    Added a particle function (setOccupancyNetForNode) and Room_Occupancy layer that allows for a node to have its net count set manually through Particle/Ubidots.
 // v21.4    Added a particle function (resetSpace) that allows for a space (and all its nodes) to have their values reset through Particle/Ubidots.
 // v21.5    Node v12 or later - Added a particle function (setTofDetectionsPerSecond) with alert code 13 - sets tofDetectionsPerSecond on a node
+// v22.0	Changing the way that the gateway tells the nodes how often to report.  This will be a Particle function that will be called by the Fleet Manager.  This will be a breaking change for the nodes.
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -91,8 +92,8 @@
 #include "Room_Occupancy.h"							// Aggregates node data to get net room occupancy for Occupancy Nodes
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
-PRODUCT_VERSION(21);								// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="21.4";
+PRODUCT_VERSION(22);								// For now, we are putting nodes and gateways in the same product group - need to deconflict #
+char currentPointRelease[6] ="22.0";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -180,7 +181,7 @@ void loop() {
 			time_t time;
 
 			publishStateTransition();                   					// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
-			wakeBoundary = (sysStatus.get_frequencyMinutes() * 60UL);
+			wakeBoundary = (sysStatus.get_frequencySeconds());
 			wakeInSeconds = constrain(wakeBoundary - Time.now() % wakeBoundary, 0UL, wakeBoundary);  // If Time is valid, we can compute time to the start of the next report window	
 			time = Time.now() + wakeInSeconds;
 			Log.info("Sleep for %lu seconds until next event at %s", wakeInSeconds, Time.format(time, "%T").c_str());
@@ -262,7 +263,10 @@ void loop() {
 				if (current.get_alertCodeNode() != 1) state = REPORTING_STATE; 				    // Received and acknowledged data from a node - need to report the alert
 			}
 
-			if ((millis() - startLoRAWindow) > (connectionWindow *60000UL)) { 					// Keeps us in listening mode for the specified windpw - then back to idle unless in test mode - keeps listening
+			if (sysStatus.get_connectivityMode() == 1)	{										// If we are in connected mode - we will stay in the LoRA state
+				break;
+			}
+			else if ((millis() - startLoRAWindow) > (connectionWindow *60000UL)) { 					// Keeps us in listening mode for the specified windpw - then back to idle unless in test mode - keeps listening
 				Log.info("Listening window over");
 				LoRA_Functions::instance().sleepLoRaRadio();									// Done with the LoRA phase - put the radio to sleep
 				LoRA_Functions::instance().printNodeData(false);

@@ -196,10 +196,10 @@ bool LoRA_Functions::listenForLoRAMessageGateway() {
 		else {Log.info("Invalid message flag, returning"); return false;}
 
 		// At this point the message is valid and has been deciphered - now we need to send a response - if there is a change in freuqency, it is applied here
-		if (sysStatus.get_updatedFrequencyMinutes() > 0) {              				// If we are to change the update frequency, we need to tell the nodes (or at least one node) about it.
-			sysStatus.set_frequencyMinutes(sysStatus.get_updatedFrequencyMinutes());	// This was the temporary value from the particle function
-			sysStatus.set_updatedFrequencyMinutes(0);
-			Log.info("We are updating the publish frequency to %i minutes", sysStatus.get_frequencyMinutes());
+		if (sysStatus.get_updatedfrequencySeconds() > 0) {              				// If we are to change the update frequency, we need to tell the nodes (or at least one node) about it.
+			sysStatus.set_frequencySeconds(sysStatus.get_updatedfrequencySeconds());	// This was the temporary value from the particle function
+			sysStatus.set_updatedfrequencySeconds(0);
+			Log.info("We are updating the publish frequency to %i seconds", sysStatus.get_frequencySeconds());
 		}
 		// The response will be specific to the message type
 		if (lora_state == DATA_ACK) { if(LoRA_Functions::instance().acknowledgeDataReportGateway()) return true;}
@@ -300,8 +300,9 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 	buf[8] = (uint8_t)(currentTime);  	
 
 	// Here we calculate the seconds to the next report
-	buf[9] = highByte(sysStatus.get_frequencyMinutes());	// Frequency of reports set by the gateway
-	buf[10] = lowByte(sysStatus.get_frequencyMinutes());	
+	buf[9] = highByte(sysStatus.get_frequencySeconds());	// Frequency of reports set by the gateway
+	buf[10] = lowByte(sysStatus.get_frequencySeconds());
+	Log.info("Frequency of reports is %d seconds", sysStatus.get_frequencySeconds());	
 
 	// Next we have to determine if there is an alert code to send
 	// If the node is not configured, we will set an alert code of 1
@@ -402,8 +403,9 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	buf[7] = (uint8_t)(currentTime >> 8);  							// Second byte
 	buf[8] = (uint8_t)(currentTime);         						// First byte	
 	// Need to calculate the seconds to the next report
-	buf[9] = highByte(sysStatus.get_frequencyMinutes());			// Frequency of reports - for Gateways
-	buf[10] = lowByte(sysStatus.get_frequencyMinutes());	
+	buf[9] = highByte(sysStatus.get_frequencySeconds());			// Frequency of reports - for Gateways
+	buf[10] = lowByte(sysStatus.get_frequencySeconds());	
+	Log.info("Frequency of reports is %d seconds", sysStatus.get_frequencySeconds());	
 	buf[11] = (current.get_nodeNumber() != 255) ?  0 : 1;			// Clear the alert code for the node unless the nodeNumber process failed
 	buf[13] = current.get_sensorType();
 	buf[14] = current.get_uniqueID() >> 24;							// Unique ID of the node
