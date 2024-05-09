@@ -217,7 +217,12 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 
 **Set Detections per Second for a TOF Sensor Occupancy Node**
 * {"cmd":[{"node":*node uniqueID here*, "var":"5","fn":"setTofDetectionsPerSecond"}]} - Sets the tofDetectionsPerSecond for the node with the given uniqueID by sending Alert Code 13 with Alert Context == var
+    * var must be an integer value 
+
+**Set Transmit Latency Seconds for a Node**
+* {"cmd":[{"node":*node uniqueID here*, "var":"5","fn":"setTransmitLatencySeconds"}]} - Sets the transmitLatencySeconds for the node with the given uniqueID by sending Alert Code 14 with Alert Context == var
     * var must be an integer value
+
 
 ## Payload Assignments for Data Report by Sensor Type
 

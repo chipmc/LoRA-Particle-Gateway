@@ -510,13 +510,33 @@ int Particle_Functions::jsonFunctionParser(String command) {
       // Test - {"cmd":[{"node":3312487035, "var":"5","fn":"setTofDetectionsPerSecond"}]}
       if(nodeNumber != 0) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
-        if ((tempValue >= 1 ) && (tempValue <= 20)) {                   
-          snprintf(messaging,sizeof(messaging), "Setting tofDetectionsPerSecond to %dms for node %d", tempValue, nodeNumber);
+        if ((tempValue >= 1 ) && (tempValue <= 30)) {                   
+          snprintf(messaging,sizeof(messaging), "Setting tofDetectionsPerSecond to %d/second for node %d", tempValue, nodeNumber);
           LoRA_Functions::instance().setAlertCode(nodeNumber,13);
           LoRA_Functions::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its tofPollingRateMS by setting an alert code and sending the value as context 
         }
         else {
-          snprintf(messaging,sizeof(messaging),"tofDetectionsPerSecond must be 1-20");
+          snprintf(messaging,sizeof(messaging),"tofDetectionsPerSecond must be 1-30");
+          success = false;                                                   // Make sure it falls in a valid range or send a "fail" result
+        }
+      } else {
+        snprintf(messaging,sizeof(messaging),"No node exists in the database with that uniqueID");
+        success = false; 
+      }
+    }
+
+    // Sets the TOF sensor detections per second for a node 
+    else if (function == "setTransmitLatencySeconds") {
+      // Test - {"cmd":[{"node":3312487035, "var":"60","fn":"setTransmitLatencySeconds"}]}
+      if(nodeNumber != 0) {
+        int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+        if ((tempValue >= 1 ) && (tempValue <= 60)) {                   
+          snprintf(messaging,sizeof(messaging), "Setting tofDetectionsPerSecond to %dms for node %d", tempValue, nodeNumber);
+          LoRA_Functions::instance().setAlertCode(nodeNumber,14);
+          LoRA_Functions::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its tofPollingRateMS by setting an alert code and sending the value as context 
+        }
+        else {
+          snprintf(messaging,sizeof(messaging),"transmitLatencySeconds must be 1-60");
           success = false;                                                   // Make sure it falls in a valid range or send a "fail" result
         }
       } else {
