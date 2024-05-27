@@ -4,7 +4,7 @@
 #include "MyPersistentData.h"
 #include "Particle_Functions.h"
 #include "PublishQueuePosixRK.h"
-#include "LoRA_Functions.h"
+#include "JsonDataManager.h"
 #include "Room_Occupancy.h"
 #include "JsonParserGeneratorRK.h"
 
@@ -85,7 +85,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
 			else break;								                    // Ran out of entries 
 		} 
 		jp.getValueByKey(cmdObjectContainer, "node", nodeUniqueID);
-    nodeNumber = LoRA_Functions::instance().getNodeNumberForUniqueID(nodeUniqueID); // nodeNumber is uniqueID
+    nodeNumber = JsonDataManager::instance().getNodeNumberForUniqueID(nodeUniqueID); // nodeNumber is uniqueID
 		jp.getValueByKey(cmdObjectContainer, "var", variable);
 		jp.getValueByKey(cmdObjectContainer, "fn", function);
 
@@ -121,11 +121,11 @@ int Particle_Functions::jsonFunctionParser(String command) {
       else if(nodeNumber != 0) {                        // if we could not set the nodeNumber from that unique ID, throw an error
         if (variable == "all") {
           snprintf(messaging,sizeof(messaging),"Resetting node %d's system and current data", nodeNumber);
-          LoRA_Functions::instance().resetAllDataForNode(nodeNumber);
+          JsonDataManager::instance().resetAllDataForNode(nodeNumber);
         }
         else {
           snprintf(messaging,sizeof(messaging),"Resetting node %d's current data", nodeNumber);
-          LoRA_Functions::instance().resetCurrentDataForNode(nodeNumber);
+          JsonDataManager::instance().resetCurrentDataForNode(nodeNumber);
         }
       } else {
         snprintf(messaging,sizeof(messaging),"Not a valid node uniqueID");
@@ -169,7 +169,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
       // Format - function - rpt, node - 0, variables - NA
       // Test - {"cmd":[{"node":0,"var":" ","fn":"rpt"}]}
       snprintf(messaging,sizeof(messaging),"Printing nodeID Data");
-      LoRA_Functions::instance().printNodeData(true);
+      JsonDataManager::instance().printNodeData(true);
     }
 
     // Sets Opening hour
@@ -296,8 +296,8 @@ int Particle_Functions::jsonFunctionParser(String command) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
         if ((tempValue >= 0 ) && (tempValue <= 29)) {                    // See - https://seeinsights.freshdesk.com/support/solutions/articles/154000101712-sensor-types-and-identifiers
           snprintf(messaging,sizeof(messaging),"Setting sensor type to %d for node %d", tempValue, nodeNumber);
-          if (!LoRA_Functions::instance().setType(nodeNumber,tempValue)) success = false;  // Make a new entry in the nodeID database
-          else LoRA_Functions::instance().setAlertCode(nodeNumber,1);        // Forces the node to update its sensor Type by setting it and triggering rejoin
+          if (!JsonDataManager::instance().setType(nodeNumber,tempValue)) success = false;  // Make a new entry in the nodeID database
+          else JsonDataManager::instance().setAlertCode(nodeNumber,1);        // Forces the node to update its sensor Type by setting it and triggering rejoin
         }
         else {
           snprintf(messaging,sizeof(messaging),"Sensor Type - must be 0-29");
@@ -324,7 +324,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
               //jp.getValueByIndex(varArrayContainer, 3, nothing);     // reserved for future use
               uint8_t space = static_cast<uint8_t>(spaceInt);
               if(nodeNumber != 0) {
-                if(LoRA_Functions::instance().getJoinPayload(nodeNumber)) {
+                if(JsonDataManager::instance().getJoinPayload(nodeNumber)) {
                   if(space >= 1 && space <= 64) {                            // People don't like a space to be zero so they start at one
                     current.set_payload1(space - 1);                              // Store it as a 6 bit anyway though (This allows us to index space as 0-63 in the app, while displaying space + 1 to Ubidots/Particle)
                     if(placementStr != "null"){                              // null is sent here when blank on ubidots widget - ignoring reduces punishment of user error
@@ -336,8 +336,8 @@ int Particle_Functions::jsonFunctionParser(String command) {
                       current.set_payload3(multi);
                     }
                     snprintf(messaging,sizeof(messaging), "Set payload for node %d. space: %d, placement: %s, multi: %s", nodeNumber, space, placementStr.c_str(), multiStr.c_str());
-                    LoRA_Functions::instance().setJoinPayload(nodeNumber);
-                    LoRA_Functions::instance().setAlertCode(nodeNumber, 1);    // trigger a rejoin alert code               
+                    JsonDataManager::instance().setJoinPayload(nodeNumber);
+                    JsonDataManager::instance().setAlertCode(nodeNumber, 1);    // trigger a rejoin alert code               
                   } else {
                     snprintf(messaging,sizeof(messaging), "Error in mountConfig. \"Space\" must be between 1 and 64.");
                     success = false;
@@ -363,8 +363,8 @@ int Particle_Functions::jsonFunctionParser(String command) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
         if ((tempValue >= 0 ) && (tempValue <= 4)) {                   
           snprintf(messaging,sizeof(messaging),"Setting zone mode to %d for node %d", tempValue, nodeNumber);
-          LoRA_Functions::instance().setAlertCode(nodeNumber,7);
-          LoRA_Functions::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its zone mode by setting an alert code and sending the value as context 
+          JsonDataManager::instance().setAlertCode(nodeNumber,7);
+          JsonDataManager::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its zone mode by setting an alert code and sending the value as context 
         }
         else {
           snprintf(messaging,sizeof(messaging),"Zone Mode must be 0-4");
@@ -383,8 +383,8 @@ int Particle_Functions::jsonFunctionParser(String command) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
         if ((tempValue >= 0 ) && (tempValue <= 2)) {                   
           snprintf(messaging,sizeof(messaging),"Setting distanceMode to %d for node %d", tempValue, nodeNumber);
-          LoRA_Functions::instance().setAlertCode(nodeNumber,8);
-          LoRA_Functions::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its floor interference buffer by setting an alert code and sending the value as context 
+          JsonDataManager::instance().setAlertCode(nodeNumber,8);
+          JsonDataManager::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its floor interference buffer by setting an alert code and sending the value as context 
         }
         else {
           snprintf(messaging,sizeof(messaging),"distanceMode must be 0 (short), 1(medium) or 2(long)");
@@ -403,8 +403,8 @@ int Particle_Functions::jsonFunctionParser(String command) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
         if ((tempValue >= 0 ) && (tempValue <= 2000)) {                   
           snprintf(messaging,sizeof(messaging),"Setting interferenceBuffer to %d for node %d", tempValue, nodeNumber);
-          LoRA_Functions::instance().setAlertCode(nodeNumber,9);
-          LoRA_Functions::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its floor interference buffer by setting an alert code and sending the value as context 
+          JsonDataManager::instance().setAlertCode(nodeNumber,9);
+          JsonDataManager::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its floor interference buffer by setting an alert code and sending the value as context 
         }
         else {
           snprintf(messaging,sizeof(messaging),"Floor Interference Buffer must be 0-2000mm");
@@ -423,8 +423,8 @@ int Particle_Functions::jsonFunctionParser(String command) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
         if ((tempValue >= 0 ) && (tempValue <= 1000)) {                   
           snprintf(messaging,sizeof(messaging),"Setting occupancyCalibrationLoops to %d for node %d", tempValue, nodeNumber);
-          LoRA_Functions::instance().setAlertCode(nodeNumber,10);
-          LoRA_Functions::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its floor interference buffer by setting an alert code and sending the value as context 
+          JsonDataManager::instance().setAlertCode(nodeNumber,10);
+          JsonDataManager::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its floor interference buffer by setting an alert code and sending the value as context 
         }
         else {
           snprintf(messaging,sizeof(messaging),"the number of calibration loops must be 0-1000");
@@ -442,7 +442,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
       if(nodeNumber != 0) {
         if (variable == "true") {                   
           snprintf(messaging,sizeof(messaging),"Initiating recalibration for node %d", nodeNumber);
-          LoRA_Functions::instance().setAlertCode(nodeNumber,11);
+          JsonDataManager::instance().setAlertCode(nodeNumber,11);
         } else {
           snprintf(messaging,sizeof(messaging),"Incorrect value for var. Must be \"true\"");
           success = false; 
@@ -481,7 +481,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
         if ((tempValue >= 1 ) && (tempValue <= 64)) {                   
           snprintf(messaging,sizeof(messaging),"Resetting Space %d", tempValue);
-          LoRA_Functions::instance().resetSpace(tempValue - 1); // Send the index of the space rather than the space number. Ex. space 1 is index 0
+          JsonDataManager::instance().resetSpace(tempValue - 1); // Send the index of the space rather than the space number. Ex. space 1 is index 0
         } else {
           snprintf(messaging,sizeof(messaging),"Space number must be between 1 and 64");
           success = false; 
@@ -512,8 +512,8 @@ int Particle_Functions::jsonFunctionParser(String command) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
         if ((tempValue >= 1 ) && (tempValue <= 30)) {                   
           snprintf(messaging,sizeof(messaging), "Setting tofDetectionsPerSecond to %d/second for node %d", tempValue, nodeNumber);
-          LoRA_Functions::instance().setAlertCode(nodeNumber,13);
-          LoRA_Functions::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its tofPollingRateMS by setting an alert code and sending the value as context 
+          JsonDataManager::instance().setAlertCode(nodeNumber,13);
+          JsonDataManager::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its tofPollingRateMS by setting an alert code and sending the value as context 
         }
         else {
           snprintf(messaging,sizeof(messaging),"tofDetectionsPerSecond must be 1-30");
@@ -532,8 +532,8 @@ int Particle_Functions::jsonFunctionParser(String command) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
         if ((tempValue >= 1 ) && (tempValue <= 60)) {                   
           snprintf(messaging,sizeof(messaging), "Setting tofDetectionsPerSecond to %dms for node %d", tempValue, nodeNumber);
-          LoRA_Functions::instance().setAlertCode(nodeNumber,14);
-          LoRA_Functions::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its tofPollingRateMS by setting an alert code and sending the value as context 
+          JsonDataManager::instance().setAlertCode(nodeNumber,14);
+          JsonDataManager::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its tofPollingRateMS by setting an alert code and sending the value as context 
         }
         else {
           snprintf(messaging,sizeof(messaging),"transmitLatencySeconds must be 1-60");

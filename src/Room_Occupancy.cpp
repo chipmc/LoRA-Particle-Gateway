@@ -1,5 +1,5 @@
 #include "Room_Occupancy.h"
-#include "LoRA_Functions.h"
+#include "JsonDataManager.h"
 
 Room_Occupancy *Room_Occupancy::_instance;
 uint16_t roomGrossArray[64];             // Declared as extern in the header file, defined as an actual array here.
@@ -27,21 +27,21 @@ void Room_Occupancy::loop() {
 }
 
 bool Room_Occupancy::resetAllCounts() {
-  return LoRA_Functions::instance().resetOccupancyCounts();                                                       
+  return JsonDataManager::instance().resetOccupancyCounts();                                                       
 }
 
 bool Room_Occupancy::resetNetCounts() {
-  return LoRA_Functions::instance().resetOccupancyNetCounts();                                                       
+  return JsonDataManager::instance().resetOccupancyNetCounts();                                                       
 }
 
 bool Room_Occupancy::setOccupancyNetForNode(int nodeNumber, int newOccupancyNet) {
-  return LoRA_Functions::instance().setOccupancyNetForNode(nodeNumber, newOccupancyNet);                                                       
+  return JsonDataManager::instance().setOccupancyNetForNode(nodeNumber, newOccupancyNet);                                                       
 }
 
 int Room_Occupancy::getRoomNet(int space) {
-  return LoRA_Functions::instance().getOccupancyNetBySpace(space);                                                       
+  return JsonDataManager::instance().getOccupancyNetBySpace(space);                                                       
 }
 
 int Room_Occupancy::getRoomGross(int space) {
-  return LoRA_Functions::instance().getOccupancyGrossBySpace(space);                                                                 
+  return JsonDataManager::instance().getOccupancyGrossBySpace(space);                                                                 
 }

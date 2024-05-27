@@ -229,7 +229,8 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 | Type  | Payload1   | Payload2   | Payload3   | Payload4   | Payload5   | Payload6   | Payload7   | Payload8   |
 | ---------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | 
 | Counter | Hourly - H | Hourly - L | Daily - H | Daily - L | TBD | TBD | TBD | TBD |
-| Occupancy | Gross-H | Gross-L | Net - H | Net - L | Space | Placement | Multi | Zone Mode | 
+| Occupancy | Gross-H (unused) | Gross-L (unused) | Net - H | Net - L | Space | Placement | Multi | Zone Mode |
+|  
 | Sensor | Data1 - H | Data1 - L | Data2 - H | Data2 - L | Data3 - H | Data3 - L | Data4 - H | Data4 - L | 
 
 ## Payload Assignments for Join Request by Sensor Type (4 values compressed to 1 byte)
@@ -245,5 +246,5 @@ To add a new node to the database, attempt to join to the gateway once by pressi
 | Type  | JsonData1 (jd1)   | JsonData2(jd2)   |
 | ---------- | ----------- | ----------- |
 | TBD | TBD | TBD |
-| Occupancy | OccupancyNet | OccupancyGross | 
+| Occupancy | OccupancyNet | OccupancyGross (unused) | 
 | TBD | TBD | TBD |
