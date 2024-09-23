@@ -6,6 +6,7 @@ const char* batteryContext[7] = {"Unknown","Not Charging","Charging","Charged","
 #include "take_measurements.h"
 #include "device_pinout.h"
 #include "MyPersistentData.h"
+#include "config.h"
 
 FuelGauge fuelGauge;                                // Needed to address issue with updates in low battery state 
 
@@ -50,45 +51,56 @@ bool batteryState() {
   fuelGauge.quickStart();                                               // May help us re-establish a baseline for SoC
   softDelay(1000);
 
+  /*
   current.set_batteryState(System.batteryState());                      // Call before isItSafeToCharge() as it may overwrite the context
   current.set_stateOfCharge(System.batteryCharge());                   // Assign to system value
+  */ 
 
   if (current.get_stateOfCharge() > 60) return true;
   else return false;
 }
 
 
-bool isItSafeToCharge()                             // Returns a true or false if the battery is in a safe charging range.
+bool isItSafeToCharge()                             // Returns a true or false if the battery is in a safe charging range - only works for Boron
 {
-  PMIC pmic(true);
-  if (current.get_internalTempC() < 0 || current.get_internalTempC() > 37 )  {  // Reference: (32 to 113 but with safety)
-    pmic.disableCharging();                         // It is too cold or too hot to safely charge the battery
-    current.set_batteryState(1);                       // Overwrites the values from the batteryState API to reflect that we are "Not Charging"
-    return false;
-  }
-  else {
-    pmic.enableCharging();                          // It is safe to charge the battery
-    return true;
-  }
+  #if CELLULAR_RADIO == 1
+    PMIC pmic(true);
+    if (current.get_internalTempC() < 0 || current.get_internalTempC() > 37 )  {  // Reference: (32 to 113 but with safety)
+      pmic.disableCharging();                         // It is too cold or too hot to safely charge the battery
+      current.set_batteryState(1);                       // Overwrites the values from the batteryState API to reflect that we are "Not Charging"
+      return false;
+    }
+    else {
+      pmic.enableCharging();                          // It is safe to charge the battery
+      return true;
+    }
+  #else
+    return true;                                      // If we are not using the cellular radio, then we charge regardless of temperature            
+  #endif
+
 }
 
 
 void getSignalStrength() {
-  char signalStr[16];
-  const char* radioTech[10] = {"Unknown","None","WiFi","GSM","UMTS","CDMA","LTE","IEEE802154","LTE_CAT_M1","LTE_CAT_NB1"};
-  // New Signal Strength capability - https://community.particle.io/t/boron-lte-and-cellular-rssi-funny-values/45299/8
-  CellularSignal sig = Cellular.RSSI();
+  #if CELLULAR_RADIO == 1
+    char signalStr[16];
+    const char* radioTech[10] = {"Unknown","None","WiFi","GSM","UMTS","CDMA","LTE","IEEE802154","LTE_CAT_M1","LTE_CAT_NB1"};
+    // New Signal Strength capability - https://community.particle.io/t/boron-lte-and-cellular-rssi-funny-values/45299/8
+    CellularSignal sig = Cellular.RSSI();
 
-  auto rat = sig.getAccessTechnology();
+    auto rat = sig.getAccessTechnology();
 
-  //float strengthVal = sig.getStrengthValue();
-  float strengthPercentage = sig.getStrength();
+    //float strengthVal = sig.getStrengthValue();
+    float strengthPercentage = sig.getStrength();
 
-  //float qualityVal = sig.getQualityValue();
-  float qualityPercentage = sig.getQuality();
+    //float qualityVal = sig.getQualityValue();
+    float qualityPercentage = sig.getQuality();
 
-  snprintf(signalStr,sizeof(signalStr), "%s S:%2.0f%%, Q:%2.0f%% ", radioTech[rat], strengthPercentage, qualityPercentage);
-  Log.info(signalStr);
+    snprintf(signalStr,sizeof(signalStr), "%s S:%2.0f%%, Q:%2.0f%% ", radioTech[rat], strengthPercentage, qualityPercentage);
+    Log.info(signalStr);
+  #else
+    WiFiSignal sig = WiFi.RSSI();
+  #endif
 }
 
 /**
