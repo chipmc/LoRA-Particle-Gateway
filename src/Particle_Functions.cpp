@@ -7,6 +7,7 @@
 #include "LoRA_Functions.h"
 #include "Room_Occupancy.h"
 #include "JsonParserGeneratorRK.h"
+#include "config.h"
 
 char openTimeStr[8] = " ";
 char closeTimeStr[8] = " ";
@@ -596,21 +597,27 @@ bool Particle_Functions::disconnectFromParticle()                      // Ensure
   Particle.process();
   if (Particle.connected()) {                      // As this disconnect from Particle thing can be a·syn·chro·nous, we need to take an extra step to wait, 
     Log.info("Failed to disconnect from Particle");
-    return(false);
-  }
-  else Log.info("Disconnected from Particle in %i seconds", (int)(Time.now() - startTime));
-  // Then we need to disconnect from Cellular and power down the cellular modem
-  startTime = Time.now();
-  Cellular.disconnect();                                               // Disconnect from the cellular network
-  Cellular.off();                                                      // Turn off the cellular modem
-  waitFor(Cellular.isOff, 30000);                                      // As per TAN004: https://support.particle.io/hc/en-us/articles/1260802113569-TAN004-Power-off-Recommendations-for-SARA-R410M-Equipped-Devices
-  Particle.process();
-  if (Cellular.isOn()) {                                               // At this point, if cellular is not off, we have a problem
-    Log.info("Failed to turn off the Cellular modem");
-    return(false);                                                     // Let the calling function know that we were not able to turn off the cellular modem
+    return false;
   }
   else {
-    Log.info("Turned off the cellular modem in %i seconds", (int)(Time.now() - startTime));
+    Log.info("Disconnected from Particle in %i seconds", (int)(Time.now() - startTime));
     return true;
   }
+
+  #if CELLULAR_RADIO == 1
+    // Then we need to disconnect from Cellular and power down the cellular modem
+    startTime = Time.now();
+    Cellular.disconnect();                                               // Disconnect from the cellular network
+    Cellular.off();                                                      // Turn off the cellular modem
+    waitFor(Cellular.isOff, 30000);                                      // As per TAN004: https://support.particle.io/hc/en-us/articles/1260802113569-TAN004-Power-off-Recommendations-for-SARA-R410M-Equipped-Devices
+    Particle.process();
+    if (Cellular.isOn()) {                                               // At this point, if cellular is not off, we have a problem
+      Log.info("Failed to turn off the Cellular modem");
+      return(false);                                                     // Let the calling function know that we were not able to turn off the cellular modem
+    }
+    else {
+      Log.info("Turned off the cellular modem in %i seconds", (int)(Time.now() - startTime));
+      return true;
+    }
+  #endif
 }

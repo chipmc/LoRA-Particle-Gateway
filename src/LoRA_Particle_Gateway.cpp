@@ -74,6 +74,7 @@
 // v21.4    Added a particle function (resetSpace) that allows for a space (and all its nodes) to have their values reset through Particle/Ubidots.
 // v21.5    Node v12 or later - Added a particle function (setTofDetectionsPerSecond) with alert code 13 - sets tofDetectionsPerSecond on a node
 // v22.0	Changing the way that the gateway tells the nodes how often to report.  This will be a Particle function that will be called by the Fleet Manager.  This will be a breaking change for the nodes.
+// v23.0    Modified to support Argon WiFi Gateway instead of Cellular. - Added a "config.h" to hold the configuration settings for the device.
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -90,6 +91,7 @@
 #include "take_measurements.h"						// Manages interactions with the sensors (default is temp for charging)
 #include "MyPersistentData.h"						// Where my persistent storage files are kept
 #include "Room_Occupancy.h"							// Aggregates node data to get net room occupancy for Occupancy Nodes
+#include "config.h"									// Configuration file for the device
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(22);								// For now, we are putting nodes and gateways in the same product group - need to deconflict #
@@ -131,6 +133,9 @@ void setup()
 	sysStatus.setup();
 	current.setup();
 	nodeDatabase.setup();
+
+	// This is a kluge to speed development - going to set the flag for WiFi Manually here - need to set up a function to do this
+	sysStatus.set_connectivityMode(4);				// connectivityMode Code 4 keeps both LoRA and WiFi Connections on
 	
     Particle_Functions::instance().setup();         // Sets up all the Particle functions and variables defined in particle_fn.h
                          
@@ -305,7 +310,13 @@ void loop() {
 				if (Particle.connected()) {
 					Particle.syncTime();												// To prevent large connections, we will sync every hour when we connect to the cellular network.
 					waitUntil(Particle.syncTimeDone);									// Make sure sync is complete
-					CellularSignal sig = Cellular.RSSI();
+					#if CELLULAR_RADIO == 1
+						CellularSignal sig = Cellular.RSSI();
+						Log.info("Cellular Signal Strength: %d dBm", sig.getStrength());
+					#else	
+						WiFiSignal sig = WiFi.RSSI();
+						Log.info("WiFi Signal Strength: %d dBm", (int8_t)sig.getStrength());
+					#endif
 				}
 				if (sysStatus.get_connectivityMode() == 1) state = LoRA_STATE;			// Go back to the LoRA State if we are in connected mode
 				else state = DISCONNECTING_STATE;	 									// Typically, we will disconnect and sleep to save power - publishes occur during the 90 seconds before disconnect
