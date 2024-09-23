@@ -2,6 +2,6 @@
 #define CONFIG_H
 
 // Uncomment the following line to use Wi-Fi
-#define CELLULAR_RADIO 0
+#define CELLULAR_RADIO 1
 
 #endif // CONFIG_H

@@ -312,7 +312,7 @@ void loop() {
 					waitUntil(Particle.syncTimeDone);									// Make sure sync is complete
 					#if CELLULAR_RADIO == 1
 						CellularSignal sig = Cellular.RSSI();
-						Log.info("Cellular Signal Strength: %d dBm", sig.getStrength());
+						Log.info("Cellular Signal Strength: %d dBm", (int8_t)sig.getStrength());
 					#else	
 						WiFiSignal sig = WiFi.RSSI();
 						Log.info("WiFi Signal Strength: %d dBm", (int8_t)sig.getStrength());
