@@ -75,6 +75,7 @@
 // v21.5    Node v12 or later - Added a particle function (setTofDetectionsPerSecond) with alert code 13 - sets tofDetectionsPerSecond on a node
 // v22.0	Changing the way that the gateway tells the nodes how often to report.  This will be a Particle function that will be called by the Fleet Manager.  This will be a breaking change for the nodes.
 // v23.0    Modified to support Argon WiFi Gateway instead of Cellular. - Added a "config.h" to hold the configuration settings for the device.
+// v23.1 	Moved timezone selection to config.h - what else should be here?
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -149,7 +150,7 @@ void setup()
 	LoRA_Functions::instance().setup(true);			// Start the LoRA radio (true for Gateway and false for Node)
 
 	// Setup local time and set the publishing schedule
-	LocalTime::instance().withConfig(LocalTimePosixTimezone("EST5EDT,M3.2.0/2:00:00,M11.1.0/2:00:00"));			// East coast of the US
+	LocalTime::instance().withConfig(LocalTimePosixTimezone(TIME_CONFIG));			// East coast of the US
 	conv.withCurrentTime().convert();  				// Convert to local time for use later
 
 	if (Time.isValid()) {
