@@ -135,6 +135,16 @@ void setup()
 	current.setup();
 	nodeDatabase.setup();
 
+	#if OVER_RIDE_SYSTEM_VALUES == 1
+		sysStatus.set_openTime(OPENTIME_OVERRIDE);		// Open time 24 hours
+		sysStatus.set_closeTime(CLOSETIME_OVERRIDE);	// Close time 24 hours
+		sysStatus.set_breakTime(BREAKTIME_OVERRIDE);	// Break time 24 hours, set this to 24 if no break time is needed for this gateway.
+		sysStatus.set_breakLengthMinutes(BREAKLENGTHMINUTES_OVERRIDE);	// Break length 1-60 minutes.
+		sysStatus.set_weekendBreakTime(WEEKENDBREAKTIME_OVERRIDE);		// Break time 24 hours (weekends), set this to 24 if no break time is needed for this gateway.
+		sysStatus.set_weekendBreakLengthMinutes(WEEKENDBREAKLENGTHMINUTES_OVERRIDE);	// Break length 1-60 minutes (weekends).
+		sysStatus.set_frequencySeconds(REPORTING_FREQUENCY_OVERRIDE);	// Reporting frequency in seconds
+	#endif
+
 	// This is a kluge to speed development - going to set the flag for WiFi Manually here - need to set up a function to do this
 	sysStatus.set_connectivityMode(4);				// connectivityMode Code 4 keeps both LoRA and WiFi Connections on
 	

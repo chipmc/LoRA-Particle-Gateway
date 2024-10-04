@@ -26,5 +26,14 @@
 #define TIME_CONFIG "EST5EDT,M3.2.0/2:00:00,M11.1.0/2:00:00"  // Uncomment for Eastern Time Zone
 
 
+// Since we may want to set some of the system values in the code, we can do that here.
+#define OVER_RIDE_SYSTEM_VALUES 1
+#define OPENTIME_OVERRIDE  8                              // Open time 24 hours
+#define CLOSETIME_OVERRIDE 20                             // Close time 24 hours
+#define BREAKTIME_OVERRIDE 24                             // Break time 24 hours, set this to 24 if no break time is needed for this gateway.
+#define BREAKLENGTHMINUTES_OVERRIDE 15                    // Break length 1-60 minutes.
+#define WEEKENDBREAKTIME_OVERRIDE 24                      // Break time 24 hours (weekends), set this to 24 if no break time is needed for this gateway.
+#define WEEKENDBREAKLENGTHMINUTES_OVERRIDE 15             // Break length 1-60 minutes (weekends).
+#define REPORTING_FREQUENCY_OVERRIDE 60                   // Reporting frequency in seconds
 
 #endif // CONFIG_H

@@ -5,6 +5,7 @@
 #include <ctime>									// formats unix timestamps as h:m:s
 #include <vector> // Include vector header for key-value pair array
 
+LocalTimeConvert convLoRA;								// For determining if the park should be opened or closed - need local time
 
 // Singleton instantiation - from template
 LoRA_Functions *LoRA_Functions::_instance;
@@ -300,10 +301,23 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 	buf[8] = (uint8_t)(currentTime);  	
 
 	// Here we calculate the seconds to the next report
+	// There are two paths here: 1. During operating hours, it is the number of seconds to the next report, 2. After hours, it is the number of seconds to the next report or the number of seconds to the next operating hour
+	// We will call secondsTillOperatingHours() to get the number of seconds to the next operating hour - a zero result means we are in operating hours
+	if (LoRA_Functions::instance().secondsUntilOperatingHours() == 0) {
+		buf[9] = highByte(sysStatus.get_frequencySeconds());	// Frequency of reports set by the gateway
+		buf[10] = lowByte(sysStatus.get_frequencySeconds());
+		Log.info("Frequency of reports is %d seconds", sysStatus.get_frequencySeconds());
+	}
+	else {
+		buf[9] = highByte(LoRA_Functions::instance().secondsUntilOperatingHours());	// Frequency of reports set by the gateway
+		buf[10] = lowByte(LoRA_Functions::instance().secondsUntilOperatingHours());
+		Log.info("Frequency of reports is %d seconds", LoRA_Functions::instance().secondsUntilOperatingHours());
+	}
+	/*
 	buf[9] = highByte(sysStatus.get_frequencySeconds());	// Frequency of reports set by the gateway
 	buf[10] = lowByte(sysStatus.get_frequencySeconds());
 	Log.info("Frequency of reports is %d seconds", sysStatus.get_frequencySeconds());	
-
+	*/
 	// Next we have to determine if there is an alert code to send
 	// If the node is not configured, we will set an alert code of 1
 	if (current.get_alertCodeNode() == 255 || current.get_alertCodeNode() == 1) {
@@ -1479,6 +1493,32 @@ bool LoRA_Functions::saveNodeDatabase(JsonParser &jp) {
     }
 }
 
+
+int LoRA_Functions::secondsUntilOperatingHours() {		// Return zero if open and number of seconds until opening if closed
+	int secondsTillOperatingHours = 0;
+
+	int operatingHours = sysStatus.get_openTime();
+	int closingHours = sysStatus.get_closeTime();
+
+	convLoRA.withCurrentTime().convert();  				// Convert to local time for use later
+
+	int currentHour = convLoRA.getLocalTimeHMS().hour;
+	int currentMinute = convLoRA.getLocalTimeHMS().minute;
+	int currentSecond = convLoRA.getLocalTimeHMS().second;
+
+
+	if (currentHour <= operatingHours) {					// Before the park opens
+		secondsTillOperatingHours = (operatingHours - currentHour) * 3600 - currentMinute * 60 - currentSecond;
+	} 
+	else if (currentHour > closingHours) {				// After the park closes
+		secondsTillOperatingHours = (24 - currentHour + operatingHours) * 3600 - currentMinute * 60 - currentSecond;
+	}
+
+	Log.info("Time till open calculation %s with current hours %d opening hours at %d and closing hours at %d. Seconds till operating hours: %d", convLoRA.timeStr().c_str(), currentHour, operatingHours, closingHours, secondsTillOperatingHours);
+	// secondsTillOperatingHours = 0;  // This is just for testing purposes comment out for production
+
+	return secondsTillOperatingHours;
+}
 
 
 /**********************************************************************

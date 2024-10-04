@@ -17,6 +17,7 @@ SYSTEM_MODE(SEMI_AUTOMATIC);                        // This will enable user cod
 SYSTEM_THREAD(ENABLED);                             // Means my code will not be held up by Particle processes.
 STARTUP(System.enableFeature(FEATURE_RESET_INFO));
 
+
 SerialLogHandler logHandler(LOG_LEVEL_INFO);        // Easier to see the program flow
 
 Particle_Functions *Particle_Functions::_instance;
@@ -135,8 +136,8 @@ int Particle_Functions::jsonFunctionParser(String command) {
 
     // Reporting Frequency Function
     else if (function == "freq") {   
-      // Format - function - freq, node - 0, variables - 2-60 (must be divisiable by two)
-      // Test - {"cmd":[{"node":0,"var":"5","fn":"freq"}]}
+      // Format - function - freq, node - 0, variables - 2-60 (must be divisiable into 60)
+      // Test - {"cmd":[{"node":0,"var":"10","fn":"freq"}]}
       int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
       if ((tempValue > 0) && (tempValue <= 60) && 60 % tempValue == 0) {
         snprintf(messaging,sizeof(messaging),"Setting reporting frequency to %d minutes", tempValue);
