@@ -1497,7 +1497,7 @@ bool LoRA_Functions::saveNodeDatabase(JsonParser &jp) {
 }
 
 
-int LoRA_Functions::secondsUntilOperatingHours() {		// Return zero if open and number of seconds until opening if closed
+uint16_t LoRA_Functions::secondsUntilOperatingHours() {		// Return zero if open and number of seconds until opening if closed
 	int secondsTillOperatingHours = 0;
 
 	int operatingHours = sysStatus.get_openTime();

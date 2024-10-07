@@ -77,6 +77,7 @@
 // v23.0    Modified to support Argon WiFi Gateway instead of Cellular. - Added a "config.h" to hold the configuration settings for the device.
 // v23.1 	Moved timezone selection to config.h - what else should be here?
 // v23.2 	Fixed issue with passing seconds till open to the Data Ack function
+// v23.3    Changed the time till next report to unsigned 16-bit integer
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60

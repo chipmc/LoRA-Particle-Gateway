@@ -437,7 +437,7 @@ public:
     /**
      * @brief Returns the seconds until operating hours begin and zero if the current time is within operating hours
      */
-    int secondsUntilOperatingHours();
+    uint16_t secondsUntilOperatingHours();
 
 
     /**********************************************************************
