@@ -74,6 +74,7 @@
 // v21.4    Added a particle function (resetSpace) that allows for a space (and all its nodes) to have their values reset through Particle/Ubidots.
 // v21.5    Node v12 or later - Added a particle function (setTofDetectionsPerSecond) with alert code 13 - sets tofDetectionsPerSecond on a node
 // v22.0	Changing the way that the gateway tells the nodes how often to report.  This will be a Particle function that will be called by the Fleet Manager.  This will be a breaking change for the nodes.
+// v22.1    Cleaned up the LoRA_Functions class, separated all JSON database functionality into JsonDataManager.cpp
 // v23.0    Modified to support Argon WiFi Gateway instead of Cellular. - Added a "config.h" to hold the configuration settings for the device.
 // v23.1 	Moved timezone selection to config.h - what else should be here?
 
@@ -87,6 +88,7 @@
 #include "Particle.h"                               // Because it is a CPP file not INO
 // Application Files
 #include "LoRA_Functions.h"							// Where we store all the information on our LoRA implementation - application specific not a general library
+#include "JsonDataManager.h"						// Where we interact with an on-board JSON database	
 #include "device_pinout.h"							// Define pinouts and initialize them
 #include "Particle_Functions.h"						// Particle specific functions
 #include "take_measurements.h"						// Manages interactions with the sensors (default is temp for charging)
@@ -219,7 +221,7 @@ void loop() {
 				} else {
 					// Check for inactive spaces and reset them. Ignores nodes of a "Counter" sensorType as they do not have spaces.
 					Log.info("Checking for inactive spaces...");
-					LoRA_Functions::instance().resetInactiveSpaces(3600);  // Define "inactive" spaces as those where ALL of the nodes in that space have not sent a report in 3600 seconds.
+					JsonDataManager::instance().resetInactiveSpaces(3600);  // Define "inactive" spaces as those where ALL of the nodes in that space have not sent a report in 3600 seconds.
 				}
 
 				publishStateTransition();                   					// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
@@ -275,7 +277,7 @@ void loop() {
 			else if ((millis() - startLoRAWindow) > (connectionWindow *60000UL)) { 					// Keeps us in listening mode for the specified windpw - then back to idle unless in test mode - keeps listening
 				Log.info("Listening window over");
 				LoRA_Functions::instance().sleepLoRaRadio();									// Done with the LoRA phase - put the radio to sleep
-				LoRA_Functions::instance().printNodeData(false);
+				JsonDataManager::instance().printNodeData(false);
 				nodeDatabase.flush(true);
 				if (Time.hour() != Time.hour(sysStatus.get_lastConnection())) state = CONNECTING_STATE;  	// Only Connect once an hour after the LoRA window is over and if the park is open			
 				else if (sysStatus.get_alertCodeGateway() != 0) state = ERROR_STATE;
