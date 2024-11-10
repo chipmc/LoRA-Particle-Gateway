@@ -81,6 +81,5 @@
         "cinttypes": "cpp"
     },
     "particle.targetPlatform": "boron",
-    "particle.targetDevice": "Boron-Dev1",
     "particle.firmwareVersion": "4.2.0"
 }

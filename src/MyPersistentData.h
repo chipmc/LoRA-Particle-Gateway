@@ -82,7 +82,7 @@ public:
 		uint8_t nodeNumber;                               // Assigned by the gateway on joining the network
 		uint8_t structuresVersion;                        // Version of the data structures (system and data)
 		uint16_t magicNumber;							  // A way to identify nodes and gateways so they can trust each other
-		uint8_t connectivityMode;                         // 0 - standard LoRA and Cellular, 1 - Long LoRA  2 - Always on LoRA, 3 - Always on LoRA and Cellular
+		uint8_t connectivityMode;                         // 0 - standard LoRA and Cellular, 1 - Long LoRA  2 - Always on LoRA, 3 - Always on LoRA and Cellular, 4 - Always on WiFi and LoRA
 		uint8_t resetCount;                               // reset count of device (0-255)
 		uint16_t messageCount;							  // This is how many messages the Gateay has composed for the day
 		time_t lastHookResponse;                   		  // Last time we got a valid Webhook response
