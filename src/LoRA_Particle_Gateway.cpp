@@ -98,7 +98,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(22);								// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="22.0";
+char currentPointRelease[6] ="23.1";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
