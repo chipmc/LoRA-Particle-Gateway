@@ -17,13 +17,13 @@
 // The Argon does not have a cellular radio, so we can't get signal strength from the cellular radio.
 // The Argon does not have a fuel guage so we can't get battery state or charge from the fuel guage.
 // 0 = Argon, 1 = Boron
-#define CELLULAR_RADIO 1
+#define CELLULAR_RADIO 0
 
 // Next, the timezone setting for the gateway is set here to support developmnet in different locations.
 // This will be used to set the time on the gateway device but - remember - nodes do not care about local time
 // This is the timezone string from: https://github.com/rickkas7/LocalTimeRK/
-// #define TIME_CONFIG "SGT-8"                                     // Uncomment for Singapore Time Zone
-#define TIME_CONFIG "EST5EDT,M3.2.0/2:00:00,M11.1.0/2:00:00"  // Uncomment for Eastern Time Zone
+#define TIME_CONFIG "SGT-8"                                     // Uncomment for Singapore Time Zone
+// #define TIME_CONFIG "EST5EDT,M3.2.0/2:00:00,M11.1.0/2:00:00"  // Uncomment for Eastern Time Zone
 
 
 // Since we may want to set some of the system values in the code, we can do that here.

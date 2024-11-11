@@ -303,15 +303,18 @@ bool LoRA_Functions::acknowledgeDataReportGateway() { 		// This is a response to
 	// Here we calculate the seconds to the next report
 	// There are two paths here: 1. During operating hours, it is the number of seconds to the next report, 2. After hours, it is the number of seconds to the next report or the number of seconds to the next operating hour
 	// We will call secondsTillOperatingHours() to get the number of seconds to the next operating hour - a zero result means we are in operating hours
-	if (LoRA_Functions::instance().secondsUntilOperatingHours() == 0) {
+	int secondsToNextReport = LoRA_Functions::instance().secondsUntilOperatingHours();
+	Log.info("Seconds to next report is %d", secondsToNextReport);
+
+	if (secondsToNextReport == 0) {
 		buf[9] = highByte(sysStatus.get_frequencySeconds());	// Frequency of reports set by the gateway
 		buf[10] = lowByte(sysStatus.get_frequencySeconds());
 		Log.info("Frequency of reports is %d seconds", sysStatus.get_frequencySeconds());
 	}
 	else {
-		buf[9] = highByte(LoRA_Functions::instance().secondsUntilOperatingHours());	// Frequency of reports set by the gateway
-		buf[10] = lowByte(LoRA_Functions::instance().secondsUntilOperatingHours());
-		Log.info("Frequency of reports is %d seconds", LoRA_Functions::instance().secondsUntilOperatingHours());
+		buf[9] = highByte(secondsToNextReport);	// Frequency of reports set by the gateway
+		buf[10] = lowByte(secondsToNextReport);
+		Log.info("Frequency of reports is %i seconds", secondsToNextReport);
 	}
 	/*
 	buf[9] = highByte(sysStatus.get_frequencySeconds());	// Frequency of reports set by the gateway
@@ -1494,7 +1497,7 @@ bool LoRA_Functions::saveNodeDatabase(JsonParser &jp) {
 }
 
 
-int LoRA_Functions::secondsUntilOperatingHours() {		// Return zero if open and number of seconds until opening if closed
+uint16_t LoRA_Functions::secondsUntilOperatingHours() {		// Return zero if open and number of seconds until opening if closed
 	int secondsTillOperatingHours = 0;
 
 	int operatingHours = sysStatus.get_openTime();
@@ -1514,7 +1517,7 @@ int LoRA_Functions::secondsUntilOperatingHours() {		// Return zero if open and n
 		secondsTillOperatingHours = (24 - currentHour + operatingHours) * 3600 - currentMinute * 60 - currentSecond;
 	}
 
-	Log.info("Time till open calculation %s with current hours %d opening hours at %d and closing hours at %d. Seconds till operating hours: %d", convLoRA.timeStr().c_str(), currentHour, operatingHours, closingHours, secondsTillOperatingHours);
+	Log.info("Current hour is %d and operating hours are from %d to %d. Seconds till open: %d",currentHour, operatingHours, closingHours, secondsTillOperatingHours);
 	// secondsTillOperatingHours = 0;  // This is just for testing purposes comment out for production
 
 	return secondsTillOperatingHours;

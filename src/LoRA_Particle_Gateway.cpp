@@ -76,6 +76,8 @@
 // v22.0	Changing the way that the gateway tells the nodes how often to report.  This will be a Particle function that will be called by the Fleet Manager.  This will be a breaking change for the nodes.
 // v23.0    Modified to support Argon WiFi Gateway instead of Cellular. - Added a "config.h" to hold the configuration settings for the device.
 // v23.1 	Moved timezone selection to config.h - what else should be here?
+// v23.2 	Fixed issue with passing seconds till open to the Data Ack function
+// v23.3    Changed the time till next report to unsigned 16-bit integer
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
