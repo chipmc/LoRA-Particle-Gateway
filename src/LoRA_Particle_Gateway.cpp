@@ -77,6 +77,7 @@
 // v22.1    Cleaned up the LoRA_Functions class, separated all JSON database functionality into JsonDataManager.cpp
 // v23.0    Modified to support Argon WiFi Gateway instead of Cellular. - Added a "config.h" to hold the configuration settings for the device.
 // v23.1 	Moved timezone selection to config.h - what else should be here?
+// v23.2 	Added code that will ensure that the gateway connects at least once an hour - even if no nodes are connected.
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -272,9 +273,10 @@ void loop() {
 			}
 
 			if (sysStatus.get_connectivityMode() == 1)	{										// If we are in connected mode - we will stay in the LoRA state
+				if (Time.hour() != Time.hour(sysStatus.get_lastConnection())) state = CONNECTING_STATE;  	// Connect once an hour even if no messages are received	
 				break;
 			}
-			else if ((millis() - startLoRAWindow) > (connectionWindow *60000UL)) { 					// Keeps us in listening mode for the specified windpw - then back to idle unless in test mode - keeps listening
+			else if ((millis() - startLoRAWindow) > (connectionWindow *60000UL)) { 				// Keeps us in listening mode for the specified windpw - then back to idle unless in test mode - keeps listening
 				Log.info("Listening window over");
 				LoRA_Functions::instance().sleepLoRaRadio();									// Done with the LoRA phase - put the radio to sleep
 				JsonDataManager::instance().printNodeData(false);
