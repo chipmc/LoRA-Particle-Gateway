@@ -164,11 +164,11 @@ void setup()
 		state = CONNECTING_STATE;
 	}
 
-	if (!digitalRead(BUTTON_PIN) || sysStatus.get_connectivityMode()== 1) {
-		Log.info("User button or pre-existing set to connected mode");
+	// if (!digitalRead(BUTTON_PIN) || sysStatus.get_connectivityMode()== 1) {
+	// 	Log.info("User button or pre-existing set to connected mode");
 		sysStatus.set_connectivityMode(1);			  // connectivityMode Code 1 keeps both LoRA and Cellular connections on
 		state = CONNECTING_STATE;
-	}
+	// }
 	
 	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); // We may need to monitor the user switch to change behaviours / modes
 
