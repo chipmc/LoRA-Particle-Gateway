@@ -78,6 +78,7 @@
 // v23.0    Modified to support Argon WiFi Gateway instead of Cellular. - Added a "config.h" to hold the configuration settings for the device.
 // v23.1 	Moved timezone selection to config.h - what else should be here?
 // v23.2 	Added code that will ensure that the gateway connects at least once an hour - even if no nodes are connected.
+// v23.3 	Fexed interpretation of the battery context value.
 
 #define DEFAULT_LORA_WINDOW 5
 #define STAY_CONNECTED 60
@@ -428,7 +429,7 @@ void userSwitchISR() {
 void publishWebhook(uint8_t nodeNumber) {							
 	char data[256];                             						// Store the date in this character array - not global
 	// Battery conect information - https://docs.particle.io/reference/device-os/firmware/boron/#batterystate-
-    const char* batteryContext[8] = {"Unknown","Not Charging","Charging","Charged","Discharging","Fault","Diconnected"};
+    const char* batteryContext[3] = {"Not Charging","Charging","Error"};	// Battery context for the battery state
 	Log.info("Publishing webhook for node %d", nodeNumber);
 
 	if (!Time.isValid()) {
