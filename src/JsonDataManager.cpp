@@ -95,6 +95,7 @@ byte JsonDataManager::getType(int nodeNumber) {
 		Log.info("From getType function Node number not found so returning %d",current.get_sensorType());
 		return current.get_sensorType();									// Ran out of entries, go with what was reported by the node
 	} 
+	
 
 	jp.getValueByKey(nodeObjectContainer, "type", type);
 	Log.info("Returning sensor type %d in getType",type);

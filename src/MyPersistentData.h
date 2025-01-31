@@ -452,8 +452,8 @@ protected:
     static currentStatusData *_instance;
 
     //Since these variables are only used internally - They can be private. 
-	static const uint32_t CURRENT_DATA_MAGIC = 0x20a99e80;
-	static const uint16_t CURRENT_DATA_VERSION = 3;
+	static const uint32_t CURRENT_DATA_MAGIC = 0x20a99e81;
+	static const uint16_t CURRENT_DATA_VERSION = 4;
 };
 
 
@@ -587,8 +587,8 @@ protected:
     static nodeIDData *_instance;
 
     //Since these variables are only used internally - They can be private. 
-	static const uint32_t NODEID_DATA_MAGIC = 0x20a99e60;
-	static const uint16_t NODEID_DATA_VERSION = 2;
+	static const uint32_t NODEID_DATA_MAGIC = 0x20a99e61;
+	static const uint16_t NODEID_DATA_VERSION = 3;
 
 };
 

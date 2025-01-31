@@ -395,7 +395,7 @@ bool LoRA_Functions::acknowledgeJoinRequestGateway() {
 	if (JsonDataManager::instance().uniqueIDExistsInDatabase(current.get_uniqueID())) {		// Check to make sure the node's uniqueID is in the database
 		uint8_t nodeNumber = JsonDataManager::instance().getNodeNumberForUniqueID(current.get_uniqueID());
 		buf[13] = JsonDataManager::instance().getType(nodeNumber);							// Make sure type is up to date
-		JsonDataManager::instance().getJoinPayload(nodeNumber);										// Get the payload values from the nodeID database
+		JsonDataManager::instance().getJoinPayload(nodeNumber);								// Get the payload values from the nodeID database
 		buf[19] = current.get_payload1();					
 		buf[20] = current.get_payload2();
 		buf[21] = current.get_payload3();

@@ -49,6 +49,8 @@ int Particle_Functions::jsonFunctionParser(String command) {
   // const char * const commandString = "{\"cmd\":[{\"node\":1,\"var\":\"hourly\",\"fn\":\"reset\"},{\"node\":0,\"var\":1,\"fn\":\"lowpowermode\"},{\"node\":2,\"var\":\"daily\",\"fn\":\"report\"}]}";
   // String to put into Uber command window {"cmd":[{"node":1,"var":"hourly","fn":"reset"},{"node":0,"var":1,"fn":"lowpowermode"},{"node":2,"var":"daily","fn":"report"}]}
 
+  Log.info("Got a command");
+
 	uint32_t nodeUniqueID;
   int nodeNumber;
 	String variable;
@@ -79,11 +81,11 @@ int Particle_Functions::jsonFunctionParser(String command) {
 	jp.getValueTokenByKey(jp.getOuterObject(), "cmd", cmdArrayContainer);
 	const JsonParserGeneratorRK::jsmntok_t *cmdObjectContainer;			// Token for the objects in the array (I beleive)
 
-	for (int i=0; i<10; i++) {												// Iterate through the array looking for a match
+	for (int i=0; i<10; i++) {												              // Iterate through the array looking for a match
 		cmdObjectContainer = jp.getTokenByIndex(cmdArrayContainer, i);
 		if(cmdObjectContainer == NULL) {
       if (i == 0) return 0;                                       // No valid entries
-			else break;								                    // Ran out of entries 
+			else break;								                                  // Ran out of entries 
 		} 
 		jp.getValueByKey(cmdObjectContainer, "node", nodeUniqueID);
     nodeNumber = JsonDataManager::instance().getNodeNumberForUniqueID(nodeUniqueID); // nodeNumber is uniqueID
@@ -95,12 +97,16 @@ int Particle_Functions::jsonFunctionParser(String command) {
 
     // In this section we will parse and execute the commands from the console or JSON - assumes connection to Particle
     // ****************  Note: currently there is no valudiation on the nodeNumbers ***************************
-    
+
+
+    Log.info("Got a command");
     // Reset Function
 		if (function == "reset") {
+      Log.info("In the reset function");
       // Format - function - reset, node - nodeNumber, variables - either "current", "all" or "nodeData"
       // Test - {"cmd":[{"node":1,"var":"all","fn":"reset"}]}
-      if (nodeUniqueID == 0) {        // if the unique ID passed to the node is "0", we are talking about the gateway
+      if (nodeNumber == 0) {        // if the unique ID passed to the node is "0", we are talking about the gateway
+          snprintf(messaging,sizeof(messaging),"In the reset function for the gateway");
         if (variable == "nodeData") {
           snprintf(messaging,sizeof(messaging),"Resetting the gateway's node Data");
           nodeDatabase.resetNodeIDs();
