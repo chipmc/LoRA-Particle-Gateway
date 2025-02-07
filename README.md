@@ -2,6 +2,32 @@
 
 This is a lightweight and extensible gateway between LoRA and Cellular networks using the Particle platform.  This work is possible because of the enhancement of the Particle community libraries RF9X-RK and AB1805_RK  
 
+# MAFC Install Configurations
+
+Gateway Particle ID: e00fce68772083a2d0b7df4e
+
+Node 8 - Raquetball 1 : 2613470559 ["1","false","false"] zoneMode = frontfocused (3)
+Node 13 - Raquetball 2 : 2121360342 ["2","false","false"] zoneMode = frontfocused (3)
+
+Node 7 - Spin Studio : 2113381891 ["3","false","false"]
+
+Node 3 - Gym High : 2222090124 ["4","true","true"]
+Node 11 - Gym Low : 2839639610 ["4","false","true"] zoneMode = frontfocused (3) 
+
+Node 5 - Men's Locker Room Inside : 3818678341 ["6","false","true"]
+Node 12 - Men's Locker Room Outside : 2824039299 ["6","false","true"] zoneMode = frontfocused (3)
+
+Node 4 - Women's Locker Room Inside : 2561435892 ["7","false","true"]
+Node 6 - Women's Locker Room Outside : 3633933507 ["7","false","true"] zoneMode = frontfocused (3)
+
+Node 2 - Staircase : 2647744414 ["8","true","true"] zoneMode = backfocused (4)
+Node 9 - Group Excercise Hallway : 3662503554 ["8","true","true"]
+Node 14 - Group Exercise Corner : 2585746525 ["8","false","true"]
+
+Node 10 - Stretch Area : 660218114 ["9","true","false"]
+
+
+
 ## Initial Implementation - Adding LoRA to Cellular for more complete coverage!
 
 The itent of this project is to show how data collected from remote LoRA nodes can be relayed to a server and on to the internet using a cellular connection.  This is especially useful in three scenarios:
