@@ -332,7 +332,12 @@ bool LoRA_Functions::decipherJoinRequestGateway() {			// Ths only question here 
 	// buf[0] - buf[1] Magic number processed above
 	// buf[2] - nodeNumber processed above
 	// buf[3] - buf[4] is token - processed above
+
+	// This is a temporary fix
 	// buf[5] - Sensor type - processed above
+	current.set_sensorType(10);		// This for a join request - set the sensor type to 10
+	// Remove this fix when we figure out how to get the sensor type from the node
+
 	// buf[6] - buf[9] is the unique ID of the node - processed above
 	current.set_payload1(buf[10]);					
 	current.set_payload2(buf[11]);

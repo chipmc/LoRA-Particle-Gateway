@@ -6,25 +6,44 @@ This is a lightweight and extensible gateway between LoRA and Cellular networks 
 
 Gateway Particle ID: e00fce68772083a2d0b7df4e
 
-Node 8 - Raquetball 1 : 2613470559 ["1","false","false"] zoneMode = frontfocused (3)
-Node 13 - Raquetball 2 : 2121360342 ["2","false","false"] zoneMode = frontfocused (3)
+Raquetball 1 : 3786288284 ["1","false","false"] zoneMode = frontfocused (3)
+    - {"cmd":[{"var":["1","false","false"],"fn":"mountConfig","node":3786288284}]}
+Raquetball 2 : 1210657838 ["2","false","false"] zoneMode = frontfocused (3)
+    - {"cmd":[{"var":["2","false","false"],"fn":"mountConfig","node":1210657838}]}
 
-Node 7 - Spin Studio : 2113381891 ["3","false","false"]
+Spin Studio : 1632518096 ["3","false","false"] - No power needs to be installed
+    - {"cmd":[{"var":["3","false","false"],"fn":"mountConfig","node":1632518096}]}
 
-Node 3 - Gym High : 2222090124 ["4","true","true"]
-Node 11 - Gym Low : 2839639610 ["4","false","true"] zoneMode = frontfocused (3) 
+Gym High : 2222090124 ["4","true","true"]
+    - {"cmd":[{"var":["4","true","true"],"fn":"mountConfig","node":2222090124}]}
+Gym Low : 1117137641 ["4","false","true"] zoneMode = frontfocused (3)  - replaced
+    - {"cmd":[{"var":["4","true","true"],"fn":"mountConfig","node":1117137641}]}
 
-Node 5 - Men's Locker Room Inside : 3818678341 ["6","false","true"]
-Node 12 - Men's Locker Room Outside : 2824039299 ["6","false","true"] zoneMode = frontfocused (3)
 
-Node 4 - Women's Locker Room Inside : 2561435892 ["7","false","true"]
-Node 6 - Women's Locker Room Outside : 3633933507 ["7","false","true"] zoneMode = frontfocused (3)
 
-Node 2 - Staircase : 2647744414 ["8","true","true"] zoneMode = backfocused (4)
-Node 9 - Group Excercise Hallway : 3662503554 ["8","true","true"]
-Node 14 - Group Exercise Corner : 2585746525 ["8","false","true"]
+Men's Locker Room Inside : 3818678341 ["6","false","true"]
+    - {"cmd":[{"var":["6","false","true"],"fn":"mountConfig","node":3818678341}]} 
+Men's Locker Room Outside : 95839962 ["6","false","true"] zoneMode = frontfocused (3)
+    - {"cmd":[{"var":["6","false","true"],"fn":"mountConfig","node":95839962}]} 
 
-Node 10 - Stretch Area : 660218114 ["9","true","false"]
+Women's Locker Room Inside : 2561435892 ["7","false","true"]
+    - {"cmd":[{"var":["7","false","true"],"fn":"mountConfig","node":2561435892}]}
+Women's Locker Room Outside : 2839639610 ["7","false","true"] zoneMode = frontfocused (3)
+    - {"cmd":[{"var":["7","false","true"],"fn":"mountConfig","node":2839639610}]}
+
+Staircase : 2647744414 ["8","true","true"] zoneMode = backfocused (4)
+    - {"cmd":[{"var":["8","true","true"],"fn":"mountConfig","node":2647744414}]}
+Group Excercise Hallway : 3662503554 ["8","true","true"]
+    - {"cmd":[{"var":["8","true","true"],"fn":"mountConfig","node":3662503554}]}
+Group Exercise Corner : 2585746525 ["8","false","true"]
+    - {"cmd":[{"var":["8","false","true"],"fn":"mountConfig","node":2585746525}]}
+Stretch Area : 660218114 ["9","true","false"]
+    - {"cmd":[{"var":["8","true","true"],"fn":"mountConfig","node":660218114}]}
+
+Pool Main Hall - Right: 3289161043 ["10","false","false"]
+    - {"cmd":[{"var":["10","false","false"],"fn":"mountConfig","node":3289161043}]}
+Pool Main Hall - Left: 4151811430 ["10","false","false"]
+    - {"cmd":[{"var":["10","false","false"],"fn":"mountConfig","node":4151811430}]} 
 
 
 

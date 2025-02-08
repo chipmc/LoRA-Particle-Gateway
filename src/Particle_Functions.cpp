@@ -49,8 +49,6 @@ int Particle_Functions::jsonFunctionParser(String command) {
   // const char * const commandString = "{\"cmd\":[{\"node\":1,\"var\":\"hourly\",\"fn\":\"reset\"},{\"node\":0,\"var\":1,\"fn\":\"lowpowermode\"},{\"node\":2,\"var\":\"daily\",\"fn\":\"report\"}]}";
   // String to put into Uber command window {"cmd":[{"node":1,"var":"hourly","fn":"reset"},{"node":0,"var":1,"fn":"lowpowermode"},{"node":2,"var":"daily","fn":"report"}]}
 
-  Log.info("Got a command");
-
 	uint32_t nodeUniqueID;
   int nodeNumber;
 	String variable;
@@ -60,7 +58,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
   bool success = true;  
   bool invalidCommand = false;
 
-	JsonParserStatic<1024, 80> jp;	// Global parser that supports up to 256 bytes of data and 20 tokens
+	JsonParserStatic<1024, 80> jp;	// Global parser that supports up to 1024 bytes of data and 80 tokens
 
   Log.info(command.c_str());
 
@@ -79,6 +77,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
 
 	const JsonParserGeneratorRK::jsmntok_t *cmdArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "cmd", cmdArrayContainer);
+  Log.info("cmdArrayContainer->size = %d", cmdArrayContainer->size);
 	const JsonParserGeneratorRK::jsmntok_t *cmdObjectContainer;			// Token for the objects in the array (I beleive)
 
 	for (int i=0; i<10; i++) {												              // Iterate through the array looking for a match
@@ -95,11 +94,11 @@ int Particle_Functions::jsonFunctionParser(String command) {
     const JsonParserGeneratorRK::jsmntok_t *varArrayContainer;      // Token for the objects in the var array (if it is an array)
     jp.getValueTokenByKey(cmdObjectContainer, "var", varArrayContainer);
 
+    Log.info("Parsed the command to Node: %d uniqueID %lu, Var: %s, Fn: %s", nodeNumber, nodeUniqueID, variable.c_str(), function.c_str());
+
     // In this section we will parse and execute the commands from the console or JSON - assumes connection to Particle
     // ****************  Note: currently there is no valudiation on the nodeNumbers ***************************
 
-
-    Log.info("Got a command");
     // Reset Function
 		if (function == "reset") {
       Log.info("In the reset function");
