@@ -8,31 +8,40 @@ Gateway Particle ID: e00fce68772083a2d0b7df4e
 
 Raquetball 1 : 3786288284 ["1","false","false"] zoneMode = frontfocused (3)
     - {"cmd":[{"var":["1","false","false"],"fn":"mountConfig","node":3786288284}]}
+    - {"cmd":[{"var":3,"fn":"zoneMode","node":3786288284}]} 
 Raquetball 2 : 1210657838 ["2","false","false"] zoneMode = frontfocused (3)
     - {"cmd":[{"var":["2","false","false"],"fn":"mountConfig","node":1210657838}]}
+    - {"cmd":[{"var":3,"fn":"zoneMode","node":1210657838}]}
 
 Spin Studio : 1632518096 ["3","false","false"] - No power needs to be installed
     - {"cmd":[{"var":["3","false","false"],"fn":"mountConfig","node":1632518096}]}
 
 Gym High : 2222090124 ["4","true","true"]
     - {"cmd":[{"var":["4","true","true"],"fn":"mountConfig","node":2222090124}]}
-Gym Low : 1117137641 ["4","false","true"] zoneMode = frontfocused (3)  - replaced
+Gym Low : 1117137641 ["4","false","true"] zoneMode = frontfocused (3)
     - {"cmd":[{"var":["4","true","true"],"fn":"mountConfig","node":1117137641}]}
+    - {"cmd":[{"var":3,"fn":"zoneMode","node":1117137641}]}
 
-
+Hallway Center
+Hallway (left when facing pool)
+Hallway (right when facing pool)
 
 Men's Locker Room Inside : 3818678341 ["6","false","true"]
     - {"cmd":[{"var":["6","false","true"],"fn":"mountConfig","node":3818678341}]} 
 Men's Locker Room Outside : 95839962 ["6","false","true"] zoneMode = frontfocused (3)
     - {"cmd":[{"var":["6","false","true"],"fn":"mountConfig","node":95839962}]} 
+    - {"cmd":[{"var":3,"fn":"zoneMode","node":95839962}]}
 
 Women's Locker Room Inside : 2561435892 ["7","false","true"]
     - {"cmd":[{"var":["7","false","true"],"fn":"mountConfig","node":2561435892}]}
 Women's Locker Room Outside : 2839639610 ["7","false","true"] zoneMode = frontfocused (3)
     - {"cmd":[{"var":["7","false","true"],"fn":"mountConfig","node":2839639610}]}
+    - {"cmd":[{"var":3,"fn":"zoneMode","node":2839639610}]}
 
 Staircase : 2647744414 ["8","true","true"] zoneMode = backfocused (4)
     - {"cmd":[{"var":["8","true","true"],"fn":"mountConfig","node":2647744414}]}
+    - {"cmd":[{"var":4,"fn":"zoneMode","node":2647744414}]}
+
 Group Excercise Hallway : 3662503554 ["8","true","true"]
     - {"cmd":[{"var":["8","true","true"],"fn":"mountConfig","node":3662503554}]}
 Group Exercise Corner : 2585746525 ["8","false","true"]
