@@ -22,9 +22,6 @@ Gym Low : 1117137641 ["4","false","true"] zoneMode = frontfocused (3)
     - {"cmd":[{"var":["4","true","true"],"fn":"mountConfig","node":1117137641}]}
     - {"cmd":[{"var":3,"fn":"zoneMode","node":1117137641}]}
 
-Hallway Center
-Hallway (left when facing pool)
-Hallway (right when facing pool)
 
 Men's Locker Room Inside : 3818678341 ["6","false","true"]
     - {"cmd":[{"var":["6","false","true"],"fn":"mountConfig","node":3818678341}]} 
@@ -49,11 +46,28 @@ Group Exercise Corner : 2585746525 ["8","false","true"]
 Stretch Area : 660218114 ["9","true","false"]
     - {"cmd":[{"var":["8","true","true"],"fn":"mountConfig","node":660218114}]}
 
-Pool Main Hall - Right: 3289161043 ["10","false","false"]
-    - {"cmd":[{"var":["10","false","false"],"fn":"mountConfig","node":3289161043}]}
-Pool Main Hall - Left: 4151811430 ["10","false","false"]
-    - {"cmd":[{"var":["10","false","false"],"fn":"mountConfig","node":4151811430}]} 
 
+Hallway Center - not currently installed but enclosure and power are there
+Hallway (left when facing pool) - Left: 4151811430 ["10","false","false"]
+    - {"cmd":[{"var":["10","false","false"],"fn":"mountConfig","node":4151811430}]} 
+Hallway (right when facing pool) - Right: 3289161043 ["10","false","false"]
+    - {"cmd":[{"var":["10","false","false"],"fn":"mountConfig","node":3289161043}]}
+
+MAFC Lobby - Front: 1393371994 ["11”,”false","false"] zoneMode = frontfocused (3)
+    - {"cmd":[{"var":["11”,”false","false"],"fn":"mountConfig","node":1393371994}]}
+MAFC Lobby - Back: 664152659 ["11”,”false","false"] zoneMode = frontfocused (3)
+    - {"cmd":[{"var":["11”,”false","false"],"fn":"mountConfig","node":664152659}]}
+
+Treadmills - We should decide how to handle - each with their own Zone?  
+Treadmills are numbered 1-7 starting with the one closest to the Group Exercise Room
+These devices are installed but are not turned on - awaiting firmware
+Treadmill 1 - 2170149625
+Treadmill 2 - 2746734497
+Treadmill 3 - 2113381891
+Treadmill 4 - 2680039880
+Treadmill 5 - 1947464048
+Treadmill 6 - 1818876163
+Treadmill 7 - 1023094059
 
 
 ## Initial Implementation - Adding LoRA to Cellular for more complete coverage!
