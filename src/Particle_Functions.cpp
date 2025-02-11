@@ -9,15 +9,27 @@
 #include "JsonParserGeneratorRK.h"
 #include "config.h"
 
-char openTimeStr[8] = " ";
-char closeTimeStr[8] = " ";
-
 // Prototypes and System Mode calls
 SYSTEM_MODE(SEMI_AUTOMATIC);                        // This will enable user code to start executing automatically.
 SYSTEM_THREAD(ENABLED);                             // Means my code will not be held up by Particle processes.
 STARTUP(System.enableFeature(FEATURE_RESET_INFO));
 
-SerialLogHandler logHandler(LOG_LEVEL_INFO);        // Easier to see the program flow
+#if SERIAL_LOG_LEVEL == 0
+  SerialLogHandler logHandler(LOG_LEVEL_NONE);     // Easier to see the program flow
+#elif SERIAL_LOG_LEVEL == 1
+  SerialLogHandler logHandler(LOG_LEVEL_ERROR);
+#elif SERIAL_LOG_LEVEL == 2
+  SerialLogHandler logHandler(LOG_LEVEL_WARN);
+#elif SERIAL_LOG_LEVEL == 3
+SerialLogHandler logHandler(LOG_LEVEL_INFO, { // Logging level for non-application messages
+	{ "app.pubq", LOG_LEVEL_ERROR},
+	{ "app.seqfile", LOG_LEVEL_ERROR},
+  { "app.ab1805", LOG_LEVEL_ERROR}
+});
+#elif SERIAL_LOG_LEVEL == 4
+  SerialLogHandler logHandler(LOG_LEVEL_ALL);
+#endif
+
 
 Particle_Functions *Particle_Functions::_instance;
 
@@ -609,7 +621,7 @@ bool Particle_Functions::disconnectFromParticle()                      // Ensure
     return true;
   }
 
-  #if CELLULAR_RADIO == 1
+  #if TRANSPORT_MODE == 1
     // Then we need to disconnect from Cellular and power down the cellular modem
     startTime = Time.now();
     Cellular.disconnect();                                               // Disconnect from the cellular network

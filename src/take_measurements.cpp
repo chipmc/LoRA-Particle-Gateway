@@ -63,7 +63,7 @@ bool batteryState() {
 
 bool isItSafeToCharge()                             // Returns a true or false if the battery is in a safe charging range - only works for Boron
 {
-  #if CELLULAR_RADIO == 1
+  #if TRANSPORT_MODE == 1
     PMIC pmic(true);
     if (current.get_internalTempC() < 0 || current.get_internalTempC() > 37 )  {  // Reference: (32 to 113 but with safety)
       pmic.disableCharging();                         // It is too cold or too hot to safely charge the battery
@@ -82,7 +82,7 @@ bool isItSafeToCharge()                             // Returns a true or false i
 
 
 void getSignalStrength() {
-  #if CELLULAR_RADIO == 1
+  #if TRANSPORT_MODE == 1
     char signalStr[16];
     const char* radioTech[10] = {"Unknown","None","WiFi","GSM","UMTS","CDMA","LTE","IEEE802154","LTE_CAT_M1","LTE_CAT_NB1"};
     // New Signal Strength capability - https://community.particle.io/t/boron-lte-and-cellular-rssi-funny-values/45299/8
@@ -98,7 +98,7 @@ void getSignalStrength() {
 
     snprintf(signalStr,sizeof(signalStr), "%s S:%2.0f%%, Q:%2.0f%% ", radioTech[rat], strengthPercentage, qualityPercentage);
     Log.info(signalStr);
-  #else
+  #elif TRANSPORT_MODE == 0
     WiFiSignal sig = WiFi.RSSI();
   #endif
 }

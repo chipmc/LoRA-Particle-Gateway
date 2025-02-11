@@ -78,10 +78,9 @@
 // v23.0    Modified to support Argon WiFi Gateway instead of Cellular. - Added a "config.h" to hold the configuration settings for the device.
 // v23.1 	Moved timezone selection to config.h - what else should be here?
 // v23.2 	Added code that will ensure that the gateway connects at least once an hour - even if no nodes are connected.
-// v23.3 	Fexed interpretation of the battery context value.
+// v23.3 	Fixed interpretation of the battery context value.
+// v23.4 	Added a configureation to allow for a disconnected gateway (Serial Only)
 
-#define DEFAULT_LORA_WINDOW 5
-#define STAY_CONNECTED 60
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
@@ -99,8 +98,8 @@
 #include "config.h"									// Configuration file for the device
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
-PRODUCT_VERSION(22);								// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="23.1";
+PRODUCT_VERSION(23);								// For now, we are putting nodes and gateways in the same product group - need to deconflict #
+char currentPointRelease[6] ="23.4";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -138,6 +137,8 @@ void setup()
 	sysStatus.setup();
 	current.setup();
 	nodeDatabase.setup();
+
+	Log.code(1).info("Info message");
 
 	// This is a kluge to speed development - going to set the flag for WiFi Manually here - need to set up a function to do this
 	sysStatus.set_connectivityMode(4);				// connectivityMode Code 4 keeps both LoRA and WiFi Connections on
@@ -306,6 +307,14 @@ void loop() {
 					Log.info("New Day - Resetting everything");
 				}
 				publishWebhook(sysStatus.get_nodeNumber());								// Before we connect - let's send the gateway's webhook
+
+				if (TRANSPORT_MODE == 2) {												// Serial connection only - no WiFi or Cellular
+					state = LoRA_STATE;													// No need to connect - we are running locally
+					sysStatus.set_lastConnection(Time.now());
+					sysStatus.set_lastConnectionDuration(0);							// Record connection time in seconds
+					break;																// Done - we are out of here - Note, this should keep us listening in LoRA mode - not sleeping
+				}
+
 				if (!Particle.connected()) Particle.connect();							// Time to connect to Particle
 				connectingTimeout = millis();
 			}
@@ -316,10 +325,11 @@ void loop() {
 				if (Particle.connected()) {
 					Particle.syncTime();												// To prevent large connections, we will sync every hour when we connect to the cellular network.
 					waitUntil(Particle.syncTimeDone);									// Make sure sync is complete
-					#if CELLULAR_RADIO == 1
+					#if TRANSPORT_MODE == 1
 						CellularSignal sig = Cellular.RSSI();
 						Log.info("Cellular Signal Strength: %d dBm", (int8_t)sig.getStrength());
-					#else	
+					#endif
+					#if TRANSPORT_MODE == 0	
 						WiFiSignal sig = WiFi.RSSI();
 						Log.info("WiFi Signal Strength: %d dBm", (int8_t)sig.getStrength());
 					#endif
@@ -428,9 +438,10 @@ void userSwitchISR() {
  */
 void publishWebhook(uint8_t nodeNumber) {							
 	char data[256];                             						// Store the date in this character array - not global
+	char webhook[256];													// Store Webhook name
+
 	// Battery conect information - https://docs.particle.io/reference/device-os/firmware/boron/#batterystate-
-    const char* batteryContext[3] = {"Not Charging","Charging","Error"};	// Battery context for the battery state
-	Log.info("Publishing webhook for node %d", nodeNumber);
+	const char* batteryContext[7] = {"Unknown","Not Charging","Charging","Charged","Discharging","Fault","Diconnected"};		// Fixed
 
 	if (!Time.isValid()) {
 		return;															// A webhook without a valid timestamp is worthless
@@ -439,56 +450,55 @@ void publishWebhook(uint8_t nodeNumber) {
 	unsigned long endTimePeriod = Time.now() - (Time.second() + 1);		// Moves the timestamp within the reporting boundary - so 18:00:14 becomes 17:59:59 - helps in Ubidots reporting
 
 	if (nodeNumber == 0) {												// Webhook for the Gateway					
-		Log.info("Publishing for Gateway");
 		takeMeasurements();												// Loads the current values for the Gateway
-		// Gateway reporting
-		// The first webhook could be sent once a day or so it would give the health of the gateway
+		snprintf(webhook, sizeof(webhook),"Ubidots-LoRA-Gateway-v1");
 		snprintf(data, sizeof(data), "{\"deviceid\":\"%s\", \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d, \"alerts\": %d, \"msg\":%d, \"timestamp\":%lu000}",\
 		Particle.deviceID().c_str(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
 		current.get_internalTempC(), sysStatus.get_resetCount(), sysStatus.get_alertCodeGateway(), sysStatus.get_messageCount(), endTimePeriod);
-		PublishQueuePosix::instance().publish("Ubidots-LoRA-Gateway-v1", data, PRIVATE | WITH_ACK);
 	}
 	else {
 	Log.info("Publishing for nodeNumber is %i of sensorType of %s", nodeNumber, (nodeNumber == 0) ? "Gateway" : (current.get_sensorType() <= 9) ? "Visitation Counter" : (current.get_sensorType() <= 19) ? "Occupancy Counter" : (current.get_sensorType() <= 29) ? "Sensor" : "Unknown");
 		switch (current.get_sensorType()) {
 			case 1 ... 9: {													// Counter
+				snprintf(webhook, sizeof(webhook),"Ubidots-LoRA-Counter-v1");
 				snprintf(data, sizeof(data), "{\"uniqueid\":\"%lu\", \"hourly\":%u, \"daily\":%u, \"sensortype\":%d, \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d,  \"snr\":%d, \"hops\":%d,\"timestamp\":%lu000}",\
 				current.get_uniqueID(), (current.get_payload1() << 8 | current.get_payload2()), (current.get_payload3() << 8 | current.get_payload4()), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
 				current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_hops(), endTimePeriod);
-				Log.info("Data is %s", data);
-				PublishQueuePosix::instance().publish("Ubidots-LoRA-Counter-v1", data, PRIVATE | WITH_ACK);
 			} break;
 
 			case 10 ... 19: {												// Occupancy
 				// (v17.40, now sending (space + 1) to Ubidots, as we index it as an unsigned 6-bit integer in the application now and would cause problems if space were to be 64)
+				#if SERIAL_LOG_LEVEL == 1
+				// This is creating extra serial communications - likely turn off once things are working
+				snprintf(webhook, sizeof(webhook),"Node Data");				
 				snprintf(data, sizeof(data), "{\"uniqueid\":\"%lu\", \"gross\":%u, \"net\":%i, \"space\":%d, \"placement\":%d, \"multi\":%d, \"zoneMode\":%d, \"sensortype\":%d, \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\":%d, \"node\":%d, \"rssi\":%d, \"snr\":%d,\"hops\":%d,\"timestamp\":%lu000}",\
 				current.get_uniqueID(), (current.get_payload1() << 8 | current.get_payload2()), (int16_t)(current.get_payload3() << 8 | current.get_payload4()), current.get_payload5() + 1, current.get_payload6(), current.get_payload7(), current.get_payload8(), current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
 				current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_hops(), endTimePeriod);
-				Log.info("Data is %s", data);
-				// Don't send the webhook - just publish if connected
-				if (Particle.connected()) {
-					PublishQueuePosix::instance().publish("Node Data", data, PRIVATE);
-				}
+				if (Particle.connected()) PublishQueuePosix::instance().publish(webhook, data, PRIVATE | WITH_ACK);  // Only going to publish if connected
+				Log.info("%s : %s", webhook, data);				
+				#endif 
+
 				// Compose and send the node and space information to the UpdateGatewayNodesAndSpaces ubiFunction
+				snprintf(webhook, sizeof(webhook),"Ubidots-LoRA-Occupancy-v2");		
 				snprintf(data, sizeof(data), "{\"nodeUniqueID\":\"%lu\",\"battery\":%d,\"space\":%d,\"spaceNet\":%d,\"spaceGross\":%d}",\
 				current.get_uniqueID(), current.get_stateOfCharge(), current.get_payload5() + 1, Room_Occupancy::instance().getRoomNet(current.get_payload5()), Room_Occupancy::instance().getRoomGross(current.get_payload5()));
-				PublishQueuePosix::instance().publish("Ubidots-LoRA-Occupancy-v2", data, PRIVATE | WITH_ACK);
 			} break;
 
 			case 20 ... 29: {												// Sensor
+				snprintf(webhook, sizeof(webhook),"Ubidots-LoRA-Sensor-v1");		
 				snprintf(data, sizeof(data), "{\"uniqueid\":\"%lu\", \"soilvwc\":%u, \"soiltemp\":%u, \"space\":%d, \"placement\":%d, \"sensortype\":%d, \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\": %d, \"node\": %d, \"rssi\":%d,  \"snr\":%d, \"hops\":%d,\"timestamp\":%lu000}",\
 				current.get_uniqueID(), (current.get_payload1() << 8 | current.get_payload2()), (current.get_payload3() << 8 | current.get_payload4()), current.get_payload5() + 1, current.get_payload6(),current.get_sensorType(), current.get_stateOfCharge(), batteryContext[current.get_batteryState()],\
 				current.get_internalTempC(), current.get_resetCount(), current.get_alertCodeNode(), current.get_nodeNumber(), current.get_RSSI(), current.get_SNR(), current.get_hops(), endTimePeriod);
-				Log.info("Data is %s", data);
-				PublishQueuePosix::instance().publish("Ubidots-LoRA-Sensor-v1", data, PRIVATE | WITH_ACK);
 			} break;
 
 			default: {														// Unknown
-				Log.info("Unknown sensor type in gateway publish %d", current.get_sensorType());
-				if (Particle.connected()) PublishQueuePosix::instance().publish("Alert","Unknown sensor type in gateway publish", PRIVATE);
+				snprintf(webhook, sizeof(webhook),"Alert");	
+				snprintf(data, sizeof(data),"Unknown sensor type in gateway publish" );
 			} break;
 		}
 	}
+	if (Particle.connected()) PublishQueuePosix::instance().publish(webhook, data, PRIVATE | WITH_ACK);  // Only going to publish if connected
+	Log.info("%s : %s", webhook, data);
 
 	return;
 }
