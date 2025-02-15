@@ -80,6 +80,7 @@
 // v23.2 	Added code that will ensure that the gateway connects at least once an hour - even if no nodes are connected.
 // v23.3 	Fixed interpretation of the battery context value.
 // v23.4 	Added a configureation to allow for a disconnected gateway (Serial Only)
+// v23.5	Added a rate limit for check inactive spaces and reset counts - once an hour
 
 
 // Particle Libraries
@@ -99,7 +100,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(23);								// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="23.4";
+char currentPointRelease[6] ="23.5";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -216,24 +217,35 @@ void loop() {
 
 		case LoRA_STATE: {														// Enter this state every reporting period and stay here for 5 minutes
 			static system_tick_t startLoRAWindow = 0;
-			static byte connectionWindow = 0;				
+			static byte connectionWindow = 0;	
+			static byte lastCheckedInactiveSpaces = 0;	
+			static byte lastResetOccupancyWhenClosed = 0;		
 
 			if (state != oldState) {
 				if (oldState != REPORTING_STATE){ 
 					startLoRAWindow = millis(); // Mark when we enter this state - for timeouts - but multiple messages won't keep us here forever
 				} else {
-					// Check for inactive spaces and reset them. Ignores nodes of a "Counter" sensorType as they do not have spaces.
-					Log.info("Checking for inactive spaces...");
-					JsonDataManager::instance().resetInactiveSpaces(3600);  // Define "inactive" spaces as those where ALL of the nodes in that space have not sent a report in 3600 seconds.
+					// Check for inactive spaces and reset them. Ignores nodes of a "Counter" sensorType as they do not have spaces. Only once an hour
+					if (lastCheckedInactiveSpaces != Time.hour()) {
+						lastCheckedInactiveSpaces = Time.hour();
+						// Check for inactive spaces and reset them. Ignores nodes of a "Counter" sensorType as they do not have spaces. Only once an hour
+						if (sysStatus.get_connectivityMode() == 0) {
+							Log.info("Checking for inactive spaces...");
+							JsonDataManager::instance().resetInactiveSpaces(3600);  // Define "inactive" spaces as those where ALL of the nodes in that space have not sent a report in 3600 seconds.
+						}
+					}
 				}
 
 				publishStateTransition();                   					// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 				conv.withCurrentTime().convert();								// Get the time and convert to Local
 				if (conv.getLocalTimeHMS().hour >= sysStatus.get_openTime() && conv.getLocalTimeHMS().hour <= sysStatus.get_closeTime()) {
 					current.set_openHours(true);
-				} else {
-					Log.info("Resetting all counts - not in open hours. Open hour: %d, Close Hour: %d, Current Hour: %d", sysStatus.get_openTime(), sysStatus.get_closeTime(), conv.getLocalTimeHMS().hour);
-					Room_Occupancy::instance().resetAllCounts();	// reset the room net AND gross counts at end of day for all occupancy nodes and update Ubidots
+				} else {	// Closed for the day - reset
+					if (lastResetOccupancyWhenClosed != Time.hour()) {
+						lastResetOccupancyWhenClosed = Time.hour();
+						Log.info("Resetting all counts - not in open hours. Open hour: %d, Close Hour: %d, Current Hour: %d", sysStatus.get_openTime(), sysStatus.get_closeTime(), conv.getLocalTimeHMS().hour);
+						Room_Occupancy::instance().resetAllCounts();	// reset the room net AND gross counts at end of day for all occupancy nodes and update Ubidots
+					}	
 					current.set_openHours(false);
 				};																										
 				
@@ -468,7 +480,7 @@ void publishWebhook(uint8_t nodeNumber) {
 
 			case 10 ... 19: {												// Occupancy
 				// (v17.40, now sending (space + 1) to Ubidots, as we index it as an unsigned 6-bit integer in the application now and would cause problems if space were to be 64)
-				#if SERIAL_LOG_LEVEL == 1
+				#if SERIAL_LOG_LEVEL == 3	
 				// This is creating extra serial communications - likely turn off once things are working
 				snprintf(webhook, sizeof(webhook),"Node Data");				
 				snprintf(data, sizeof(data), "{\"uniqueid\":\"%lu\", \"gross\":%u, \"net\":%i, \"space\":%d, \"placement\":%d, \"multi\":%d, \"zoneMode\":%d, \"sensortype\":%d, \"battery\":%d,\"key1\":\"%s\",\"temp\":%d, \"resets\":%d,\"alerts\":%d, \"node\":%d, \"rssi\":%d, \"snr\":%d,\"hops\":%d,\"timestamp\":%lu000}",\
