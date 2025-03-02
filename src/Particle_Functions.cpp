@@ -563,6 +563,26 @@ int Particle_Functions::jsonFunctionParser(String command) {
       }
     }
 
+    // Sets the sensitivity value for an accelerometer
+    else if (function == "setSensitivity") {
+      // Test - {"cmd":[{"node":3312487035, "var":"1","fn":"setSensitivity"}]}
+      if(nodeNumber != 0) {
+        int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
+        if ((tempValue >= 1 ) && (tempValue <= 10)) {                   
+          snprintf(messaging,sizeof(messaging), "Setting accelerometer sensitivity to %d for node %d", tempValue, nodeNumber);
+          JsonDataManager::instance().setAlertCode(nodeNumber,15);
+          JsonDataManager::instance().setAlertContext(nodeNumber,tempValue);  // Forces the node to update its tofPollingRateMS by setting an alert code and sending the value as context 
+        }
+        else {
+          snprintf(messaging,sizeof(messaging),"sensitivity must be 1-10");
+          success = false;                                                   // Make sure it falls in a valid range or send a "fail" result
+        }
+      } else {
+        snprintf(messaging,sizeof(messaging),"No node exists in the database with that uniqueID");
+        success = false; 
+      }
+    }
+
     // What if none of these functions are recognized
     else {
       snprintf(messaging,sizeof(messaging),"Not a valid command");
