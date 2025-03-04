@@ -307,6 +307,8 @@ int Particle_Functions::jsonFunctionParser(String command) {
         // - 5 (Vibration Sensor - Advanced)
         // - 10 (Indoor Room Occupancy Sensor)
         // - 11 (Outdoor Occupancy Sensor)
+        // - 12 Machine Visition occupancy counter
+        // - 13 Accelerometer occupancy counter
         // - 20 (Soil Moisture Sensor)
         // - 21 (Distance Sensor)
       // Test - {"cmd":[{"node":"3312487035", "var":"1","fn":"type"}]}
