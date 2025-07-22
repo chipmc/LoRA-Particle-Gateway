@@ -19,7 +19,7 @@
 // 0 = WiFi, 1 = Cellular, 2 = Serial Only 
 // In serial only mode, all publishes will come to the serial console - Particle Functions via serial to be tried later
 // In serial only mode, we will take the least common denominator approach and not sure PMIC or get signal strength
-#define TRANSPORT_MODE 1
+#define TRANSPORT_MODE 2
 
 // We can get a lot of extra information in the serial terminal making it harder to follow what is going on.  
 // This allows us to set the level of verbosity - All the Particle levels are here and I added one more - VERBOSE.
@@ -35,8 +35,8 @@
 // Next, the timezone setting for the gateway is set here to support developmnet in different locations.
 // This will be used to set the time on the gateway device but - remember - nodes do not care about local time
 // This is the timezone string from: https://github.com/rickkas7/LocalTimeRK/
-// #define TIME_CONFIG "SGT-8"                                     // Uncomment for Singapore Time Zone
-#define TIME_CONFIG "EST5EDT,M3.2.0/2:00:00,M11.1.0/2:00:00"  // Uncomment for Eastern Time Zone
+#define TIME_CONFIG "SGT-8"                                     // Uncomment for Singapore Time Zone
+// #define TIME_CONFIG "EST5EDT,M3.2.0/2:00:00,M11.1.0/2:00:00"  // Uncomment for Eastern Time Zone
 
 
 #endif // CONFIG_H

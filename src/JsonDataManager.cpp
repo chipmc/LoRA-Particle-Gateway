@@ -35,13 +35,15 @@ bool JsonDataManager::setup() {
 
 	// Here is where we load the JSON object from memory and parse
 	jp.addString(nodeDatabase.get_nodeIDJson());				// Read in the JSON string from memory
-	Log.info("The node string is: %s",nodeDatabase.get_nodeIDJson().c_str());
+	Log.info("The node string is %d bytes",nodeDatabase.get_nodeIDJson().length());
+	JsonDataManager::printNodeData(false);						// Print the node data to the log
 
 	if (jp.parse()) Log.info("Parsed Successfully");
 	else {
 		nodeDatabase.resetNodeIDs();
 		Log.info("Parsing error");
 	}
+	
 	return true;
 }
 
@@ -597,6 +599,7 @@ void JsonDataManager::printNodeData(bool publish) {
 		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
 		if(nodeObjectContainer == NULL) {
 			break;								// Ran out of entries 
+			Log.info("Ran out of entries in node database - printNodeData");
 		} 
 		jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);
 		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);
@@ -635,7 +638,7 @@ void JsonDataManager::printNodeData(bool publish) {
 			delay(1000);
 		}
 	}
-	Log.info(nodeDatabase.get_nodeIDJson());  // See the raw JSON string
+	// Log.info(nodeDatabase.get_nodeIDJson());  // See the raw JSON string
 }
 
 uint8_t JsonDataManager::findNodeNumber(int nodeNumber, uint32_t uniqueID) {

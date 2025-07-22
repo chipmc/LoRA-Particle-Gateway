@@ -23,9 +23,9 @@ Gym Low : 1117137641 ["4","false","true"] zoneMode = frontfocused (3)
     - {"cmd":[{"var":3,"fn":"zoneMode","node":1117137641}]}
 
 
-Men's Locker Room Inside : 3818678341 ["6","false","true"]
+Men's Locker Room Corridor : 3818678341 ["6","false","true"]
     - {"cmd":[{"var":["6","false","true"],"fn":"mountConfig","node":3818678341}]} 
-Men's Locker Room Outside : 95839962 ["6","false","true"] zoneMode = frontfocused (3)
+Men's Locker Room Poolside : 95839962 ["6","false","true"] zoneMode = frontfocused (3)
     - {"cmd":[{"var":["6","false","true"],"fn":"mountConfig","node":95839962}]} 
     - {"cmd":[{"var":3,"fn":"zoneMode","node":95839962}]}
 

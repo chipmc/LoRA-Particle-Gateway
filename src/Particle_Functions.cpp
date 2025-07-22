@@ -151,8 +151,8 @@ int Particle_Functions::jsonFunctionParser(String command) {
     }
 
     // Reporting Frequency Function
-    else if (function == "freq") {   
-      // Format - function - freq, node - 0, variables - 2-60 (must be divisiable by two)
+    else if (function == "freq") {
+      // Format - function - freq, node - 0, variables - 2-60 (must be a factor of 60)
       // Test - {"cmd":[{"node":0,"var":"5","fn":"freq"}]}
       int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
       if ((tempValue > 0) && (tempValue <= 60) && 60 % tempValue == 0) {
