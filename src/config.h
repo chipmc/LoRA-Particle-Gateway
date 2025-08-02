@@ -32,6 +32,9 @@
 // How many minutes will the Gateway stay connected
 #define STAY_CONNECTED 60
 
+// How frequently will the gateway tell the nodes to report (note this value is re-applied every night at midnight)
+#define DEFAULT_REPORTING_FREQUENCY_SECONDS 3600
+
 // Next, the timezone setting for the gateway is set here to support developmnet in different locations.
 // This will be used to set the time on the gateway device but - remember - nodes do not care about local time
 // This is the timezone string from: https://github.com/rickkas7/LocalTimeRK/

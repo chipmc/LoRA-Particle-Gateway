@@ -82,7 +82,7 @@
 // v23.4 	Added a configureation to allow for a disconnected gateway (Serial Only)
 // v23.5	Added a rate limit for check inactive spaces and reset counts - once an hour
 // v23.6 	Added a .gitignore file to stop replicating the compiled code to the repo
-// v24.0 	Going to enhance the hourly reporting frequency fidelity
+// v24.0 	Going to enhance the hourly reporting frequency fidelity - default reporting frequency set in Config.h and re-applied each night upon closure
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
@@ -244,6 +244,7 @@ void loop() {
 				} else {	// Closed for the day - reset
 					if (lastResetOccupancyWhenClosed != Time.hour()) {
 						lastResetOccupancyWhenClosed = Time.hour();
+						sysStatus.set_updatedfrequencySeconds(DEFAULT_REPORTING_FREQUENCY_SECONDS);			// We will set the reporting period every night
 						Log.info("Resetting all counts - not in open hours. Open hour: %d, Close Hour: %d, Current Hour: %d", sysStatus.get_openTime(), sysStatus.get_closeTime(), conv.getLocalTimeHMS().hour);
 						Room_Occupancy::instance().resetAllCounts();	// reset the room net AND gross counts at end of day for all occupancy nodes and update Ubidots
 					}	

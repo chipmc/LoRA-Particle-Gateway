@@ -58,7 +58,7 @@ bool sysStatusData::validate(size_t dataSize) {
             Log.info("data not valid openTime=%d and closeTime=%d", sysStatus.get_openTime(), sysStatus.get_closeTime());
             valid = false;
         }
-        else if (sysStatus.get_frequencySeconds() <=0 || sysStatus.get_frequencySeconds() > 60) {
+        else if (sysStatus.get_frequencySeconds() <=0 || sysStatus.get_frequencySeconds() > 3600) {  // Updated valid value is 1 to 3600 seconds 
             Log.info("data not valid frequency minutes =%d", sysStatus.get_frequencySeconds());
             valid = false;
         }
@@ -87,7 +87,7 @@ void sysStatusData::initialize() {
     sysStatus.set_resetCount(0);
     sysStatus.set_messageCount(0);
     sysStatus.set_lastHookResponse(0);
-    sysStatus.set_frequencySeconds(60);
+    sysStatus.set_frequencySeconds(DEFAULT_REPORTING_FREQUENCY_SECONDS);
     sysStatus.set_updatedfrequencySeconds(0);
     sysStatus.set_alertCodeGateway(0);
     sysStatus.set_alertTimestampGateway(0);
