@@ -87,8 +87,7 @@ void sysStatusData::initialize() {
     sysStatus.set_resetCount(0);
     sysStatus.set_messageCount(0);
     sysStatus.set_lastHookResponse(0);
-    sysStatus.set_frequencySeconds(DEFAULT_REPORTING_FREQUENCY_SECONDS);
-    sysStatus.set_updatedfrequencySeconds(0);
+    sysStatus.set_updatedfrequencySeconds(DEFAULT_REPORTING_FREQUENCY_SECONDS);
     sysStatus.set_alertCodeGateway(0);
     sysStatus.set_alertTimestampGateway(0);
     sysStatus.set_openTime(6);

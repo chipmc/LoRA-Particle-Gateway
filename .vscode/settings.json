@@ -80,7 +80,6 @@
         "stop_token": "cpp",
         "cinttypes": "cpp"
     },
-    "particle.targetPlatform": "boron",
-    "particle.firmwareVersion": "6.1.1",
-    "particle.targetDevice": ""
+    "particle.targetPlatform": "p2",
+    "particle.firmwareVersion": "6.3.3"
 }
