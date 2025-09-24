@@ -479,19 +479,29 @@ uint16_t JsonDataManager::getOccupancyGrossBySpace(int space) {
 
 bool JsonDataManager::resetOccupancyNetCounts(){
 	int nodeNumber;
-
+	int OccupancyNet;
+	
 	Log.info("Resetting occupancy net counts");
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
 	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
 
-	for (int i = 0; i < 100; i++) {											// Iterate through the array looking for a match
+	for (int i = 0; i < 100; i++) {											// Iterate through all the nodes
 		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
 		if(nodeObjectContainer == NULL) {
 			break;															// Ran out of entries
 		} 
 		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);  		// Get the nodeNumber
-		JsonDataManager::instance().setOccupancyNetForNode(nodeNumber, 0);
+		jp.getValueByKey(nodeObjectContainer, "jd1", OccupancyNet);  		// Get the current occupancyNet
+		 // Ignore nodes that are not occupancy nodes in this function
+
+		if (OccupancyNet != 0) {
+			Log.info("Resetting node %d occupancyNet from %d to 0", nodeNumber, OccupancyNet);
+			JsonDataManager::instance().setOccupancyNetForNode(nodeNumber, 0);
+		}
+		else {
+			Log.info("Node %d occupancyNet is already 0", nodeNumber);
+		}
 	}
 	return true;
 }
@@ -547,8 +557,8 @@ bool JsonDataManager::setOccupancyNetForNode(int nodeNumber, int newOccupancyNet
 	jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
 	JsonDataManager::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
 
-	if (sensorType >= 10 && sensorType <= 19) {	// Ignore nodes that are not occupancy nodes in this function
-		result = JsonDataManager::instance().setAlertCode(nodeNumber, 12);         			  /*** Queue up an alert code with alert context ***/
+	if (sensorType >= 10 && sensorType <= 19) {							// Ignore nodes that are not occupancy nodes in this function
+		result = JsonDataManager::instance().setAlertCode(nodeNumber, 12);         			  	/*** Queue up an alert code with alert context ***/
 		result = JsonDataManager::instance().setAlertContext(nodeNumber, newOccupancyNet);  	  /*** These will be set to current in the Data Acknowledgement message ***/
 		if(result) {
 			snprintf(message, sizeof(message), "Node %lu net count set to %d", uniqueID, newOccupancyNet);

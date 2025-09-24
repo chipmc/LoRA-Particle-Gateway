@@ -83,6 +83,7 @@
 // v23.5	Added a rate limit for check inactive spaces and reset counts - once an hour
 // v23.6 	Added a .gitignore file to stop replicating the compiled code to the repo
 // v24.0 	Going to enhance the hourly reporting frequency fidelity - default reporting frequency set in Config.h and re-applied each night upon closure
+// v24.1 	Fixed a bug that causing spurious reporting when the counts are zeroed. 
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
@@ -101,7 +102,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(24);								// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="24.0";
+char currentPointRelease[6] ="24.1";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging

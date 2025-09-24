@@ -476,7 +476,9 @@ int Particle_Functions::jsonFunctionParser(String command) {
 
     // Resets the Room Occupancy numbers
     else if (function == "resetRoomCounts") {
-      // Test - {"cmd":[{"node":3312487035, "var":"true","fn":"recalibrate"}]}
+      // Only works for the Gateway not the nodes
+      // Format - function - resetRoomCounts, node - 0, variables - "all" or "net"
+      // Test - {"cmd":[{"node":0, "var":"net","fn":"resetRoomCounts"}]}
       if(nodeNumber == 0) {
         if (variable == "all") {                   
           snprintf(messaging,sizeof(messaging),"Resetting Room gross AND net counts");
@@ -515,7 +517,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
 
     // Sets the net count for a node manually
     else if (function == "setOccupancyNetForNode") {
-      // Test - {"cmd":[{"node":3312487035, "var":"5","fn":"setNodeNetCount"}]}
+      // Test - {"cmd":[{"node":3312487035, "var":"5","fn":"setOccupancyNetForNode"}]}
       if(nodeNumber != 0) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
         snprintf(messaging,sizeof(messaging),"Setting net occupancy to %d for node %d", tempValue, nodeNumber);
@@ -523,6 +525,22 @@ int Particle_Functions::jsonFunctionParser(String command) {
       } else {
         snprintf(messaging,sizeof(messaging),"No node exists in the database with that uniqueID");
         success = false; 
+      }
+    }
+
+    // Resets the Net counts for all nodes
+    else if (function == "resetAllNetCounts") {
+      // Test - {"cmd":[{"node":0, "var":"true","fn":"resetAllNetCounts"}]}
+      if(nodeNumber == 0 && variable == "true") {
+        snprintf(messaging,sizeof(messaging),"Resetting net counts for all nodes");
+        JsonDataManager::instance().resetOccupancyNetCounts();
+      } else {
+        if (nodeNumber != 0) {
+          snprintf(messaging,sizeof(messaging),"Can only reset net counts through Gateway (node 0)");
+        } else {
+          snprintf(messaging,sizeof(messaging),"Must enter \"true\" for var");
+        }
+        success = false;
       }
     }
 
