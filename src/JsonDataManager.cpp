@@ -326,7 +326,7 @@ bool JsonDataManager::setJsonData1(int nodeNumber, int sensorType, int newJsonDa
 	JsonModifier mod(jp);
 	mod.insertOrUpdateKeyValue(nodeObjectContainer, "jd1", (int)newJsonData1);
 	
-	saveNodeDatabase(jp);						// This updates the JSON object but doe not commit to to persistent storage
+	saveNodeDatabase(jp);						// This updates the JSON object but does not commit to to persistent storage
 
 	return true;
 }
@@ -902,7 +902,13 @@ bool JsonDataManager::resetSpace(int space){
 							if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);		
 							updateNeeded = 0;
 						}
-						updateNeeded = 1;
+						if (Room_Occupancy::instance().getRoomNet(payload1) != 0 && Room_Occupancy::instance().getRoomGross(payload1) != 0){
+							Log.info("Setting updateNeeded flag to 1 for space %d with non-zero net / Gross", payload1 + 1);
+							updateNeeded = 1;
+						}
+						else {
+							Log.info("Space %d already zeroed", payload1 + 1);
+						}
 				} break;
 				case 20 ... 29: {   					// Sensor
 					// Reset Sensor nodes in the space here
@@ -954,7 +960,9 @@ bool JsonDataManager::resetCurrentDataForNode(int nodeNumber){
 	jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);  			// Get the uniqueID
 	jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
 	JsonDataManager::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
-	switch (sensorType) {
+	if (payload1 != 0 || payload2 != 0) {
+		Log.info("Node %d has non-zero payload values (%d/%d/%d/%d) - resetCurrentDataForNode", nodeNumber, payload1, payload2, payload3, payload4);
+		switch (sensorType) {
 		case 1 ... 9: {    						// Counter
 			// Reset Counter sensorType here
 		} break;
@@ -962,7 +970,7 @@ bool JsonDataManager::resetCurrentDataForNode(int nodeNumber){
 			result = JsonDataManager::instance().setAlertCode(nodeNumber, 6);         /*** Queue up an alert code to reset current data ***/
 			if(result){
 				JsonDataManager::instance().setJsonData1(nodeNumber, sensorType, 0);   // Set the JsonData1 to 0 for the node (occupancyNet)
-				JsonDataManager::instance().setJsonData2(nodeNumber, sensorType, 0);   // Set the JsonData1 to 0 for the node (occupancyGross)
+				JsonDataManager::instance().setJsonData2(nodeNumber, sensorType, 0);   // Set the JsonData2 to 0 for the node (occupancyGross)
 				// Send with battery = -10. This is interpreted by UpdateGatewayNodesAndSpaces as "set the occupancyNet value only", which we set to 0
 				snprintf(message, sizeof(message), "{\"nodeUniqueID\":\"%lu\",\"battery\":%d,\"space\":%d,\"spaceNet\":%d,\"spaceGross\":%d}",\
 				uniqueID, -10, payload1 + 1, Room_Occupancy::instance().getRoomNet(payload1), Room_Occupancy::instance().getRoomGross(payload1));
@@ -983,6 +991,10 @@ bool JsonDataManager::resetCurrentDataForNode(int nodeNumber){
 			if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);		        		
 			return false;
 		} break;
+		}
+	}
+	else {
+		Log.info("Node %d has net and gross already zeroed", nodeNumber);	// Nothing to do
 	}
 
 	return true;
