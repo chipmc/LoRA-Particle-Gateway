@@ -932,18 +932,18 @@ bool JsonDataManager::resetSpace(int space){
 	return true;
 }
 
-bool JsonDataManager::resetCurrentDataForNode(int nodeNumber){
+bool JsonDataManager::resetCurrentDataForNode(int nodeNumber){			// This function only resets the current data (jd1 and jd2) for the node, not the system data (alert codes etc)
 	if (nodeNumber == 0 || nodeNumber == 255) return false;					// return false if node not configured
 
 	int sensorType;
 	uint32_t uniqueID;
 	char message[256];
 	bool result = 0;
-	uint8_t payload1;
-	uint8_t payload2;
-	uint8_t payload3;
-	uint8_t payload4;
-	int compressedJoinPayload;
+	int payload1;
+	int payload2;
+	// uint8_t payload3;
+	// uint8_t payload4;
+	// int compressedJoinPayload;
 
 	Log.info("Resetting current data for node %d - resetCurrentDataForNode", nodeNumber);
 
@@ -959,10 +959,14 @@ bool JsonDataManager::resetCurrentDataForNode(int nodeNumber){
 
 	jp.getValueByKey(nodeObjectContainer, "type", sensorType);  		// Get the sensorType
 	jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);  			// Get the uniqueID
-	jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
-	JsonDataManager::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
+	// jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
+	jp.getValueByKey(nodeObjectContainer, "jd1", payload1);  		// Get the jd1 (occupancyNet)
+	jp.getValueByKey(nodeObjectContainer, "jd2", payload2);  		// Get the jd2 (occupancyGross)
+
+	// JsonDataManager::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
+
 	if (payload1 != 0 || payload2 != 0) {
-		Log.info("Node %d has non-zero payload values (%d/%d/%d/%d) - resetCurrentDataForNode", nodeNumber, payload1, payload2, payload3, payload4);
+		Log.info("Node %d has non-zero net or gross - resetting", nodeNumber);
 		switch (sensorType) {
 		case 1 ... 9: {    						// Counter
 			// Reset Counter sensorType here

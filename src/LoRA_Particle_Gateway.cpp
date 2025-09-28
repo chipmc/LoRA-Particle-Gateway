@@ -87,7 +87,7 @@
 // v24.2    Another attempt to fix the reporting issue.  This one fixes the end of day clearing issue which involves zeroing all nodes / spaces at the same time.
 // v24.3    Issue with invalid nodeID causing a hard fault fixed.  Particle commands need node uniqueID not nodeNumber.
 // v24.3a   Minor fix for gateway focused particle commands
-// v24.4    changing the way we zero node counts and reducing "phantom" reports from devices that are not on-line
+// v24.4    changing the way we zero node counts and reducing "phantom" reports from devices that are not on-line - Validated working 
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
