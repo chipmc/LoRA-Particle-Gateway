@@ -707,7 +707,7 @@ uint8_t JsonDataManager::findNodeNumber(int nodeNumber, uint32_t uniqueID) {
 	return index;
 }
 
-bool JsonDataManager::checkIfNodeConfigured(int nodeNumber, uint32_t uniqueID)  {	// node is 'configured' if a uniqueID for it exists in the payload is set
+bool JsonDataManager::checkIfNodeConfigured(int nodeNumber, uint32_t uniqueID)  {	// node is 'configured' if a uniqueID for it exists and the payload is set
 	if (nodeNumber == 0 || nodeNumber == 255) return false;
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
@@ -763,7 +763,7 @@ byte JsonDataManager::getNodeNumberForUniqueID(uint32_t uniqueID) {
 
 	for (int i = 0; i < 100; i++) {												// Iterate through the array looking for a match
 		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
-		if(nodeObjectContainer == NULL) {
+		if(nodeObjectContainer == NULL) {										
 			Log.info("getNodeNumberForUniqueID ran out of entries at i = %d",i);
 			break;															// Ran out of entries - no match found
 		} 
@@ -775,7 +775,8 @@ byte JsonDataManager::getNodeNumberForUniqueID(uint32_t uniqueID) {
 		}
 		index++;															// This will be the node number for the next node if no match is found
 	}
-	return 0;
+	Log.info("No match found for uniqueID %lu returning", uniqueID);
+	return 255;	// Return 255 if no match found
 }
 
 bool JsonDataManager::resetInactiveSpaces(int secondsInactive){

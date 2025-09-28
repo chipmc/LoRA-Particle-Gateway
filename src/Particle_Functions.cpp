@@ -61,6 +61,11 @@ int Particle_Functions::jsonFunctionParser(String command) {
   // const char * const commandString = "{\"cmd\":[{\"node\":1,\"var\":\"hourly\",\"fn\":\"reset\"},{\"node\":0,\"var\":1,\"fn\":\"lowpowermode\"},{\"node\":2,\"var\":\"daily\",\"fn\":\"report\"}]}";
   // String to put into Uber command window {"cmd":[{"node":1,"var":"hourly","fn":"reset"},{"node":0,"var":1,"fn":"lowpowermode"},{"node":2,"var":"daily","fn":"report"}]}
 
+  // For consistency, we will use nodeNumber as the uniqueID for the node - this is set in the node's EEPROM
+  // The gateway is always nodeNumber 0
+  // You can get a report of the node numbers and their uniqueIDs by sending {"cmd":[{"node":0,"var":"all","fn":"rpt"}]}
+  // This will return a list of all nodes and their uniqueIDs
+
 	uint32_t nodeUniqueID;
   int nodeNumber;
 	String variable;
@@ -98,8 +103,19 @@ int Particle_Functions::jsonFunctionParser(String command) {
       if (i == 0) return 0;                                       // No valid entries
 			else break;								                                  // Ran out of entries 
 		} 
+
+    // Validate the node number and parse the commands
 		jp.getValueByKey(cmdObjectContainer, "node", nodeUniqueID);
     nodeNumber = JsonDataManager::instance().getNodeNumberForUniqueID(nodeUniqueID); // nodeNumber is uniqueID
+    if (nodeNumber == 255) {  // If we don't have a match for the uniqueID, then it is an invalid node
+      Log.info("Node uniqueID %lu is not configured - invalid command", nodeUniqueID);
+      char data[128];  
+      snprintf(data, sizeof(data), "{\"commands\":%i,\"context\":\"Node uniqueID %lu is not configured - invalid command\",\"timestamp\":%lu000 }", -2, nodeUniqueID, Time.now());        // Send -2 (Invalid Node) to the 'commands' Synthetic Variable
+      PublishQueuePosix::instance().publish("Ubidots_Command_Hook", data, PRIVATE);
+      invalidCommand = true;
+      continue;   // Go to the next command in the array
+    }
+
 		jp.getValueByKey(cmdObjectContainer, "var", variable);
 		jp.getValueByKey(cmdObjectContainer, "fn", function);
 
@@ -112,10 +128,10 @@ int Particle_Functions::jsonFunctionParser(String command) {
     // ****************  Note: currently there is no valudiation on the nodeNumbers ***************************
 
     // Reset Function
-		if (function == "reset") {
-      Log.info("In the reset function");
-      // Format - function - reset, node - nodeNumber, variables - either "current", "all" or "nodeData"
-      // Test - {"cmd":[{"node":1,"var":"all","fn":"reset"}]}
+		if (function == "reset") { 
+      Log.info("In the reset nodes function");
+      // Format - function - reset, node - node uniqueID, variables - either "current", "all" or "nodeData"
+      // Test - {"cmd":[{"node":2170149625,"var":"all","fn":"reset"}]}
       if (nodeNumber == 0) {        // if the unique ID passed to the node is "0", we are talking about the gateway
           snprintf(messaging,sizeof(messaging),"In the reset function for the gateway");
         if (variable == "nodeData") {
@@ -136,17 +152,23 @@ int Particle_Functions::jsonFunctionParser(String command) {
         sysStatus.set_alertCodeGateway(20);              // Alert code 20 will reset the current data on the gateway
         sysStatus.set_resetCount(0);
       } 
-      else if(nodeNumber != 0) {                        // if we could not set the nodeNumber from that unique ID, throw an error
+      else if(nodeNumber != 0) {                        // If we are not focused on the gateway, then we have a uniqueID for a node
+        Log.info("In the reset function for node %d", nodeNumber);
+        delay(1000);
         if (variable == "all") {
           snprintf(messaging,sizeof(messaging),"Resetting node %d's system and current data", nodeNumber);
+          Log.info(messaging);
+          delay(1000);
           JsonDataManager::instance().resetAllDataForNode(nodeNumber);
         }
         else {
           snprintf(messaging,sizeof(messaging),"Resetting node %d's current data", nodeNumber);
+          Log.info(messaging);
           JsonDataManager::instance().resetCurrentDataForNode(nodeNumber);
         }
       } else {
         snprintf(messaging,sizeof(messaging),"Not a valid node uniqueID");
+        Log.info(messaging);
       }
     }
 
@@ -224,7 +246,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
     // Sets break time (hour)
     else if (function == "break") {
       // Format - function - open, node - 0, variables - 0-23 break start hour (set to 24 to dedenote having no break)
-      // Test - {"cmd":[{"node":0, "var":"2","fn":"break"}]}
+      // Test - {"cmd":[{"node":0, "var":"14","fn":"break"}]}
       int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
       if ((tempValue >= 0) && (tempValue <= 24)) {
         snprintf(messaging,sizeof(messaging),"Setting break start hour to %d:00", tempValue);
@@ -239,7 +261,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
     // Sets break length in minutes
     else if (function == "breakLengthMinutes") {
       // Format - function - close, node - 0, variables - 0-60 break length (in minutes)
-      // Test - {"cmd":[{"node":0, "var":"21","fn":"breakLengthMinutes"}]}
+      // Test - {"cmd":[{"node":0, "var":"30","fn":"breakLengthMinutes"}]}
       int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
       if ((tempValue >= 0 ) && (tempValue <= 240)) {
         snprintf(messaging,sizeof(messaging),"Setting break length to %d minutes", tempValue);
@@ -254,7 +276,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
     // Sets weekend break time (hour)
     else if (function == "weekendBreak") {
       // Format - function - open, node - 0, variables - 0-23 break start hour (set to 24 to dedenote having no break)
-      // Test - {"cmd":[{"node":0, "var":"2","fn":"break"}]}
+      // Test - {"cmd":[{"node":0, "var":"14","fn":"break"}]}
       int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
       if ((tempValue >= 0) && (tempValue <= 24)) {
         snprintf(messaging,sizeof(messaging),"Setting weekend break start hour to %d:00", tempValue);
@@ -269,7 +291,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
     // Sets weekend break length in minutes
     else if (function == "weekendBreakLengthMinutes") {
       // Format - function - close, node - 0, variables - 0-60 break length (in minutes)
-      // Test - {"cmd":[{"node":0, "var":"21","fn":"breakLengthMinutes"}]}
+      // Test - {"cmd":[{"node":0, "var":"30","fn":"breakLengthMinutes"}]}
       int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
       if ((tempValue >= 0 ) && (tempValue <= 240)) {
         snprintf(messaging,sizeof(messaging),"Setting weekend break length to %d minutes", tempValue);
@@ -333,7 +355,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
     // Designates the space number (the room/area it is counting for) of an Occupancy Sensor (device type >= 10)
     else if (function == "mountConfig") {
       // Format - function - mountConfig, node - node uniqueID, variable - [INT (space), BOOL (placement), BOOL (multi)] 
-      // Test - {"cmd":[{"var":["31","true","true"],"fn":"mountConfig","node":3312487035}]}
+      // Test - {"cmd":["node":3312487035,{"var":["31","true","true"],"fn":"mountConfig"}]}
       if (varArrayContainer->type == JsonParserGeneratorRK::JSMN_ARRAY) {   // Check if "var" is an array and if nodeNumber is erroneous
               int spaceInt;
               uint8_t placement; String placementStr;
@@ -379,7 +401,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
 
     // Sets the zoneMode for an occupancy node's SPAD configuration
     else if (function == "zoneMode") {
-      // Test - {"cmd":[{"node":3312487035, "var":"1","fn":"zoneMode"}]}
+      // Test - {"cmd":[{"node":3312487035,"var":"1","fn":"zoneMode"}]}
       if(nodeNumber != 0) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
         if ((tempValue >= 0 ) && (tempValue <= 4)) {                   
@@ -399,7 +421,7 @@ int Particle_Functions::jsonFunctionParser(String command) {
 
     // Sets the distanceMode for an occupancy node
     else if (function == "distanceMode") {
-      // Test - {"cmd":[{"node":3312487035, "var":"1","fn":"distanceMode"}]}
+      // Test - {"cmd":[{"node":3312487035,"var":"1","fn":"distanceMode"}]}
       if(nodeNumber != 0) {
         int tempValue = strtol(variable,&pEND,10);                       // Looks for the first integer and interprets it
         if ((tempValue >= 0 ) && (tempValue <= 2)) {                   

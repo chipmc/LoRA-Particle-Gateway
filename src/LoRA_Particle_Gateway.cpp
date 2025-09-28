@@ -85,6 +85,7 @@
 // v24.0 	Going to enhance the hourly reporting frequency fidelity - default reporting frequency set in Config.h and re-applied each night upon closure
 // v24.1 	Fixed a bug that causing spurious reporting when the counts are zeroed - this one solved the issue of reporting when a note was already at zero
 // v24.2    Another attempt to fix the reporting issue.  This one fixes the end of day clearing issue which involves zeroing all nodes / spaces at the same time.
+// v24.3    Issue with invalid nodeID causing a hard fault fixed.  Particle commands need node uniqueID not nodeNumber.
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
