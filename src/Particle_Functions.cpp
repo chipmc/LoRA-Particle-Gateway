@@ -106,8 +106,9 @@ int Particle_Functions::jsonFunctionParser(String command) {
 
     // Validate the node number and parse the commands
 		jp.getValueByKey(cmdObjectContainer, "node", nodeUniqueID);
-    nodeNumber = JsonDataManager::instance().getNodeNumberForUniqueID(nodeUniqueID); // nodeNumber is uniqueID
-    if (nodeNumber == 255) {  // If we don't have a match for the uniqueID, then it is an invalid node
+    if (nodeUniqueID != 0) nodeNumber = JsonDataManager::instance().getNodeNumberForUniqueID(nodeUniqueID); // nodeNumber is auniqueID - not a gateway which is always 0
+
+    if (nodeNumber == 255) {                                                                                // If we don't have a match for the uniqueID, then it is an invalid node
       Log.info("Node uniqueID %lu is not configured - invalid command", nodeUniqueID);
       char data[128];  
       snprintf(data, sizeof(data), "{\"commands\":%i,\"context\":\"Node uniqueID %lu is not configured - invalid command\",\"timestamp\":%lu000 }", -2, nodeUniqueID, Time.now());        // Send -2 (Invalid Node) to the 'commands' Synthetic Variable
