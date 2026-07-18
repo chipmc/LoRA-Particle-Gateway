@@ -58,7 +58,7 @@ bool sysStatusData::validate(size_t dataSize) {
             Log.info("data not valid openTime=%d and closeTime=%d", sysStatus.get_openTime(), sysStatus.get_closeTime());
             valid = false;
         }
-        else if (sysStatus.get_frequencySeconds() <=0 || sysStatus.get_frequencySeconds() > 60) {
+        else if (sysStatus.get_frequencySeconds() <=0 || sysStatus.get_frequencySeconds() > 3600) {  // Updated valid value is 1 to 3600 seconds 
             Log.info("data not valid frequency minutes =%d", sysStatus.get_frequencySeconds());
             valid = false;
         }
@@ -87,8 +87,7 @@ void sysStatusData::initialize() {
     sysStatus.set_resetCount(0);
     sysStatus.set_messageCount(0);
     sysStatus.set_lastHookResponse(0);
-    sysStatus.set_frequencySeconds(60);
-    sysStatus.set_updatedfrequencySeconds(0);
+    sysStatus.set_updatedfrequencySeconds(DEFAULT_REPORTING_FREQUENCY_SECONDS);
     sysStatus.set_alertCodeGateway(0);
     sysStatus.set_alertTimestampGateway(0);
     sysStatus.set_openTime(6);
@@ -565,9 +564,9 @@ bool nodeIDData::validate(size_t dataSize) {
 void nodeIDData::initialize() {
 
     Log.info("Erasing FRAM region");
-    for (unsigned int i=0; i < sizeof(NodeData); i++) {
-        fram.writeData(i+200,(uint8_t *)0xFF,2);
-    }
+    //for (unsigned int i=0; i < sizeof(NodeData); i++) {
+    //    fram.writeData(i+200,(uint8_t *)0xFF,2);
+    //}
 
     Log.info("Initializing data");
     PersistentDataFRAM::initialize();

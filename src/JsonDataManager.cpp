@@ -326,7 +326,7 @@ bool JsonDataManager::setJsonData1(int nodeNumber, int sensorType, int newJsonDa
 	JsonModifier mod(jp);
 	mod.insertOrUpdateKeyValue(nodeObjectContainer, "jd1", (int)newJsonData1);
 	
-	saveNodeDatabase(jp);						// This updates the JSON object but doe not commit to to persistent storage
+	saveNodeDatabase(jp);						// This updates the JSON object but does not commit to to persistent storage
 
 	return true;
 }
@@ -479,19 +479,29 @@ uint16_t JsonDataManager::getOccupancyGrossBySpace(int space) {
 
 bool JsonDataManager::resetOccupancyNetCounts(){
 	int nodeNumber;
-
+	int OccupancyNet;
+	
 	Log.info("Resetting occupancy net counts");
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
 	jp.getValueTokenByKey(jp.getOuterObject(), "nodes", nodesArrayContainer);
 	const JsonParserGeneratorRK::jsmntok_t *nodeObjectContainer;			// Token for the objects in the array (I beleive)
 
-	for (int i = 0; i < 100; i++) {											// Iterate through the array looking for a match
+	for (int i = 0; i < 100; i++) {											// Iterate through all the nodes
 		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
 		if(nodeObjectContainer == NULL) {
 			break;															// Ran out of entries
 		} 
 		jp.getValueByKey(nodeObjectContainer, "node", nodeNumber);  		// Get the nodeNumber
-		JsonDataManager::instance().setOccupancyNetForNode(nodeNumber, 0);
+		jp.getValueByKey(nodeObjectContainer, "jd1", OccupancyNet);  		// Get the current occupancyNet
+		 // Ignore nodes that are not occupancy nodes in this function
+
+		if (OccupancyNet != 0) {
+			Log.info("Resetting node %d occupancyNet from %d to 0", nodeNumber, OccupancyNet);
+			JsonDataManager::instance().setOccupancyNetForNode(nodeNumber, 0);
+		}
+		else {
+			Log.info("Node %d occupancyNet is already 0", nodeNumber);
+		}
 	}
 	return true;
 }
@@ -547,8 +557,8 @@ bool JsonDataManager::setOccupancyNetForNode(int nodeNumber, int newOccupancyNet
 	jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
 	JsonDataManager::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
 
-	if (sensorType >= 10 && sensorType <= 19) {	// Ignore nodes that are not occupancy nodes in this function
-		result = JsonDataManager::instance().setAlertCode(nodeNumber, 12);         			  /*** Queue up an alert code with alert context ***/
+	if (sensorType >= 10 && sensorType <= 19) {							// Ignore nodes that are not occupancy nodes in this function
+		result = JsonDataManager::instance().setAlertCode(nodeNumber, 12);         			  	/*** Queue up an alert code with alert context ***/
 		result = JsonDataManager::instance().setAlertContext(nodeNumber, newOccupancyNet);  	  /*** These will be set to current in the Data Acknowledgement message ***/
 		if(result) {
 			snprintf(message, sizeof(message), "Node %lu net count set to %d", uniqueID, newOccupancyNet);
@@ -697,7 +707,7 @@ uint8_t JsonDataManager::findNodeNumber(int nodeNumber, uint32_t uniqueID) {
 	return index;
 }
 
-bool JsonDataManager::checkIfNodeConfigured(int nodeNumber, uint32_t uniqueID)  {	// node is 'configured' if a uniqueID for it exists in the payload is set
+bool JsonDataManager::checkIfNodeConfigured(int nodeNumber, uint32_t uniqueID)  {	// node is 'configured' if a uniqueID for it exists and the payload is set
 	if (nodeNumber == 0 || nodeNumber == 255) return false;
 
 	const JsonParserGeneratorRK::jsmntok_t *nodesArrayContainer;			// Token for the outer array
@@ -753,7 +763,7 @@ byte JsonDataManager::getNodeNumberForUniqueID(uint32_t uniqueID) {
 
 	for (int i = 0; i < 100; i++) {												// Iterate through the array looking for a match
 		nodeObjectContainer = jp.getTokenByIndex(nodesArrayContainer, i);
-		if(nodeObjectContainer == NULL) {
+		if(nodeObjectContainer == NULL) {										
 			Log.info("getNodeNumberForUniqueID ran out of entries at i = %d",i);
 			break;															// Ran out of entries - no match found
 		} 
@@ -765,7 +775,8 @@ byte JsonDataManager::getNodeNumberForUniqueID(uint32_t uniqueID) {
 		}
 		index++;															// This will be the node number for the next node if no match is found
 	}
-	return 0;
+	Log.info("No match found for uniqueID %lu returning", uniqueID);
+	return 255;	// Return 255 if no match found
 }
 
 bool JsonDataManager::resetInactiveSpaces(int secondsInactive){
@@ -892,7 +903,13 @@ bool JsonDataManager::resetSpace(int space){
 							if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);		
 							updateNeeded = 0;
 						}
-						updateNeeded = 1;
+						if (Room_Occupancy::instance().getRoomNet(payload1) != 0 && Room_Occupancy::instance().getRoomGross(payload1) != 0){
+							Log.info("Setting updateNeeded flag to 1 for space %d with non-zero net / Gross", payload1 + 1);
+							updateNeeded = 1;
+						}
+						else {
+							Log.info("Space %d already zeroed", payload1 + 1);
+						}
 				} break;
 				case 20 ... 29: {   					// Sensor
 					// Reset Sensor nodes in the space here
@@ -915,18 +932,18 @@ bool JsonDataManager::resetSpace(int space){
 	return true;
 }
 
-bool JsonDataManager::resetCurrentDataForNode(int nodeNumber){
+bool JsonDataManager::resetCurrentDataForNode(int nodeNumber){			// This function only resets the current data (jd1 and jd2) for the node, not the system data (alert codes etc)
 	if (nodeNumber == 0 || nodeNumber == 255) return false;					// return false if node not configured
 
 	int sensorType;
 	uint32_t uniqueID;
 	char message[256];
 	bool result = 0;
-	uint8_t payload1;
-	uint8_t payload2;
-	uint8_t payload3;
-	uint8_t payload4;
-	int compressedJoinPayload;
+	int payload1;
+	int payload2;
+	// uint8_t payload3;
+	// uint8_t payload4;
+	// int compressedJoinPayload;
 
 	Log.info("Resetting current data for node %d - resetCurrentDataForNode", nodeNumber);
 
@@ -942,9 +959,15 @@ bool JsonDataManager::resetCurrentDataForNode(int nodeNumber){
 
 	jp.getValueByKey(nodeObjectContainer, "type", sensorType);  		// Get the sensorType
 	jp.getValueByKey(nodeObjectContainer, "uID", uniqueID);  			// Get the uniqueID
-	jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
-	JsonDataManager::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
-	switch (sensorType) {
+	// jp.getValueByKey(nodeObjectContainer, "p", compressedJoinPayload);  // Get the compressedJoinPayload
+	jp.getValueByKey(nodeObjectContainer, "jd1", payload1);  		// Get the jd1 (occupancyNet)
+	jp.getValueByKey(nodeObjectContainer, "jd2", payload2);  		// Get the jd2 (occupancyGross)
+
+	// JsonDataManager::instance().parseJoinPayloadValues(sensorType, compressedJoinPayload, payload1, payload2, payload3, payload4); // extract the values
+
+	if (payload1 != 0 || payload2 != 0) {
+		Log.info("Node %d has non-zero net or gross - resetting", nodeNumber);
+		switch (sensorType) {
 		case 1 ... 9: {    						// Counter
 			// Reset Counter sensorType here
 		} break;
@@ -952,7 +975,7 @@ bool JsonDataManager::resetCurrentDataForNode(int nodeNumber){
 			result = JsonDataManager::instance().setAlertCode(nodeNumber, 6);         /*** Queue up an alert code to reset current data ***/
 			if(result){
 				JsonDataManager::instance().setJsonData1(nodeNumber, sensorType, 0);   // Set the JsonData1 to 0 for the node (occupancyNet)
-				JsonDataManager::instance().setJsonData2(nodeNumber, sensorType, 0);   // Set the JsonData1 to 0 for the node (occupancyGross)
+				JsonDataManager::instance().setJsonData2(nodeNumber, sensorType, 0);   // Set the JsonData2 to 0 for the node (occupancyGross)
 				// Send with battery = -10. This is interpreted by UpdateGatewayNodesAndSpaces as "set the occupancyNet value only", which we set to 0
 				snprintf(message, sizeof(message), "{\"nodeUniqueID\":\"%lu\",\"battery\":%d,\"space\":%d,\"spaceNet\":%d,\"spaceGross\":%d}",\
 				uniqueID, -10, payload1 + 1, Room_Occupancy::instance().getRoomNet(payload1), Room_Occupancy::instance().getRoomGross(payload1));
@@ -973,6 +996,10 @@ bool JsonDataManager::resetCurrentDataForNode(int nodeNumber){
 			if (Particle.connected()) PublishQueuePosix::instance().publish("Alert", message, PRIVATE);		        		
 			return false;
 		} break;
+		}
+	}
+	else {
+		Log.info("Node %d has net and gross already zeroed", nodeNumber);	// Nothing to do
 	}
 
 	return true;
