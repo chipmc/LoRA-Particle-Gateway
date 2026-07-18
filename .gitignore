@@ -40,7 +40,7 @@ target/
 *.out
 *.app
 
-VSCode Stuff
+# VSCode Stuff
 *.bin
 *.elf
 *.hex
