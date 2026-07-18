@@ -564,9 +564,9 @@ bool nodeIDData::validate(size_t dataSize) {
 void nodeIDData::initialize() {
 
     Log.info("Erasing FRAM region");
-    for (unsigned int i=0; i < sizeof(NodeData); i++) {
-        fram.writeData(i+200,(uint8_t *)0xFF,2);
-    }
+    //for (unsigned int i=0; i < sizeof(NodeData); i++) {
+    //    fram.writeData(i+200,(uint8_t *)0xFF,2);
+    //}
 
     Log.info("Initializing data");
     PersistentDataFRAM::initialize();
