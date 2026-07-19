@@ -190,3 +190,201 @@ To be documented from repository history. No commit hash is asserted here.
 ### Results
 
 The FRAM erase hard fault is recorded as already fixed. Exact test results and closure evidence are to be documented from repository history.
+
+## RR-002 — Cloud connection failure must not disable continuous LoRa listening
+
+- **Status:** Implemented
+- **Date opened:** 2026-07-18
+- **Owner:** Codex (focused investigation requested by Chip)
+
+### Observed symptom or question
+
+The MAFC Gateway is wall-powered and is required to remain awake so it can serve nearby nodes continuously. Static control-flow analysis shows that a Particle Cloud connection attempt that does not succeed within 10 minutes changes connectivity mode from 1 to 0, enters `DISCONNECTING_STATE`, and then enters `SLEEPING_STATE` when the publish queue permits. During sleep the gateway cannot receive or acknowledge LoRa reports or occupancy-change events.
+
+This is a credible failure mode established by reachable source code. Whether it has occurred on the bench or deployed gateway has not yet been established from runtime logs.
+
+### MAFC evidence
+
+In `src/LoRA_Particle_Gateway.cpp`:
+
+1. `setup()` unconditionally sets connectivity mode 1 and enters `CONNECTING_STATE`.
+2. Normal mode-1 operation returns from a successful cloud connection to `LoRA_STATE` and stays awake.
+3. After 600,000 ms without a cloud connection, `CONNECTING_STATE` sets connectivity mode 0 and enters `DISCONNECTING_STATE`.
+4. After at least 90 seconds, when `PublishQueuePosix::getCanSleep()` is true, `DISCONNECTING_STATE` enters `SLEEPING_STATE`.
+5. `SLEEPING_STATE` calls `System.sleep()` in `ULTRA_LOW_POWER` mode.
+6. After waking, mode 0 limits LoRa listening to `DEFAULT_LORA_WINDOW` before another sleep/reconnect cycle.
+
+The mode transition is therefore sufficient to reduce LoRa availability during a WiFi or Particle Cloud outage. No speculative memory or NodeDB claim is needed for this item.
+
+### Relevant MAFC files and functions
+
+- `src/LoRA_Particle_Gateway.cpp`
+  - `setup()`
+  - `loop()` cases `LoRA_STATE`, `CONNECTING_STATE`, `DISCONNECTING_STATE`, and `SLEEPING_STATE`
+- `src/config.h`
+  - `DEFAULT_LORA_WINDOW`
+  - `STAY_CONNECTED`
+- `src/MyPersistentData.h` and `src/MyPersistentData.cpp`
+  - `sysStatusData::get_connectivityMode()`
+  - `sysStatusData::set_connectivityMode()`
+- `lib/PublishQueuePosixRK/src/PublishQueuePosixRK.cpp`
+  - `PublishQueuePosix::getCanSleep()` state dependencies
+
+### Reference Gateway behavior
+
+At Reference commit `2b90ac8`, the corresponding state machine also changes to mode 0 and proceeds toward sleep after a 10-minute connection failure. It adds stronger connection diagnostics, a long connection guard, queue-drain observability, and a disconnect hard timeout, but its normal architecture intentionally includes bounded LoRa windows and sleep based on operating hours and power state.
+
+The Reference behavior is relevant as applicability evidence, not as code to transplant: its failure-to-sleep behavior is consistent with its own power-managed architecture and is not suitable for the wall-powered, continuously listening MAFC operating model.
+
+### Relevant Reference files and functions
+
+- `src/LoRA_Particle_Gateway.cpp`
+  - `loop()` cases `CONNECTING_STATE`, `DISCONNECTING_STATE`, `SLEEPING_STATE`, and `LoRA_STATE`
+  - Particle connection guard and queue-drain logging
+- `src/config.h`
+  - `PARTICLE_CONNECT_GUARD_TIMEOUT_MS`
+  - `DISCONNECTING_HARD_TIMEOUT_MS`
+- `src/GatewayPlatform.h`
+  - `MIN_CLOUD_COMMAND_WINDOW_MS`
+
+### Reliability hypothesis
+
+If a failed cloud connection attempt leaves MAFC connectivity mode at 1, returns control to `LoRA_STATE`, and suppresses immediate reconnection attempts for a bounded retry interval, then the gateway will continue receiving and acknowledging LoRa traffic throughout a cloud outage while still retrying cloud recovery periodically.
+
+### Applicability analysis
+
+This behavior applies specifically to the MAFC Gateway because it is wall-powered, does not intentionally sleep, and must accept hourly and occupancy-change reports from up to 50 nearby nodes. Preserving LoRa reception during a cloud outage does not require a Node firmware or protocol change.
+
+The Reference Gateway's intentional sleep and battery-management behavior must remain separate. This proposal does not generalize the MAFC always-awake policy back into the Reference Gateway.
+
+### Minimal proposed change
+
+Limit the implementation to `src/LoRA_Particle_Gateway.cpp`:
+
+1. Add RAM-only state that records a failed cloud attempt and its retry start time.
+2. On the existing 10-minute connection timeout, keep connectivity mode 1, record the failure/cooldown, and return to `LoRA_STATE` instead of entering `DISCONNECTING_STATE`.
+3. While the retry cooldown is active, do not let the existing hourly `lastConnection` check immediately send the gateway back to `CONNECTING_STATE` on every loop.
+4. Retry after the existing one-hour operational cadence and clear the failure state after a successful connection.
+
+The retry marker does not need persistence. A reboot should make a fresh cloud attempt, as it does now.
+
+### Files expected to change
+
+- `src/LoRA_Particle_Gateway.cpp`
+- `docs/reliability/reliability-review.md` for implementation and validation results
+
+No library, build, persistent-data layout, Node firmware, protocol, or Reference Gateway file is expected to change.
+
+### Explicit non-goals
+
+- Do not remove the general sleep state or mode-0 behavior; those paths may still support other historical configurations.
+- Do not refactor the full state machine or connectivity-mode model.
+- Do not copy the Reference Gateway connection architecture.
+- Do not change the 10-minute initial connection-attempt timeout without separate evidence.
+- Do not change Particle event names or downstream integrations.
+- Do not add offline replay for node events that current firmware declines to enqueue while Particle is disconnected; investigate that separately if required.
+- Do not change Node retry, reporting, acknowledgement, or packet behavior.
+
+### Alternatives considered
+
+- **Remain indefinitely in `CONNECTING_STATE`:** rejected because LoRa receive handling does not run there.
+- **Return directly to LoRa with no retry cooldown:** rejected because the stale `lastConnection` check would immediately re-enter `CONNECTING_STATE`, leaving only a brief receive poll between repeated 10-minute attempts.
+- **Write the attempt time into `lastConnection`:** rejected because that field represents a successful connection and is published as an operational metric.
+- **Remove all sleep code or connectivity modes:** rejected as unnecessary scope expansion.
+- **Copy Reference Gateway behavior:** rejected because the Reference Gateway intentionally sleeps and has different power and operating constraints.
+
+### Risks
+
+- Cloud recovery can be delayed by up to the selected retry interval after service becomes available, unless Particle's background connection attempt succeeds sooner.
+- The RAM-only cooldown resets on reboot, causing an immediate connection attempt; this is intentional but must be covered in bench testing.
+- Particle may reconnect in the system thread while the application is in the cooldown. The implementation must clear or reconcile cooldown state when a connection is observed so metrics and time sync remain coherent.
+- Continued LoRa reception during a cloud outage can update node state while current firmware does not enqueue all disconnected node publishes. This proposal preserves radio service but does not solve offline event replay.
+- Incorrect cooldown arithmetic could cause reconnect thrashing or suppress retries; use rollover-safe elapsed-time comparison.
+
+### Protocol/Node compatibility impact
+
+None expected. LoRa packet layouts, tokens, alert codes, acknowledgements, timing fields sent to nodes, Node firmware, and per-node configuration remain unchanged. The intended effect is to keep the existing LoRa receive/acknowledgement path available during cloud failure.
+
+### Instrumentation required
+
+Use concise transition logs for:
+
+- cloud connection timeout and start of retry cooldown;
+- return to continuous LoRa service;
+- retry eligibility after cooldown;
+- background cloud reconnection observed during cooldown;
+- cooldown cleared after successful cloud handling.
+
+No new persistent diagnostic field is required for the first bench test. Existing state-transition, LoRa receipt, connection, and free-memory logs should be retained.
+
+### Bench validation
+
+1. Record the baseline boot and healthy mode-1 sequence with WiFi and Particle Cloud available.
+2. Remove WAN/Particle Cloud reachability while leaving the gateway powered. Where practical, test both loss of WiFi association and loss of upstream cloud reachability.
+3. Leave the outage in place beyond the existing 10-minute connection timeout.
+4. Confirm the candidate logs the timeout, returns to `LoRA_STATE`, and never enters `DISCONNECTING_STATE` or `SLEEPING_STATE` because of that timeout.
+5. During the cooldown, send representative hourly and occupancy-change packets from existing unmodified nodes. Confirm each is received and acknowledged and that node database/occupancy state updates remain correct.
+6. Restore network/cloud access. Confirm background recovery or the bounded retry succeeds, normal cloud handling resumes, and the cooldown clears.
+7. Repeat with a power cycle during cooldown; confirm boot performs a fresh connection attempt and LoRa service remains recoverable.
+8. Confirm scheduled closing-hours and cleaning-period resets retain existing behavior.
+
+Pass criteria:
+
+- No sleep or LoRa radio shutdown caused by cloud connection failure.
+- Existing nodes continue to receive protocol-compatible acknowledgements during the outage.
+- Cloud connection is retried within the documented bound and recovers without manual reset after service restoration.
+- No unexpected reset, watchdog event, persistent-data reinitialization, or occupancy corruption.
+
+### Soak validation
+
+Run at least 48 hours on the bench with the expected MAFC node population or a representative traffic generator:
+
+- include at least one cloud outage longer than 10 minutes and one lasting beyond a full retry interval;
+- include occupancy-change bursts and hourly reports during the outage;
+- restore connectivity and verify recovery;
+- monitor state transitions, acknowledgements, reset count/reason if available, free heap, largest free block if instrumented separately, publish-queue depth, and node/space state.
+
+Pass criteria are continuous LoRa acknowledgement coverage, no failure-induced sleep, bounded cloud retry/recovery, no escalating memory loss, and preserved scheduled reset behavior.
+
+### Rollback
+
+Revert the focused implementation commit and flash the last bench-approved MAFC firmware. The proposed RAM-only state requires no FRAM migration or cleanup. Keep the RR documentation and record the rollback reason and observed results.
+
+### Decision
+
+Chip explicitly approved a targeted first-step fix on 2026-07-18. Implementation is limited to the documented mode-1 cloud-failure path. Bench and soak approval remain pending.
+
+### Implementation commit
+
+`a0bf75d` (`fix: keep LoRa active after cloud timeout`) on branch `maintenance/rr-002-cloud-failure-lora`.
+
+### Architecture review
+
+Architecture review completed on 2026-07-19 with no blocking findings. The implementation conforms to the approved RR-002 scope:
+
+- the mode-1 timeout no longer changes connectivity mode or enters the disconnect/sleep path;
+- LoRa packet reporting retains priority over cloud retry handling;
+- the one-hour application retry cooldown uses rollover-safe elapsed-time arithmetic;
+- a background Particle Cloud reconnection is detected and reconciled;
+- non-mode-1 timeout behavior, persistent layouts, Node firmware, and the LoRa protocol are unchanged.
+
+The Particle system thread can continue attempting cloud recovery during the application cooldown. This is intentional: the cooldown prevents the application state machine from spending repeated 10-minute periods in `CONNECTING_STATE`, while allowing earlier background recovery.
+
+The candidate is cleared for bench flashing but is not bench validated. The full outage, LoRa acknowledgement, recovery, reboot-during-cooldown, and soak procedures remain outstanding.
+
+### Results
+
+Static evidence and Reference applicability comparison completed on 2026-07-18.
+
+Implementation completed on 2026-07-18:
+
+- added a RAM-only, rollover-safe one-hour retry cooldown;
+- preserved mode 1 after its 10-minute cloud connection timeout;
+- returned to `LoRA_STATE` instead of `DISCONNECTING_STATE` on that mode-1 timeout;
+- retained legacy timeout behavior for non-mode-1 operation;
+- handled background cloud recovery during cooldown;
+- preserved received-packet reporting priority before cloud retry handling.
+
+Local P2 user-module compilation succeeded with Particle Device OS 6.4.1 and the installed ARM toolchain. The binary was generated under `/tmp/rr002-local-build`, outside the repository. Particle binary inspection passed and reported a P2 application module depending on system module 6401. The reviewed candidate SHA-256 is `5667c59462e9e4157a09e5289a45ce514ee2b9090c6ec9d410c9568982f25837`. `git diff --check` passed. Bench evidence has not yet been collected.
+
+On 2026-07-19, Chip authorized flashing the reviewed candidate. Particle Cloud accepted the OTA flash to `Morrisville-MAFC` (`e00fce68772083a2d0b7df4e`, Product 20952), and the device subsequently reported online. This confirms delivery and reboot recovery only; it does not satisfy the RR-002 cloud-outage bench validation or change the item status from **Implemented**.
