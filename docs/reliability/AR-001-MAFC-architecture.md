@@ -752,7 +752,7 @@ The initialization fallback to `SLEEPING_STATE` is not reachable in the current 
 
 ### Downstream Particle Cloud integrations
 
-**Resolved for the configuration observed on 2026-07-18:** The documented MAFC device `e00fce68772083a2d0b7df4e` is online as `Morrisville-MAFC` in Particle Product `20952`. A read-only Particle CLI query reported ten product integrations. Endpoint credentials and sensitive URL components are intentionally not recorded here.
+**Resolved for the configuration observed on 2026-07-18 and corrected by bench identity evidence on 2026-07-19:** The initial inventory associated `e00fce68772083a2d0b7df4e`, named `Morrisville-MAFC`, with Particle Product `20952`, whose read-only configuration exposed ten product integrations. During RR-002 bench testing, the gateway's own `Particle.deviceID()` startup/reporting output identified the tested P2 as `0a10aced202194944a04084c`. A read-only Particle query resolved that device as `LoRA-Gateway-Dev-2` in Product `38211`, platform P2, Device OS 6.4.1, firmware version 24, and development-device status enabled. The Product 20952 record is a different device and must not be used as the MAFC P2 bench flash target. Endpoint credentials and sensitive device-account fields are intentionally not recorded here.
 
 Current firmware-to-integration event mapping:
 

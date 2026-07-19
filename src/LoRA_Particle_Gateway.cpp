@@ -88,6 +88,8 @@
 // v24.3    Issue with invalid nodeID causing a hard fault fixed.  Particle commands need node uniqueID not nodeNumber.
 // v24.3a   Minor fix for gateway focused particle commands
 // v24.4    changing the way we zero node counts and reducing "phantom" reports from devices that are not on-line - Validated working 
+// v24.5    Fixed a hardfault on FRAM erase and a bug that would cause the gateway to go to sleep if it failed to connect to the clout in 10 minutes.
+
 
 // Particle Libraries
 #include "PublishQueuePosixRK.h"			        // https://github.com/rickkas7/PublishQueuePosixRK
@@ -106,7 +108,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(24);								// For now, we are putting nodes and gateways in the same product group - need to deconflict #
-char currentPointRelease[6] ="24.4";
+char currentPointRelease[6] ="24.5";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -149,6 +151,7 @@ void setup()
 	nodeDatabase.setup();
 
 	Log.code(1).info("Info message");
+	Log.info("Firmware point release: 24.5");
 
 	// This is a kluge to speed development - going to set the flag for WiFi Manually here - need to set up a function to do this
 	sysStatus.set_connectivityMode(4);				// connectivityMode Code 4 keeps both LoRA and WiFi Connections on
@@ -338,6 +341,7 @@ void loop() {
 
 			if (state != oldState) {
 				publishStateTransition();  
+				Log.info("CONNECTING_STATE entry - firmware point release: %s, connectivity mode: %u", currentPointRelease, (unsigned)sysStatus.get_connectivityMode());
 				if (Time.day(sysStatus.get_lastConnection()) != conv.getLocalTimeYMD().getDay()) {
 					sysStatus.set_messageCount(0);									// Reset the message count at midnight
 					sysStatus.set_resetCount(0);									// Reset the reset counter
@@ -376,6 +380,7 @@ void loop() {
 				else state = DISCONNECTING_STATE;	 									// Typically, we will disconnect and sleep to save power - publishes occur during the 90 seconds before disconnect
 			}
 			else if (millis() - connectingTimeout > 600000L) {
+				Log.info("CONNECTING_STATE timeout - firmware point release: %s, connectivity mode: %u", currentPointRelease, (unsigned)sysStatus.get_connectivityMode());
 				if (sysStatus.get_connectivityMode() == 1) {
 					Log.info("Failed to connect in 10 minutes - returning to LoRA and starting cloud retry cooldown");
 					cloudConnectRetryStarted = millis();

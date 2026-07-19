@@ -96,11 +96,14 @@ Responsibilities:
 
 - Give final scope approval.
 - Perform or approve bench validation.
-- Flash hardware.
+- Be the sole operator permitted to flash firmware to hardware, whether by Particle Cloud, USB, local tooling, or any other method.
+- Be the sole operator permitted to create Git commits, push branches or tags, merge branches, and create releases.
 - Apply field judgment.
 - Approve merges and releases.
 
 No AI role is the final approver for scope, production readiness, merge, or release.
+
+AI roles may prepare working-tree changes, review diffs, build candidate binaries, and provide exact handoff commands. AI roles must not execute `git commit`, `git push`, a merge, tag creation, release creation, or any firmware flash. An approved implementation or validation plan does not delegate those actions. Chip performs them personally after reviewing the handoff.
 
 ## Engineering lifecycle
 
@@ -172,6 +175,17 @@ During implementation, stop and return the item for approval if evidence changes
 - Do not mix speculative cleanup, formatting, dependency updates, or unrelated refactoring into reliability commits.
 - Preserve traceability from each RR item to its investigation prompt, evidence, approval decision, implementation commit, validation results, and final decision.
 - Record deviations from the approved scope before requesting review.
-- Chip retains merge and release authority.
+- Leave AI-prepared changes uncommitted for Chip to review and commit.
+- Chip exclusively creates commits, pushes, merges, tags, and releases.
+- Chip exclusively flashes firmware to any device. AI handoff must identify the intended device, point release, binary hash, build target, and exact flash command without executing it.
+
+## Firmware candidate identity
+
+- Every firmware candidate prepared for flashing must have a unique point release. Do not reuse a point release after a binary has been handed off or flashed, including for a failed candidate.
+- `currentPointRelease` is the authoritative human-readable candidate identifier. Increment it from the last assigned value for each new firmware candidate; the next candidate after the current `24.4` baseline is `24.5`.
+- Firmware must log the point release during every startup using an explicit, searchable application message such as `Firmware point release: 24.5`.
+- The implementation handoff and RR result must record the point release, binary SHA-256, target platform and Device OS version, intended device, and corresponding source state. After Chip commits the change, the RR record must map the point release to Chip's commit hash.
+- `PRODUCT_VERSION` and the point release serve different purposes. Do not change `PRODUCT_VERSION` merely to identify a bench candidate unless the approved release plan also requires that product-version change.
+- A flash may not proceed if the candidate cannot be distinguished from the currently installed firmware through its startup log.
 
 The living record for findings, decisions, and results is [`reliability/reliability-review.md`](reliability/reliability-review.md).
