@@ -131,6 +131,9 @@ void outOfMemoryHandler(system_event_t event, int param);
 
 // Program Variables
 volatile bool userSwitchDectected = false;	
+constexpr system_tick_t CLOUD_CONNECT_RETRY_INTERVAL_MS = 60UL * 60UL * 1000UL;
+static system_tick_t cloudConnectRetryStarted = 0;
+static bool cloudConnectRetryPending = false;
 
 void setup() 
 {
@@ -294,7 +297,22 @@ void loop() {
 			}
 
 			if (sysStatus.get_connectivityMode() == 1)	{										// If we are in connected mode - we will stay in the LoRA state
-				if (Time.hour() != Time.hour(sysStatus.get_lastConnection())) state = CONNECTING_STATE;  	// Connect once an hour even if no messages are received	
+				if (state != LoRA_STATE) break;											// Finish reporting a received packet before cloud retry handling
+				if (cloudConnectRetryPending) {
+					if (Particle.connected()) {
+						Log.info("Cloud connection recovered during retry cooldown");
+						cloudConnectRetryPending = false;
+						state = CONNECTING_STATE;
+					}
+					else if ((millis() - cloudConnectRetryStarted) >= CLOUD_CONNECT_RETRY_INTERVAL_MS) {
+						Log.info("Cloud retry cooldown complete - retrying connection");
+						cloudConnectRetryPending = false;
+						state = CONNECTING_STATE;
+					}
+				}
+				else if (Time.hour() != Time.hour(sysStatus.get_lastConnection())) {
+					state = CONNECTING_STATE;											// Connect once an hour even if no messages are received
+				}
 				break;
 			}
 			else if ((millis() - startLoRAWindow) > (connectionWindow *60000UL)) { 				// Keeps us in listening mode for the specified windpw - then back to idle unless in test mode - keeps listening
@@ -339,6 +357,7 @@ void loop() {
 			}
 
 			if (Particle.connected()) {													// Either we will connect or we will timeout - will try for 10 minutes 
+				cloudConnectRetryPending = false;
 				sysStatus.set_lastConnection(Time.now());
 				sysStatus.set_lastConnectionDuration((millis() - connectingTimeout) / 1000);	// Record connection time in seconds
 				if (Particle.connected()) {
@@ -357,9 +376,17 @@ void loop() {
 				else state = DISCONNECTING_STATE;	 									// Typically, we will disconnect and sleep to save power - publishes occur during the 90 seconds before disconnect
 			}
 			else if (millis() - connectingTimeout > 600000L) {
-				Log.info("Failed to connect in 10 minutes - giving up");
-				sysStatus.set_connectivityMode(0);										// Setting back to zero - must not have coverage here or here at this time
-				state = DISCONNECTING_STATE;											// Makes sure we turn off the radio
+				if (sysStatus.get_connectivityMode() == 1) {
+					Log.info("Failed to connect in 10 minutes - returning to LoRA and starting cloud retry cooldown");
+					cloudConnectRetryStarted = millis();
+					cloudConnectRetryPending = true;
+					state = LoRA_STATE;
+				}
+				else {
+					Log.info("Failed to connect in 10 minutes - giving up");
+					sysStatus.set_connectivityMode(0);										// Setting back to zero - must not have coverage here or here at this time
+					state = DISCONNECTING_STATE;											// Makes sure we turn off the radio
+				}
 			}
 
 		} break;
