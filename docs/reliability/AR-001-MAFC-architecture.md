@@ -709,15 +709,59 @@ Sensors on remote nodes are not directly interfaced by this gateway firmware; th
 
 Debug commands are exposed through the single `Commands` Particle function. The command parser supports actions documented in `README.md` and implemented in `Particle_Functions::jsonFunctionParser()`.
 
-## 11. Architecture Questions
+## 11. Architecture Question Resolutions
 
-## Open Questions
+Follow-up investigation on 2026-07-18 resolved the six questions from the initial architecture pass. These are architecture findings, not approved reliability items or implementation recommendations.
 
-| Question | Why It Is Unclear | Files Requiring Additional Investigation |
+### Publish queue directory
+
+**Resolved:** The runtime directory is `/usr/pubqueue` unless application code overrides it before `setup()`. `PublishQueuePosix::PublishQueuePosix()` calls `fileQueue.withDirPath("/usr/pubqueue")`, and no MAFC application override exists. `PublishQueuePosix::setup()` then calls `fileQueue.scanDir()`.
+
+Evidence:
+
+- `lib/PublishQueuePosixRK/src/PublishQueuePosixRK.cpp`: singleton construction, constructor, and `setup()`.
+- `lib/SequentialFileRK/src/SequentialFileRK.cpp`: `withDirPath()` and `scanDir()` behavior.
+
+### `roomGrossArray[64]`
+
+**Resolved:** The array is an abandoned occupancy-path remnant in the current build. It is defined once in `src/Room_Occupancy.cpp`, is not declared in the current header, and has no current read or write references. Active room gross values come from `JsonDataManager::getOccupancyGrossBySpace()` over JSON node fields.
+
+Repository history confirms the transition: commit `cb9bfaa` removed the header declaration and changed `getRoomGross()` to use the JSON-backed aggregation path; commit `fbdd0d3` removed the remaining commented array-manipulation implementation. The unused definition remained. This finding does not authorize cleanup.
+
+### Reset-reason consumption
+
+**Resolved:** No Particle reset-reason value is consumed by the current MAFC firmware. `STARTUP(System.enableFeature(FEATURE_RESET_INFO))` enables retention, but the repository contains no reset-reason read path.
+
+The gateway `sysStatus.resetCount` field is separate: current code initializes, clears, reads, and publishes it, but no increment from Particle reset information was found. The `current.resetCount` field represents a node-supplied packet value populated in `LoRA_Functions::decipherDataReportGateway()`, not the gateway reset reason.
+
+### Connectivity modes 0, 1, and 4
+
+**Resolved for the current source:**
+
+- **Mode 0** is the bounded-window path. It uses `DEFAULT_LORA_WINDOW`, performs the inactive-space check, connects to Particle at most hourly after the LoRa window, disconnects after queue drain, and proceeds to sleep. It is assigned during persistent-data initialization, by the `stay=false` command immediately before reset, and after a 10-minute cloud connection failure.
+- **Mode 1** is the effective normal MAFC runtime path. `setup()` assigns it unconditionally and enters `CONNECTING_STATE`. After connection, the state machine returns to `LoRA_STATE`, remains there while connected mode is active, and performs an hourly cloud connection/time-sync check rather than following the normal sleep path.
+- **Mode 4** has no distinct reachable runtime meaning in the current build. `setup()` writes mode 4 and then overwrites it with mode 1 before `loop()` begins. No command or later path assigns mode 4. State-machine branches only distinguish modes 0 and 1; a hypothetical nonzero/non-1 value would receive mixed fallback behavior rather than a dedicated WiFi mode.
+
+The `stay=false` command flushes mode 0 and resets the device, but the next `setup()` overwrites it with mode 1. Therefore it does not establish a persistent mode-0 startup path in this build.
+
+### Sleep reachability
+
+**Resolved statically:** Sleep is not reached during the healthy, normal mode-1 path, but it is reachable after a cloud connection failure. If `CONNECTING_STATE` fails to connect for 10 minutes, it assigns mode 0 and enters `DISCONNECTING_STATE`; after 90 seconds and publish-queue readiness, that state enters `SLEEPING_STATE` and calls `System.sleep()`.
+
+The initialization fallback to `SLEEPING_STATE` is not reachable in the current setup flow because mode 1 and `CONNECTING_STATE` are assigned unconditionally first. A normal mode-0 sleep cycle exists in the state machine, but the boot-time mode-1 overwrite prevents `stay=false` from selecting it across reset. Bench logs would be required to establish whether the failure-induced sleep path has occurred on deployed hardware; code reachability itself is established.
+
+### Downstream Particle Cloud integrations
+
+**Resolved for the configuration observed on 2026-07-18:** The documented MAFC device `e00fce68772083a2d0b7df4e` is online as `Morrisville-MAFC` in Particle Product `20952`. A read-only Particle CLI query reported ten product integrations. Endpoint credentials and sensitive URL components are intentionally not recorded here.
+
+Current firmware-to-integration event mapping:
+
+| Firmware event | Product integration observed | Finding |
 |---|---|---|
-| What publish queue directory is used at runtime? | `PublishQueuePosixRK.h` states `withDirPath()` is required, and the application calls `PublishQueuePosix::instance().setup()` without an observed `withDirPath()` call in inspected MAFC source. The library default path behavior was not fully traced. | `lib/PublishQueuePosixRK/src/PublishQueuePosixRK.h`, `lib/PublishQueuePosixRK/src/PublishQueuePosixRK.cpp`, `lib/SequentialFileRK/src/*` |
-| Is `roomGrossArray[64]` part of an active or abandoned occupancy path? | `Room_Occupancy.cpp` defines the array, but inspected code did not reference it after definition. Active occupancy aggregation appears to read JSON `jd1`/`jd2`. | `src/Room_Occupancy.cpp`, full-workspace symbol references if needed. |
-| Which reset-reason data is consumed, if any? | `STARTUP(System.enableFeature(FEATURE_RESET_INFO))` enables reset information, but inspected source did not show a reader or publisher for reset reason. | `src/Particle_Functions.cpp`, `src/LoRA_Particle_Gateway.cpp`, any future diagnostics files. |
-| What is the intended runtime meaning of connectivity modes 0, 1, and 4 in the current MAFC build? | `sysStatusData::SysData` comments define several connectivity modes, `setup()` sets mode 4 and then unconditionally mode 1, and `loop()` explicitly branches on modes 0 and 1. The exact operational use of mode 4 in current source is not fully expressed by reachable branches inspected here. | `src/LoRA_Particle_Gateway.cpp`, `src/MyPersistentData.h`, `src/Particle_Functions.cpp`. |
-| Is sleeping expected to be reachable in the current MAFC build? | Project documentation says MAFC is wall-powered and remains awake. Source still contains `SLEEPING_STATE`, but `setup()` unconditionally sets connected mode 1 and `LoRA_STATE` remains in LoRa state under mode 1 except hourly connect checks. The architectural presence of sleep is clear; its expected current reachability requires runtime confirmation. | `src/LoRA_Particle_Gateway.cpp`, `src/config.h`, runtime logs. |
-| How are Particle Cloud integrations configured downstream? | Source publishes named Particle events and `README.md` names webhook/integration intent, but actual Particle integration configuration is not stored in inspected source. | Particle Console/integration configuration outside repository; `README.md` for documented event names. |
+| `Ubidots-LoRA-Gateway-v1` | Same event name | Matched. |
+| `Ubidots-LoRA-Counter-v1` | Same event name | Matched. |
+| `Ubidots-LoRA-Occupancy-v2` | Two integrations with the same event name | Matched; each event fans out to two downstream destinations. |
+| `Ubidots_Command_Hook` | Same event name | Matched. |
+| `Ubidots-LoRA-Sensor-v1` | No integration with this exact name; the product has `Ubidots-LoRA-Node-Sensor-v1` | Name mismatch. Whether MAFC currently uses sensor types 20-29 is not established here. |
+
+The product also contains integrations for older or other event names, including `Ubidots-LoRA-Occupancy-v1`, `Send-Configuration`, `Ubidots_Alert_Hook`, and `Update-Device`. Their presence does not prove that current MAFC firmware emits or relies on them. Particle configuration is external mutable state and should be re-queried before any future integration change or release decision.
